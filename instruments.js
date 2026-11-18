@@ -66,8 +66,8 @@ const TideHud=(()=>{
       const v=views[i],r=g.station[i],close=g.near[i],s=g.spec,q=g.state,k=TideCoop.roleKeys[i];
       const riding=s.type==='ride' && (s.driver!==i||q.latch);
       v.querySelector('.reticle').hidden=!(TideLookout.active(g)&&g.watch.task.watcher===i&&g.engaged[i]);
-      const here=close||g.signal&&g.stage===2&&i===0&&!g.signal.pinned||riding||!!g.section.tram,tag=TideHarbor.targetFor(g,i).name;
-      const task=g.landfall?(g.landfall.pinned?'值班间收听':'防潮门'):g.rig?.belay?'浪沟接应':s.title;
+      const here=!!g.cable||close||g.signal&&g.stage===2&&i===0&&!g.signal.pinned||riding||!!g.section.tram,tag=TideHarbor.targetFor(g,i).name;
+      const task=g.cable?TideCableQuay.title(g):g.landfall?(g.landfall.pinned?'值班间收听':'防潮门'):g.rig?.belay?'浪沟接应':s.title;
       const title=g.state.doneAt!==null?'已完成 · '+task:(g.stage+1)+' / '+g.world.sections.length+'　'+task;
       set(v.querySelector('.tool'),title);
       set(v.querySelector('.instruction'),here?r.text||'靠近设备开始操作':g.archive?'前往'+tag:g.signal?'前往'+tag:g.optic?'沿塔顶外环前往'+tag:'前往'+tag+'，沿灯带通过栈桥');

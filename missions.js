@@ -8,9 +8,9 @@ const TideMissions = (() => {
       step('ride','放梯接人',['ladder','winch'],'沈遥：这次我拉。你看到我再松手。',{driver:1,length:18,mode:'basket',rise:.65})
     ],
     [
-      step('cable','岸上试灯',['breaker','radio'],'林澈：铜牌上刻的是试灯的节拍。',{code:0}),
-      step('cable','浅水支路',['breaker','radio'],'阿棠：我在船尾。绿标在一道白浪后面。',{code:2,rough:1}),
-      step('cable','吊臂背面的接线柱',['breaker','radio'],'沈遥：从吊臂背面绕过去，看另一根线。',{code:1,rough:2})
+      step('cable','岸上试灯',['key','post'],'林澈：铜牌上两道刻痕，一短一长。我敲给你。'),
+      step('cable','浅水支路',['saddle','drum'],'沈遥：驾驶台又在呼叫。你走下面，我上去看着线。'),
+      step('cable','吊臂背面的接线柱',['lamp','window'],'林澈：我们提上来的线头刻着缺月。去吊臂背后找另一半。')
     ],
     [
       step('power','启动飞轮',['wheel','breaker'],'林澈：我摇飞轮。两根针搭上，你接离合。',{value:.35}),

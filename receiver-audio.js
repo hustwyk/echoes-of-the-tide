@@ -1,13 +1,27 @@
 // Both the physical field-strength needle and this audio filter follow the loop's bearing.
 const TideReceiverAudio=(()=>{
+  let loading=null;
+  function loadQuay(){
+    if(window.TideQuayAudio)return Promise.resolve(window.TideQuayAudio);
+    if(!loading)loading=new Promise(resolve=>{
+      const script=document.createElement('script');script.src='assets/cablequay-audio.js';
+      script.onload=()=>resolve(window.TideQuayAudio);
+      script.onerror=()=>{loading=null;script.remove();resolve(null);};
+      document.head.appendChild(script);
+    });
+    return loading;
+  }
   function create(ctx,output){
     const buffers={},pending=new Set();
     let preview=null,call=null,ratchet=null,previousStroke=0;
+    let story=null,storyKey='',lastKey=false,relay=null;
     async function decode(key){
       if(buffers[key]||pending.has(key))return;
       pending.add(key);
       try{
-        const bytes=Uint8Array.from(atob(TideBreakwaterAudio[key]),v=>v.charCodeAt(0));
+        const stock=(key==='receiver'||key==='hoist')?TideBreakwaterAudio:await loadQuay();
+        if(!stock)return;
+        const bytes=Uint8Array.from(atob(stock[key]),v=>v.charCodeAt(0));
         buffers[key]=await ctx.decodeAudioData(bytes.buffer);
       }finally{pending.delete(key);}
     }
@@ -26,8 +40,20 @@ const TideReceiverAudio=(()=>{
       if(clip){clip.gain.gain.setTargetAtTime(.0001,ctx.currentTime,.012);try{clip.source.stop(ctx.currentTime+.045);}catch{}}
       return null;
     }
-    function stop(){preview=end(preview);call=end(call);ratchet=end(ratchet);previousStroke=0;}
+    function stop(){preview=end(preview);call=end(call);ratchet=end(ratchet);previousStroke=0;story=end(story);storyKey='';relay=end(relay);lastKey=false;}
+    function quay(g){
+      const a=g.cable,button=a.down||a.returnDown;
+      if(button&&!lastKey){relay=end(relay);relay=play('relay',.72);}
+      lastKey=button;
+      const key=a.radio==='sending'?'shore':a.radio==='reply'?'ship':a.overhead>=0?'overhear':'';
+      const t=key==='overhear'?a.overhead:a.clock;
+      if(!buffers.relay&&!pending.has('relay'))decode('relay').catch(()=>{});
+      if(key&&!buffers[key]&&!pending.has(key))decode(key).catch(()=>{});
+      if(key!==storyKey||story&&Math.abs(ctx.currentTime-story.start-t)>.55){story=end(story);storyKey=key;}
+      if(key&&!story)story=play(key,1.10,t);
+    }
     function update(g){
+      if(g.cable){quay(g);return;}
       if(!g.landfall)return;
       const a=g.landfall;
       for(const key of ['hoist','receiver'])if(!buffers[key]&&!pending.has(key))decode(key).catch(()=>{});
@@ -50,5 +76,5 @@ const TideReceiverAudio=(()=>{
     }
     return {update,stop};
   }
-  return {create};
+  return {create,loadQuay};
 })();

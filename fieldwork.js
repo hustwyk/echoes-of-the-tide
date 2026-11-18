@@ -3,7 +3,6 @@
 const TideFieldWork=(()=>{
   const clamp=TideTraversal.clamp;
   const designs={
-    cable:{pair:['电缆挂钩','收线轮'],first:['提起湿电缆','收紧上廊卷筒'],response:'支路已架离水面'},
     paper:{pair:['验收联','潮图底片'],first:['揭起纸角，让打孔透光','从灯箱另一侧寻找对应印痕'],response:'底片已固定，可以去透光台'},
     radio:{pair:['桅杆转台','发报稿夹'],first:['锁住桅杆底座','从夹页里抽出当前报文'],response:'接上桅杆馈线'},
     tide:{pair:['下标尺固定脚','上标尺基准'],first:['固定贴近水面的尺脚','对照上端的读数'],response:'同一把标尺已经归零'},
@@ -19,7 +18,7 @@ const TideFieldWork=(()=>{
         const lane=sec.paths[i],anchor=lane[Math.floor(lane.length*.5)];
         const sign=i?1:-1;
         const tiers=(s.type==='radio'&&i===0)||(s.type==='tide'&&i===1)||(s.type==='optic'&&i===1)?5:3;
-        const rise=(s.type==='cable'&&i===0)||(s.type==='tide'&&i===0)?-.38:.35;
+        const rise=s.type==='tide'&&i===0?-.38:.35;
         const length=s.type==='paper'?1.3:1.55;
         for(let j=1;j<=tiers;j++)decks.push({x:anchor.x+sign*j*length,y:anchor.y+j*rise,z:anchor.z,w:length+.05,d:2.2,kind:world.style,active:true});
         const floor={x:anchor.x+sign*(tiers*length+2.1),y:anchor.y+tiers*rise,z:anchor.z,w:4.45,d:4.4,kind:world.style,active:true};
@@ -44,14 +43,6 @@ const TideFieldWork=(()=>{
     for(let i=0;i<2;i++)if(use[i])f.values[i]=clamp(f.values[i]+inputs[i].x*dt*.44,0,1);
     let done=false;
     switch(s.type){
-      case 'cable':{
-        // A slack cable drops back into the tide. The observer supplies tension.
-        const t=f.values[1],w=.15+(step===0?.06:0),taut=use[1]&&Math.abs(t-goal[1])<w;
-        f.hold=taut&&use[0]?f.hold+dt:Math.max(0,f.hold-dt*.65);
-        g.set(0,taut?'现在按住操作键，把电缆挂高':'等待收线轮拉直电缆',{vis:'dial',value:f.hold/1.45,caption:'挂钩锁定'});
-        g.set(1,'按住操作键，左右调节收线轮张力',{vis:'dial',value:t,target:goal[1],band:w,caption:taut?'电缆已绷紧':'观察张力'});
-        done=f.hold>1.45;break;
-      }
       case 'paper':{
         const level=f.values[0],lit=use[0]&&Math.abs(level-goal[0])<.10;
         g.set(0,'移动纸角，使斜光穿过装订孔',{vis:'chart',value:level,target:goal[0],band:.10,caption:lit?'透光孔已亮':'纸边与灯箱'});
