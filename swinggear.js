@@ -16,16 +16,18 @@ const TideSwingGear=(()=>{
     const metal=own(new T.MeshStandardMaterial({color:0xffffff,map:grain,vertexColors:true,metalness:.44,roughness:.45}));
     const dull=own(new T.MeshStandardMaterial({color:0xffffff,map:grain,vertexColors:true,metalness:.23,roughness:.65}));
     const cube=own(new T.BoxGeometry(1,1,1)),cyl=own(new T.CylinderGeometry(1,1,1,24)),hex=own(new T.CylinderGeometry(1,1,1,6));
-    const torusCache=new Map(),repeatGeo=new Map(),templates=new Set();
+    const torusCache=new Map(),primitives=new Set(),templates=new Set();
     const tmp=new T.Object3D(),color=new T.Color(),local=v(),normal=v(),up=v(0,1,0);
     function group(par,x,y,z,name){
       const g=new T.Group();g.name=name;g.position.set(x,y,z);par.add(g);return g;
     }
     function batch(par,x,y,z,name){const g=group(par,x,y,z,name);const o={g,mats:new Map()};templates.add(o);return o;}
     function part(o,geo,tint,pos,size=[1,1,1],rot=[0,0,0],material=metal,quat=null){
-      if(!repeatGeo.has(geo))repeatGeo.set(geo,geo.index?own(geo.toNonIndexed()):geo);
-      if(!o.mats.has(material))o.mats.set(material,{p:[],n:[],c:[],uv:[]});
-      const a=repeatGeo.get(geo).attributes,b=o.mats.get(material);
+      primitives.add(geo);
+      if(!o.mats.has(material))o.mats.set(material,{p:[],n:[],c:[],uv:[],indices:[]});
+      const a=geo.attributes,b=o.mats.get(material),offset=b.p.length/3;
+      const index=geo.index,count=index?index.count:a.position.count;
+      for(let i=0;i<count;i++)b.indices.push(offset+(index?index.getX(i):i));
       tmp.position.set(...pos);tmp.scale.set(...size);
       if(quat)tmp.quaternion.copy(quat);else tmp.rotation.set(...rot);
       tmp.updateMatrix();const nm=new T.Matrix3().getNormalMatrix(tmp.matrix);color.set(tint);
@@ -39,7 +41,7 @@ const TideSwingGear=(()=>{
     function finish(o){
       for(const [mat,b] of o.mats){
         const g=own(new T.BufferGeometry());for(const [key,ar,s] of [['position',b.p,3],['normal',b.n,3],['color',b.c,3],['uv',b.uv,2]])g.setAttribute(key,new T.Float32BufferAttribute(ar,s));
-        g.computeBoundingSphere();const m=new T.Mesh(g,mat);m.castShadow=true;m.receiveShadow=true;o.g.add(m);
+        g.setIndex(b.indices);g.computeBoundingSphere();const m=new T.Mesh(g,mat);m.castShadow=true;m.receiveShadow=true;o.g.add(m);
       }o.mats.clear();return o.g;
     }
     const block=(o,pos,w,h,d,c,rx=0,ry=0,rz=0,mat=metal)=>part(o,cube,c,pos,[w,h,d],[rx,ry,rz],mat);
@@ -436,6 +438,8 @@ const TideSwingGear=(()=>{
       c.textAlign='left';c.font='bold 66px serif';c.fillText('收件人',276,476);c.strokeStyle='#515d4e';c.lineWidth=3;c.beginPath();c.moveTo(504,483);c.lineTo(w-146,483);c.stroke();
       c.fillStyle='#415446';c.font='bold 55px serif';c.textAlign='right';c.fillText('附双轨值班记录',w-106,665);c.textAlign='left';
       c.font='25px monospace';c.fillStyle='#75816e';c.fillText('桥头寄件柜　／　留转原件',112,763);
+      c.save();c.rotate(-.022);c.font='italic 34px serif';c.fillStyle='#514839';c.fillText('船尾也留一份。',107,593);
+      c.strokeStyle='rgba(81,72,57,.45)';c.lineWidth=1.5;c.strokeText('顾岚',379,593);c.fillText('顾岚',379,593);c.restore();
       c.save();c.translate(965,731);c.rotate(-.081);c.strokeStyle='rgba(139,76,58,.77)';c.lineWidth=4;c.strokeRect(-92,-37,184,74);c.fillStyle='rgba(139,76,58,.8)';c.font='bold 38px serif';c.textAlign='center';c.fillText('转　递',0,14);c.restore();
       c.strokeStyle='rgba(123,100,65,.23)';c.lineWidth=2;c.beginPath();c.moveTo(51,h*.58);c.lineTo(w-40,h*.579);c.stroke();
     });
@@ -471,8 +475,8 @@ const TideSwingGear=(()=>{
     rod(feeder,[0,0,0],[0,.217,.097],.018,bronze);rod(feeder,[0,.217,.097],[-.155,.217,.097],.015,beech);
     grip('rack',feeder.g,[-.146,.217,.097],[-.016,.217,.097]);
     for(const o of templates)finish(o);templates.clear();
-    for(const [src,plain] of repeatGeo)for(const g of [src,plain])if(resources.delete(g))g.dispose();
-    repeatGeo.clear();torusCache.clear();
+    for(const g of primitives)if(resources.delete(g))g.dispose();
+    primitives.clear();torusCache.clear();
     let disposed=false;
     const get=(n,f=0)=>Number.isFinite(n)?n:f,smooth=t=>t*t*(3-2*t),q0=new T.Quaternion(),q1=new T.Quaternion(),e0=new T.Euler(),stowPos=v(),fromPos=v();
     function position(out,obj,fx,fy,fz){return out.set(get(obj?.x??obj?.[0],fx),get(obj?.y??obj?.[1],fy),get(obj?.z??obj?.[2],fz));}

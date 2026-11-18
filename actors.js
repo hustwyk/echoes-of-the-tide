@@ -1025,6 +1025,135 @@
     state.hasPose=true;
   }
 
+  // Lock a tread in the collision surface's own metric frame. Floating decks
+  // supply two sloping axes; the signal rotors supply just horizontal U and V.
+  function soleCoordinates(f,x,z,out){
+    const a=f.axes,dx=x-f.x,dz=z-f.z;
+    if(a){const det=a.ux*a.vz-a.uz*a.vx;out.u=(dx*a.vz-dz*a.vx)/det;out.v=(a.ux*dz-a.uz*dx)/det;}
+    else{out.u=dx;out.v=dz;}
+    out.deck=f;
+  }
+  function soleWorld(p,out){
+    const f=p.deck,a=f.axes;
+    out.x=f.x+(a?p.u*a.ux+p.v*a.vx:p.u);out.z=f.z+(a?p.u*a.uz+p.v*a.vz:p.v);
+    return out;
+  }
+  const frameYaw=f=>f.axes?Math.atan2(f.axes.vx,f.axes.vz):0;
+  const floorPoint=new T.Vector3(),surfaceNormal=new T.Vector3();
+  function supportAt(world,x,z,rootY){
+    // Check the same finite polygons as traversal. Neighbouring platforms can
+    // overlap in plan, even well inside the footprint of the lower one.
+    const deck=TideTraversal.surface(world,x,z,rootY+.405);
+    return deck&&TideTraversal.surfaceHeight(deck,x,z)>rootY-.425?deck:null;
+  }
+  function floorNormal(d,x,z,out){
+    if(d.axes){
+      const a=d.axes;out.set(a.vy*a.uz-a.vz*a.uy,a.vz*a.ux-a.vx*a.uz,a.vx*a.uy-a.vy*a.ux).normalize();
+      // The local forward of a signal ramp and lantern gallery points north.
+      if(out.y<0)out.negate();return out;
+    }
+    if(d.sag){const h=.028;return out.set((TideTraversal.netHeight(d,x-h,z)-TideTraversal.netHeight(d,x+h,z))/(2*h),1,
+      (TideTraversal.netHeight(d,x,z-h)-TideTraversal.netHeight(d,x,z+h))/(2*h)).normalize();}
+    return out.set(0,1,0);
+  }
+  function prepareSupport(actor,st,m,reset,dt){
+    const frame=m.groundFloor;
+    if(!frame||!Number.isFinite(frame.w)||!Number.isFinite(frame.d)||!m.groundWorld||m.grounded===false||m.grips||m.operating||m.climbing||m.swing||m.wall){
+      if(st.support){st.support=null;for(const f of st.feet)f.planted=false;}
+      return null;
+    }
+    if(!st.support||reset){
+      const feet=[0,1].map(()=>({deck:null,planted:false,hasPoint:false,settle:0,swingStart:1,normal:new T.Vector3()}));
+      st.support={previous:{deck:null},feet,dx:0,dz:0,travel:0,still:0};for(const f of st.feet)f.planted=false;
+      if(!st.ground&&st.flight>.22&&!reset){
+        // Let the leading sole take the impact. The other knee finishes its
+        // descent from the actual previous pose over the following frames.
+        const i=1-st.leftLead,foot=feet[i],boot=actor.userData.rig.bones['boot'+i];
+        boot.localToWorld(floorPoint.set(0,-.055,0));
+        foot.settle=.0001;foot.landing=true;foot.startX=floorPoint.x;foot.startZ=floorPoint.z;
+        foot.startY=actor.position.y;foot.startLift=gaitClamp((floorPoint.y-foot.startY)/actor.scale.y,0,.40);
+      }
+    }
+    const support=st.support,prev=support.previous;
+    const same=prev.deck===frame,oldU=prev.u,oldV=prev.v;
+    if(prev.deck){soleWorld(prev,floorPoint);support.dx=actor.position.x-floorPoint.x;support.dz=actor.position.z-floorPoint.z;}
+    else support.dx=support.dz=0;
+    soleCoordinates(frame,actor.position.x,actor.position.z,prev);
+    support.travel=same?Math.hypot(prev.u-oldU,prev.v-oldV):Math.hypot(support.dx,support.dz);
+    support.still=support.travel>.00008?0:support.still+dt;
+    return support;
+  }
+  function stepFeet(actor,m,st,support,dt,cycle,stance,move,run,speed,co,si,dirX,dirZ){
+    const world=m.groundWorld,feet=support.feet;
+    const root=actor.position,sx=actor.scale.x,sy=actor.scale.y,sz=actor.scale.z,yaw=Math.atan2(si,co);
+    const walking=speed>.105&&move>.045&&support.still<.085;
+    let maxHips=Infinity;
+    for(let i=0;i<2;i++){
+      const f=feet[i],sign=i?1:-1,u=(st.phase+i*.5)%1,stanceNow=u<stance,sw=gaitClamp((u-stance)/(1-stance),0,1);
+      const k=gaitClamp(u/stance,0,1),L=cycle*stance,step=stanceNow?L*(.5-k):
+        L*(easeStep(0,1,sw)-.5)-Math.min(.47,cycle*(1-stance))*sw*(1-sw)*(1-2*sw);
+      const localX=sign*(.093+.010*st.brake)*sx,localZ=sign*.012*sz;
+      const neutralX=root.x+co*localX+si*localZ,neutralZ=root.z-si*localX+co*localZ;
+      let x=neutralX+(walking?dirX*step*move:0),z=neutralZ+(walking?dirZ*step*move:0);
+      let lift=walking&&!stanceNow?(.106+.175*run)*Math.pow(Math.sin(Math.PI*sw),1.32)*move:0;
+      let pitch=walking?(stanceNow?.095*(1-easeStep(.02,.29,k))-.27*easeStep(.67,1,k):
+        -.27*(1-easeStep(0,.49,sw))+.095*easeStep(.62,.98,sw))*move:0;
+      let lock=(!walking||stanceNow)&&!f.settle;
+      if(f.planted&&(!f.deck||!f.deck.active))f.planted=false;
+      if(f.planted){
+        soleWorld(f,floorPoint);
+        const dist=Math.hypot(floorPoint.x-neutralX,floorPoint.z-neutralZ);
+        if(lock&&!walking&&feet[1-i].planted&&!feet[1-i].settle&&
+          (dist>.165||Math.abs(wrapAngle(f.heading+frameYaw(f.deck)-yaw))>.63)){
+          f.settle=.0001;f.startX=floorPoint.x;f.startZ=floorPoint.z;f.startY=f.surfaceY;
+          lock=false;
+        }
+        if(!lock){f.planted=false;f.swingStart=sw;f.offsetX=floorPoint.x-x;f.offsetZ=floorPoint.z-z;f.startY=f.surfaceY;}
+        else{x=floorPoint.x;z=floorPoint.z;}
+      }
+      if(!walking&&!f.planted&&!f.settle&&f.hasPoint&&
+        (Math.hypot(f.lastX-x,f.lastZ-z)>.018||f.lift>.008)){
+        f.settle=.0001;f.startX=f.lastX;f.startZ=f.lastZ;f.startY=f.surfaceY;f.startLift=f.lift;
+        lock=false;
+      }
+      if(f.settle){
+        f.settle=Math.min(1,f.settle+dt/(f.landing?.148:.205));const e=easeStep(0,1,f.settle);
+        x=gaitMix(f.startX,f.landing?x:neutralX,e);z=gaitMix(f.startZ,f.landing?z:neutralZ,e);
+        lift=(f.startLift||0)*(1-e)+(f.landing?0:.060)*Math.sin(Math.PI*f.settle);pitch=-.105*Math.sin(Math.PI*f.settle);
+        if(f.settle>=1){f.settle=0;f.startLift=0;f.landing=false;lock=true;}
+        else lock=false;
+      }else if(walking&&!stanceNow&&!f.planted){
+        const e=1-easeStep(f.swingStart,1,sw);x+=(f.offsetX||0)*e;z+=(f.offsetZ||0)*e;
+      }
+      let d=f.planted?f.deck:supportAt(world,x,z,root.y);
+      if(!d&&lock){
+        // At a sill or cut-out, put the edge of the tread on a real support.
+        const ex=x,ez=z;
+        for(let n=1;n<=4&&!d;n++){x=gaitMix(ex,root.x,n*.22);z=gaitMix(ez,root.z,n*.22);d=supportAt(world,x,z,root.y);}
+      }
+      let h=d?TideTraversal.surfaceHeight(d,x,z):root.y;
+      if(!Number.isFinite(h)){d=null;h=root.y;f.planted=false;}
+      if(lock&&d&&!f.planted){soleCoordinates(d,x,z,f);f.heading=yaw-frameYaw(d);f.planted=true;f.offsetX=f.offsetZ=0;}
+      // On a rising tread the swing first clears its target; on descent it
+      // leaves the previous stair before lowering. Stance always uses the real height.
+      if(!lock&&f.hasPoint&&f.startY!==undefined){const p=f.settle?f.settle:sw;h=Math.max(h,gaitMix(f.startY,h,easeStep(.12,.88,p)));}
+      const nrm=d?floorNormal(d,x,z,surfaceNormal):surfaceNormal.set(0,1,0);
+      const radius=treadHeight(pitch)*sy;
+      const ax=x+nrm.x*radius-root.x,az=z+nrm.z*radius-root.z;
+      f.x=(co*ax-si*az)/sx;f.z=(si*ax+co*az)/sz;f.y=(h-root.y+nrm.y*radius)/sy+lift;
+      f.normal.set(co*nrm.x-si*nrm.z,nrm.y,si*nrm.x+co*nrm.z).normalize();
+      f.pitch=pitch;f.yaw=f.planted?gaitClamp(wrapAngle(f.heading+frameYaw(d)-yaw),-.76,.76):0;
+      f.lastX=x;f.lastZ=z;f.surfaceY=h;f.lift=lift;f.hasPoint=true;
+      // Both knees must be able to reach their own tread, including the lower
+      // of two stair steps. Solve the pelvis before the two hip/knee chains.
+      if(f.planted){
+        const lateral=f.x-sign*.087;
+        maxHips=Math.min(maxHips,f.y+.060+Math.sqrt(Math.max(.08,.786*.786-lateral*lateral-f.z*f.z)));
+      }
+    }
+    return maxHips;
+  }
+
   function animate(actor,motion,dt,time) {
     const rig=actor.userData.rig,b=rig.bones;
     TideCrew.express(rig.face,rig.id,time,!!motion.talking);
@@ -1032,7 +1161,7 @@
     const ground=motion.grounded!==false,grips=motion.grips,hang=motion.swing;
     const ride=!!(hang&&hang.phase==='ride'&&grips),reaching=!!(hang&&hang.phase==='reach'&&grips);
     const yaw=Number.isFinite(motion.yaw)?motion.yaw:actor.rotation.y,co=Math.cos(yaw),si=Math.sin(yaw);
-    const speed=Math.max(0,Number.isFinite(motion.speed)?Math.abs(motion.speed):Math.hypot(motion.vx||0,motion.vz||0));
+    let speed=Math.max(0,Number.isFinite(motion.speed)?Math.abs(motion.speed):Math.hypot(motion.vx||0,motion.vz||0));
     const st=rig.locomotion||(rig.locomotion={
       phase:rig.id*.5+.17,ground,flight:0,vy:0,impact:0,impactAge:1,launch:0,launchHeld:false,leftLead:rig.id,
       x:actor.position.x,y:actor.position.y,z:actor.position.z,yaw,vx:0,vz:0,travelX:0,travelZ:0,
@@ -1044,8 +1173,11 @@
     const vx=Number.isFinite(motion.vx)?motion.vx:-si*speed,vz=Number.isFinite(motion.vz)?motion.vz:-co*speed;
     const horizontal=Math.hypot(vx,vz),dirX=horizontal>.025?vx/horizontal:-si,dirZ=horizontal>.025?vz/horizontal:-co;
     const vy=Number.isFinite(motion.vy)?motion.vy:s>.00001&&!reset?(actor.position.y-st.y)/s:0;
+    const support=prepareSupport(actor,st,motion,reset,s);
+    if(support&&support.still>=.085)speed=0;
     let distance=0;
     if(Number.isFinite(motion.strideDistance))distance=Math.max(0,motion.strideDistance);
+    else if(support&&speed>.025&&!reset){distance=support.travel;}
     else if(speed>.025&&!reset){
       if(Number.isFinite(motion.vx)&&Number.isFinite(motion.vz)){
         // Input can keep a velocity while a wall prevents any actual step.
@@ -1054,7 +1186,7 @@
     }
     if(reset){distance=0;st.feet.forEach(f=>{f.planted=false;});st.hangOffset.set(0,0,0);st.impact=0;st.launch=0;}
     if(!s||!ground||ride||motion.climbing)distance=0;
-    distance=Math.min(distance,Math.max(.025,s*(speed+2.5)));
+    if(!support)distance=Math.min(distance,Math.max(.025,s*(speed+2.5)));
     const wasGround=st.ground;
     const launchHeld=motion.launch===true||motion.launch>.50;
     const launching=(!ground&&wasGround&&!ride)||(launchHeld&&!st.launchHeld);
@@ -1122,6 +1254,10 @@
       st.reach=0;st.hangOffset.multiplyScalar(Math.exp(-s*18));
       if(st.hangOffset.lengthSq()<.0000003)st.hangOffset.set(0,0,0);
     }
+    if(support){
+      const maxY=stepFeet(actor,motion,st,support,s,cycle,stance,move,run,speed,co,si,dirX,dirZ);
+      b.hips.position.y=Math.min(b.hips.position.y,maxY);
+    }
     b.hips.position.add(st.hangOffset);
     b.hips.updateMatrix();inversePelvis.copy(b.hips.matrix).invert();
     anklePlane.set(co*nx-si*nz,ny,si*nx+co*nz).normalize();
@@ -1134,7 +1270,8 @@
       let x=sign*(.093+.010*st.brake)+localDX*advance*move/actor.scale.x;
       let z=sign*.012+localDZ*advance*move/actor.scale.z;
       let footYaw=0;
-      if(ground&&!motion.climbing&&!ride&&!reaching&&move>.12&&speed>.18&&onGround){
+      if(support){foot.planted=support.feet[i].planted;}
+      else if(ground&&!motion.climbing&&!ride&&!reaching&&move>.12&&speed>.18&&onGround){
         if(!foot.planted){
           foot.x=st.travelX+co*x*actor.scale.x+si*z*actor.scale.z;
           foot.z=st.travelZ-si*x*actor.scale.x+co*z*actor.scale.z;
@@ -1168,7 +1305,8 @@
         const k=(1+Math.sin(actor.position.y*Math.PI/.29+i*Math.PI))*.5;
         b['thigh'+i].rotation.set(.26+.72*k,0,0);b['shin'+i].rotation.set(-.44-1.17*k,0,0);
         b['boot'+i].rotation.set(.18+.38*k,0,0);
-      }else placeLeg(b,i,x,y,z,anklePlane,pitch,footYaw,0);
+      }else if(support){const f=support.feet[i];placeLeg(b,i,f.x,f.y,f.z,f.normal,f.pitch,f.yaw,0);}
+      else placeLeg(b,i,x,y,z,anklePlane,pitch,footYaw,0);
       const arm=b['arm'+i],forearm=b['forearm'+i],wrist=b['wrist'+i];
       const armSwing=Math.cos(u*TAU-Math.PI*stance);
       arm.rotation.set(.065-(.30+.38*run)*armSwing*move*unloaded+.49*work+.17*st.brake

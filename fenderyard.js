@@ -16,16 +16,18 @@ const TideFenderYard=(()=>{
     const metal=own(new T.MeshStandardMaterial({color:0xffffff,map:grain,vertexColors:true,metalness:.44,roughness:.45}));
     const dull=own(new T.MeshStandardMaterial({color:0xffffff,map:grain,vertexColors:true,metalness:.23,roughness:.65}));
     const cube=own(new T.BoxGeometry(1,1,1)),cyl=own(new T.CylinderGeometry(1,1,1,24)),hex=own(new T.CylinderGeometry(1,1,1,6));
-    const torusCache=new Map(),repeatGeo=new Map(),templates=new Set();
+    const torusCache=new Map(),primitives=new Set(),templates=new Set();
     const tmp=new T.Object3D(),color=new T.Color(),local=v(),normal=v(),up=v(0,1,0);
     function group(par,x,y,z,name){
       const g=new T.Group();g.name=name;g.position.set(x,y,z);par.add(g);return g;
     }
     function batch(par,x,y,z,name){const g=group(par,x,y,z,name);const o={g,mats:new Map()};templates.add(o);return o;}
     function part(o,geo,tint,pos,size=[1,1,1],rot=[0,0,0],material=metal,quat=null){
-      if(!repeatGeo.has(geo))repeatGeo.set(geo,geo.index?own(geo.toNonIndexed()):geo);
-      if(!o.mats.has(material))o.mats.set(material,{p:[],n:[],c:[],uv:[]});
-      const a=repeatGeo.get(geo).attributes,b=o.mats.get(material);
+      primitives.add(geo);
+      if(!o.mats.has(material))o.mats.set(material,{p:[],n:[],c:[],uv:[],indices:[]});
+      const a=geo.attributes,b=o.mats.get(material),offset=b.p.length/3;
+      const index=geo.index,count=index?index.count:a.position.count;
+      for(let i=0;i<count;i++)b.indices.push(offset+(index?index.getX(i):i));
       tmp.position.set(...pos);tmp.scale.set(...size);
       if(quat)tmp.quaternion.copy(quat);else tmp.rotation.set(...rot);
       tmp.updateMatrix();const nm=new T.Matrix3().getNormalMatrix(tmp.matrix);color.set(tint);
@@ -39,7 +41,7 @@ const TideFenderYard=(()=>{
     function finish(o){
       for(const [mat,b] of o.mats){
         const g=own(new T.BufferGeometry());for(const [key,ar,s] of [['position',b.p,3],['normal',b.n,3],['color',b.c,3],['uv',b.uv,2]])g.setAttribute(key,new T.Float32BufferAttribute(ar,s));
-        g.computeBoundingSphere();const m=new T.Mesh(g,mat);m.castShadow=true;m.receiveShadow=true;o.g.add(m);
+        g.setIndex(b.indices);g.computeBoundingSphere();const m=new T.Mesh(g,mat);m.castShadow=true;m.receiveShadow=true;o.g.add(m);
       }o.mats.clear();return o.g;
     }
     const block=(o,pos,w,h,d,c,rx=0,ry=0,rz=0,mat=metal)=>part(o,cube,c,pos,[w,h,d],[rx,ry,rz],mat);
@@ -498,8 +500,8 @@ const TideFenderYard=(()=>{
     }
     function gunTint(){return '#444d48';}
     for(const b of templates)finish(b);templates.clear();
-    for(const [src,plain] of repeatGeo)for(const g of [src,plain])if(resources.delete(g))g.dispose();
-    repeatGeo.clear();torusCache.clear();
+    for(const g of primitives)if(resources.delete(g))g.dispose();
+    primitives.clear();torusCache.clear();
     const lo=v(),hi=v(),M=new T.Object3D(),qStep=new T.Quaternion(),axisX=v(1,0,0),off=v();
     const ladderHands=[v(),v()];let deployed=0,disposed=false;
     let lastX,lastY,lastSet,lastPay,lastSpin,lastBrake,hasLadderPose=false;

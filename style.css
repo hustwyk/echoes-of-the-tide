@@ -35,3 +35,10 @@ dialog{width:min(590px,calc(100% - 22px));max-height:94vh;color:var(--text);back
 .partner-pin.at-edge i{width:0;height:0;background:none;box-shadow:none;border:6px solid transparent;border-bottom:12px solid var(--point);transform:rotate(var(--bearing));transform-origin:50% 66%}
 
 .partner-pin.label-inward-left span{left:0}.partner-pin.label-inward-right span{right:0}
+#filing:not([hidden]){position:absolute;inset:0;pointer-events:none;display:grid;grid-template-columns:1fr 1fr;align-content:end;color:#fffaea;background:linear-gradient(transparent 66%,#10191bdc);padding:0 0 12px}
+#filing:before{content:"";position:absolute;left:50%;inset-block:0;border-left:1px solid #b5c6bc88}
+#filing button{pointer-events:auto;background:#172424ec;border:1px solid #889b90;color:#fbf2dc;padding:6px 11px;font-size:inherit}
+#filing button:disabled{opacity:.5}.file-exit{position:absolute;right:12px;top:10px}
+.file-side{z-index:1;padding:8px max(12px,3vw);align-self:end;font-size:clamp(11px,1.15vw,17px);text-shadow:0 1px 4px #101817}
+.file-side small{color:#ffe5ae}.file-side p{margin:4px 0 8px}.file-side button{margin:2px}
+#file-note{grid-column:1/-1;text-align:center;margin:2px;height:1.5em;font-size:clamp(12px,1.15vw,18px)}
