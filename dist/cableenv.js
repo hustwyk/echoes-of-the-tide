@@ -89,9 +89,7 @@ const TideCableQuayEnv=(()=>{
     const stencil=patch(230,96,(c,w,h)=>{
       c.fillStyle='#d0c3a1';c.font='bold 42px sans-serif';c.fillText('东 廊',8,47);c.font='bold 16px monospace';c.fillText('EAST  /  02',10,75);scuff(c,w,h,530);
     });
-    const floatMark=patch(235,89,(c,w,h)=>{
-      c.fillStyle='#ccb587';c.font='bold 39px "Songti SC",serif';c.fillText('浮 栈　贰',7,44);c.font='bold 12px monospace';c.fillText('WORK LANDING · 02',9,68);scuff(c,w,h,480);
-    });
+
     const salt=patch(436,130,(c,w,h)=>{
       const line=x=>42+4.8*Math.sin(x*.031)+2.3*Math.sin(x*.131);
       for(let x=0;x<w;x++){
@@ -167,35 +165,13 @@ const TideCableQuayEnv=(()=>{
       for(const x of [-w*.27,w*.27])box(x,-.211,0,.091,.18,d,painted,dark,null,o);
     }
     function ironColor(i){return i%3?0x66776f:0x7e8373;}
-    function floatingDeck(f,o){
-      const w=f.w,d=f.d;
-      box(0,-.224,0,w-.02,.32,d-.04,painted,0x556b64,null,o);
-      for(const s of [-1,1]){
-        part(sphere,painted,0x475b58,[s*w*.291,-.57,0],[w*.21,.51,d*.47],null,o);
-        box(s*(w*.5-.043),-.09,0,.077,.155,d,alloy,rail,null,o);
-        for(const sign of [-1,1]){
-          ring(s*(w*.5+.035),-.285,sign*d*.273,.235,.083,rubber,0x293635,[0,Math.PI/2,0],o);
-          box(s*w*.46,-.16,sign*d*.273,.108,.19,.14,alloy,rust,null,o);
-        }
-      }
-      const planks=Math.max(4,Math.round(d/.185)),space=d/planks;
-      for(let i=0;i<planks;i++){
-        const z=-d*.5+(i+.5)*space;colorPlank(i,z);
-      }
-      function colorPlank(i,z){
-        box(0,-.039,z,w-.14,.075,space-.009,timber,([0x9a8669,0x9d8f70,0x83775d,0x8d8268])[i%4],null,o);
-        for(const s of [-1,1])rivet(s*(w*.5-.17),-.003,z,.014,0,0x807961,o);
-      }
-      art(floatMark,0,-.25,d*.5-.012,Math.min(1.05,w*.70),.32,0,0,0,o);
-      reflection(-w*.12,.002,0,.62*w,.31*d,-.1,o);
-    }
     // Supports and rails are part of their parent slabs. Rail fragments only occur on the outside edge away from stations.
     const stationZ=[1.4,-1.2,-3.8,-11.2,-12.55,-15.4,-17.85,-22.2,-24.5,-26.7,-28.9];
     const west=[];
     for(const f of world.floors){
+      if(f.kind==='cableFloat')continue;
       const o={f,parts:[],x:null,y:null,z:null,active:null};floors.push(o);
-      const isFloat=f.kind==='cableFloat',upper=!isFloat&&(f.x>1.2||f.y>1.75);
-      if(isFloat){floatingDeck(f,o);continue;}
+      const upper=f.x>1.2||f.y>1.75;
       if(upper)galleryDeck(f,o);else {concreteDeck(f,o);if(f.x<0)west.push(f);}
       const w=f.w,d=f.d,side=upper?1:-1,outer=side*(w*.5-.095),sections=Math.max(1,Math.ceil(d/5.50));
       for(let k=0;k<sections;k++){

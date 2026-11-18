@@ -19,11 +19,13 @@ const TideFenders = (() => {
     const landing=slab(-2.13,top,8.22,1.90,1.38);
     const steps=slab(-2.38,.34,7.05,2.86,1.22);
     slab(-2.38,.05,6.04,2.86,.94);
-    world.fenders={boats,boatLink,lower,shelf,well,ledge,sill,landing,steps};
+    const floatPose=TideFloating.make([...boats,boatLink],-.48,-2.67,16.85,3.78,1.39,1.34);
+    world.fenders={floatPose,boats,boatLink,lower,shelf,well,ledge,sill,landing,steps};
   }
   function create(g){
     if(!g.world.fenders)return null;
     g.checkpoints=g.world.fenders.boats.slice();g.players=g.checkpoints.map(spawn);
+    TideFloating.step(g.world.fenders.floatPose,g.players,g.cues.water,0,0);
     return {phase:'approach',setting:0,fenderX:2.67,fenderTop:-2.30,wheelSpin:0,ladder:0,pawl:false,onLadder:false,
       wall:null,lastFace:0,kicks:0,wallBuffer:0,previousJump:false,seen:[false,false],grip:[null,null],top:[false,false],voice:'shore',clock:0,line:-1,queue:[],subtitle:'',warned:false,heardPawl:false};
   }
@@ -56,9 +58,10 @@ const TideFenders = (() => {
     if(s.clock>=clip.duration){s.voice='';s.line=-1;s.clock=0;s.subtitle='';}
   }
   function clearWall(s){s.wall=null;s.lastFace=0;s.kicks=0;s.wallBuffer=0;}
-  function swimmer(g,i){
+  function swimmer(g,i,wet){
     const s=g.fenders,p=g.players[i];
-    Object.assign(p,spawn(g.checkpoints[i]));
+    if(wet)g.cues.splash={x:p.x,z:p.z,at:g.time};
+    Object.assign(p,TideFloating.spawn(g.checkpoints[i]));
     if(!i)s.onLadder=false;else clearWall(s);
     g.setbacks++;g.events.reset?.(i);g.alert('救生索收紧，'+(i?'沈遥':'林澈')+'回到落脚处',1.8);
   }
@@ -133,7 +136,9 @@ const TideFenders = (() => {
     }
     for(let i=0;i<2;i++){
       const p=g.players[i];
-      if(p.y< -3.82||s.top[i]&&p.y<top-1.46)swimmer(g,i);
+      const water=g.cues.water+TideFloating.swell(p.x,p.z,g.time);
+      const wet=!p.grounded&&p.vy<0&&p.y<water-.17;
+      if(wet||s.top[i]&&p.y<top-1.46)swimmer(g,i,wet);
       g.near[i]=!!s.grip[i]||close(g.players[i],target(g,i).p);g.engaged[i]=!!s.grip[i];
     }
     const leftText=s.top[0]?'从石阶下到吊篮码头':s.onLadder?'握紧梯档，向前爬；松手可停':s.ladder>=1?'到绞轮后面的卷梯，按住操作并向前爬':s.top[1]?'靠近回程梯，等沈遥放到底':s.seen[0]?'按住操作并向前收绳，等沈遥蹬上堤沿':'跑向手绞轮，在艇边起跳，长按跳得更高';

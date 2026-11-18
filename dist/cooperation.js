@@ -79,7 +79,7 @@ const TideCoop = (() => {
     }
     tick(dt,inputs,yaws=[0,0]) {
       if(this.complete)return;
-      this.time+=dt;TideFenders.narrate(this,dt);if(this.swing)TideSwing.narrate(this,dt);if(this.cistern)TideCistern.narrate(this,dt);if(this.glass)TideGlass.narrate(this,dt);
+      this.time+=dt;if(this.world.fenders)TideFloating.step(this.world.fenders.floatPose,this.players,this.cues.water,this.time,dt);TideFenders.narrate(this,dt);if(this.swing)TideSwing.narrate(this,dt);if(this.cistern)TideCistern.narrate(this,dt);if(this.glass)TideGlass.narrate(this,dt);
       const q=this.state, section=this.section;
       q.age+=dt;TidePassage.update(this);TideRigging.updateLadders(section,dt);
       if(q.doneAt!==null && this.time-q.doneAt>1.15){
@@ -131,7 +131,8 @@ const TideCoop = (() => {
           if(this.world.foghouse.wheels.includes(c))Object.assign(p,{x:c.x,y:c.y,z:c.z,ground:c,grounded:true});
         }else if(this.survey&&!p.grounded&&p.vy<0&&p.y<TideSoundings.surface(p.x,p.z,this.time)-.22){
           this.resetPerson(side,'系在救生索上的尺和人一起回到检修台');
-        }else if(this.cable&&!p.grounded&&p.vy<0&&p.y<this.cable.water+TideLookout.swell(p.x,p.z,this.time)-.34){
+        }else if(this.cable&&!p.grounded&&p.vy<0&&p.y<this.cable.water+TideFloating.swell(p.x,p.z,this.time)-.34){
+          this.cues.splash={x:p.x,z:p.z,at:this.time};
           this.resetPerson(side,'落水后，安全索把你拉了回来');
         }else if(p.y<Math.min(...section.starts.map(d=>d.y),...section.ends.map(d=>d.y))-4.2) {
           this.resetPerson(side,'安全索接住了你');

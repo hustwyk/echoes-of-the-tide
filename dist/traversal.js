@@ -82,7 +82,7 @@ const TideTraversal = (() => {
     return {floors,sections,style};
   }
   function spawn(s) {
-    return {x:s.x,y:s.y,z:s.z+.65,vx:0,vz:0,vy:0,yaw:0,ground:s,grounded:true,grace:.1,jumpBuffer:0,speed:0,jumpAge:0,jumpRise:false,launch:0,landing:0,cast:false};
+    return {x:s.x,y:s.y,z:s.z+.65,vx:0,vz:0,vy:0,yaw:0,ground:s,grounded:true,grace:.1,jumpBuffer:0,speed:0,jumpAge:0,jumpRise:false,launch:0,landing:0,cast:false,deckMotion:null};
   }
   function netHeight(d,x,z){
     const u=2*(x-d.x)/d.w,v=2*(z-d.z)/d.d,edge=Math.max(0,1-u*u)*Math.max(0,1-v*v);
@@ -130,7 +130,9 @@ const TideTraversal = (() => {
     }
     if(input.jump&&!operating)p.jumpBuffer=.14;
     if(p.jumpBuffer>0 && p.grace>0){
-      p.vy=7.2;p.grace=p.jumpBuffer=0;p.jumpRise=true;p.launch=1;p.jumpAge=0;p.grounded=false;p.ground=null;
+      p.vy=7.2;
+      if(p.deckMotion){p.vy+=clamp(p.deckMotion.y,-1.4,1.4);p.vx+=clamp(p.deckMotion.x,-1,1);p.vz+=clamp(p.deckMotion.z,-1.3,1.3);p.deckMotion=null;}
+      p.grace=p.jumpBuffer=0;p.jumpRise=true;p.launch=1;p.jumpAge=0;p.grounded=false;p.ground=null;
     }
     if(p.jumpRise){
       p.jumpAge+=dt;
@@ -145,7 +147,7 @@ const TideTraversal = (() => {
     const descending=floor?.axes&&p.ground===floor&&p.grounded&&oldY-top<.40;
     if(floor && p.vy<=0 && (p.y<=top+.012||descending)) {
       if(!p.grounded)p.landing=clamp((-p.vy-1.5)/9,0,1);
-      p.y=top;p.vy=0;p.cast=false;p.jumpRise=false;p.ground=floor;p.grounded=true;p.grace=.095;
+      p.y=top;p.vy=0;p.cast=false;if(!floor.buoyant)p.deckMotion=null;p.jumpRise=false;p.ground=floor;p.grounded=true;p.grace=.095;
     } else {p.grounded=false;p.ground=null;p.grace-=dt;}
   }
   return {build,spawn,move,netHeight,surfaceHeight,surface,clamp,mix};

@@ -4,6 +4,7 @@ const TideCableYard=(()=>{
   function create(scene,g,equipment,actors){
     const w=g.world.cableQuay,root=new T.Group();scene.add(root);
     const shore=TideCableQuayEnv.create(scene,g.world);
+    const ferry=TideWarpFloat.create(scene,g);
     const plant=TideCableQuayGear.create(scene,w),owned=new Set(),own=o=>(owned.add(o),o);
     const vec=(x,y,z)=>new T.Vector3(x,y,z),up=vec(0,1,0),transform=new T.Object3D();
     const wet=own(new T.MeshStandardMaterial({color:0x393a30,metalness:.33,roughness:.32}));
@@ -80,12 +81,13 @@ const TideCableYard=(()=>{
       hand[1].set(.118,-.012,0).applyMatrix4(pocket.matrixWorld);return hand;
     }
     function leadHands(s){
-      const p=s.players[0],head=TideCableQuay.tip(p),c=Math.cos(p.yaw),sn=Math.sin(p.yaw);
+      const p=s.players[0],head=TideCableQuay.endpoint(s),c=Math.cos(p.yaw),sn=Math.sin(p.yaw);
       for(let i=0;i<2;i++){const x=i?.12:-.12;hand[i].set(head.x+x*c,head.y+.024,head.z-x*sn);}
       return hand;
     }
     function hands(s,i){
       const place=TideCableQuay.target(s,i);
+      if(place.kind==='warp')return ferry.hands(s,i);
       return place.kind==='breaker'?equipment.grips(breaker):plant.hands(place.kind,place.index);
     }
     let lastTime=null,handsetLift=0;
@@ -94,7 +96,7 @@ const TideCableYard=(()=>{
       const dt=lastTime===null?0:Math.max(0,Math.min(.15,s.time-lastTime));lastTime=s.time;
       const lift=s.stage===2&&a.backTest&&a.power&&s.engaged[1]?1:0;
       handsetLift+=(lift-handsetLift)*(1-Math.exp(-dt*10));
-      shore.update(s.time,a.water);
+      shore.update(s.time,a.water);ferry.update(s,s.time);
       plant.update({down:a.down,pilot:a.pilot,returns:a.returns,route:a.route,payout:a.payout,hooks:a.hooks,backLight:a.backLight,
         beam:destination.toArray(),windows:a.windows,patched:a.patched,tx:a.radio==='sending'||a.radio==='sent',rx:a.radio==='reply',power:a.power,handsetLift});
       equipment.drive(breaker,a.power?1:0,s.time);pilotMat.emissiveIntensity=a.power?1.5:a.backLight?3.5:.025;
@@ -102,7 +104,7 @@ const TideCableYard=(()=>{
       span(feeder[0],feeder[1],.08);span(feeder[1],feeder[2],.28+.02*Math.sin(s.time));span(feeder[2],w.source,.018);
       let from=w.source;
       for(let j=0;j<a.hooks;j++){span(from,w.eyes[j],.23);from=w.eyes[j];}
-      const end=a.carried?TideCableQuay.tip(p):a.hooks?from:{x:w.head.x,y:w.source.y-.27,z:w.head.z+.23};
+      const end=a.carried?TideCableQuay.endpoint(s):a.hooks?from:{x:w.head.x,y:w.source.y-.27,z:w.head.z+.23};
       if(a.carried||!a.hooks){
         const dist=Math.hypot(end.x-from.x,end.y-from.y,end.z-from.z);
         span(from,end,a.carried?TideCableQuay.sag(dist,a.payout-TideCableQuay.fixed(s)):.19);
@@ -131,13 +133,13 @@ const TideCableYard=(()=>{
         if(capLight.position.distanceToSquared(p)>5)capLight.position.set(p.x,p.y+1.69,p.z);
         capLight.target.position.set(p.x-Math.sin(p.yaw)*3.1,p.y-.25,p.z-Math.cos(p.yaw)*3.1);capLight.target.updateMatrixWorld();
       }
-      links.count=count;links.instanceMatrix.needsUpdate=true;box.position.set(end.x,end.y,end.z);box.rotation.y=a.carried?p.yaw:.41;
+      links.count=count;links.instanceMatrix.needsUpdate=true;box.position.set(end.x,end.y,end.z);box.rotation.set(a.warp.clipped?w.float.pitch:0,a.warp.clipped?w.float.yaw:a.carried?p.yaw:.41,a.warp.clipped?w.float.roll:0,'YXZ');
       for(let i=0;i<foam.length;i++){
         const ring=foam[i],hit=a.contact;
         ring.visible=s.stage===1&&a.carried&&a.clearance<.23;
         if(!ring.visible)continue;
         const u=(s.time*1.19+i/foam.length)%1,x=hit.x+.09*i,z=hit.z-.08*i,t=s.time;
-        const h=TideLookout.swell(x,z,t),dx=(TideLookout.swell(x+.15,z,t)-h)/.15,dz=(TideLookout.swell(x,z+.15,t)-h)/.15;
+        const h=TideFloating.swell(x,z,t),dx=(TideFloating.swell(x+.15,z,t)-h)/.15,dz=(TideFloating.swell(x,z+.15,t)-h)/.15;
         normal.set(-dx,1,-dz).normalize();ring.quaternion.setFromUnitVectors(face,normal);
         ring.position.set(x,a.water+h+.053,z);ring.scale.set(.09+.51*u,.08+.42*u,1);
         ring.material.opacity=(1-u)*Math.min(.78,Math.max(0,.23-a.clearance)*2.4);
@@ -154,7 +156,9 @@ const TideCableYard=(()=>{
       switch(place.kind){
         case 'key':return lens([-4.72,1.97,-.25],[-3.22,.99,-2.12],55);
         case 'post':return lens([4.95,4.50,place.z+1.07],[3.62,3.65,place.z-.62],52);
-        case 'drum':return lens([5.45,4.91,-9.72],[-1.35,1.66,-10.2+(s.players[0].z+10.2)*.72],63);
+        case 'warp':return lens([p.x-2.85,p.y+2.26,p.z+2.1],[p.x-.10,p.y+.73,p.z-.33],61);
+        case 'drum':if(a.warp.clipped)return lens([2.40,6.75,-3.8],[.62,1.69,-9.82+.25*w.float.z],54);
+          return lens([5.45,4.91,-9.72],[-1.35,1.66,-10.2+(s.players[0].z+10.2)*.72],63);
         case 'saddle':return lens([p.x-2.25,p.y+1.54,p.z+1.16],[place.x,place.y+.82,place.z-.42],54);
         case 'lamp':return lens([-5.25,2.48,-21.30],[.65,3.29,-25.70],56);
         case 'window':return lens([4.32,4.34,place.z+.83],[2.38,3.83,place.z-.04],54);
@@ -163,7 +167,7 @@ const TideCableYard=(()=>{
       }
       return null;
     }
-    return {update,shot,hands,leadHands,testerHands,dispose(){shore.dispose();plant.dispose();root.removeFromParent();root.clear();for(const r of owned)r.dispose();}};
+    return {update,shot,hands,leadHands,testerHands,dispose(){ferry.dispose();shore.dispose();plant.dispose();root.removeFromParent();root.clear();for(const r of owned)r.dispose();}};
   }
   return {create};
 })();

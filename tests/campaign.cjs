@@ -3,11 +3,11 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const box=vm.createContext({});
-for(const name of ['missions','traversal','fender-speech','fenders','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','lookout','cistern-speech','cistern','glass-speech','chartroom','paper','lantern','signal','archive','relay-speech','relay','soundings-speech','soundings','fog-speech','fogsignal','pass-speech','lastpass','swing-speech','swing','cooperation']){
+for(const name of ['missions','traversal','floating','warp-speech','warping','fender-speech','fenders','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','lookout','cistern-speech','cistern','glass-speech','chartroom','paper','lantern','signal','archive','relay-speech','relay','soundings-speech','soundings','fog-speech','fogsignal','pass-speech','lastpass','swing-speech','swing','cooperation']){
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../dist',name+'.js'),'utf8'),box);
 }
 const {Session,near,surface,lookout,ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideSwing,TideCistern,TideGlass,TidePaper}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideSwing,TideCistern,TideGlass,TidePaper})',box);
-const TideFenders=vm.runInContext('TideFenders',box);
+const {TideFenders,TideWarping,TideFloating}=vm.runInContext('({TideFenders,TideWarping,TideFloating})',box);
 const empty=()=>({x:0,z:0,use:false,jump:false});
 function steer(g,i,target,keys){
   const p=g.players[i],dx=target.x-p.x,dz=target.z-p.z,dist=Math.hypot(dx,dz);
@@ -148,10 +148,16 @@ function quayInputs(g,out){
   for(let i=0;i<2;i++){
     const p=g.players[i],s=sites[i],k=out[i];
     if(TideCableQuay.near(g,i)&&TideCableQuay.target(g,i)===s){k.use=true;continue;}
-    let goal=s;
-    if(!i&&p.z>-16.48&&s.z<-16.7&&p.z<-13.1){
-      goal=p.z>w.float.z+.12?w.float:s;
+    if(!i&&g.stage===1){
+      const h=a.warp;
+      if(h.returning&&(p.ground===w.float||s.kind==='warp'))continue;
+      if(h.released&&p.ground===w.float){
+        // Release the tool-confirm button before making a separate running jump.
+        // Wait on the hull until the far apron is within a comfortable rising step.
+        if(g.time-h.releasedAt<.18||p.vz>-.25&&w.saddles[1].y-p.y>.79)continue;
+      }
     }
+    let goal=s;
     for(const [fx,fy,fz,r] of w.fixtures){
       if(Math.abs(p.y-fy)>.9||p.z<fz-.24||p.z>fz+1.75||s.z>fz-.38)continue;
       if(Math.abs(p.x-fx)<r+.38)goal={x:fx+(i?.96:-.89),y:fy,z:fz-.35};
@@ -163,7 +169,13 @@ function quayInputs(g,out){
     if(out[1].use)out[1].jump=a.survey[1];
   }else if(g.stage===1){
     if(out[1].use)out[1].z=axis((TideCableQuay.length(g)+.66-a.payout)*2.7);
-    if(a.carried&&TideCableQuay.near(g,0)){out[0].use=true;out[0].jump=a.slack>.26&&a.slack<.95;}
+    if(a.carried&&TideCableQuay.near(g,0)){
+      const h=a.warp;out[0].use=true;
+      if(TideWarping.needed(g)){
+        out[0].jump=!h.clipped||h.phase==='far';
+        if(h.clipped&&h.phase!=='far')out[0].z=h.stroke>=.988||h.stroke<h.purchase-.001?-1:1;
+      }else out[0].jump=a.slack>.26&&a.slack<.95;
+    }
   }else if(a.patched<0){
     if(out[0].use){out[0].x=axis((-28.9-a.scanZ)*4);out[0].z=axis((a.scanY-3.85)*4);}
     if(out[1].use)out[1].jump=a.exposed>=1;
@@ -933,6 +945,48 @@ if(require.main===module){
   assert.ok(basket.rig.wrong>=0&&!basket.rig.lit);
   assert.ok(basket.state.ferry>.36&&basket.state.ferry<=.42);
   reach(basket,()=>basket.stage===2);
+
+  {
+    const g=new Session(0),h=g.world.fenders.floatPose,crew=g.players;
+    const marks=crew.map(p=>TideFloating.local(h,p.x,p.y,p.z));let low=Infinity,high=-Infinity,angle=0;
+    for(let j=0;j<600;j++){
+      g.tick(step,[empty(),empty()]);low=Math.min(low,h.y);high=Math.max(high,h.y);angle=Math.max(angle,Math.abs(h.pitch),Math.abs(h.roll));
+      for(let i=0;i<2;i++){
+        const p=crew[i],expected=TideFloating.point(h,marks[i].x,marks[i].y,marks[i].z);
+        assert.equal(p.ground,g.world.fenders.boats[i]);assert.ok(Math.hypot(p.x-expected.x,p.y-expected.y,p.z-expected.z)<.00001);
+      }
+    }
+    assert.ok(high-low>.44&&angle>.055);
+    const expected=g.players[0].y;g.tick(step,[{...empty(),jump:true,jumpHeld:true},empty()]);
+    assert.ok(!crew[0].grounded&&crew[0].y>expected&&crew[1].ground===g.world.fenders.boats[1]);
+  }
+  {
+    const g=new Session(1),a=g.cable,s=a.warp,w=g.world.cableQuay;
+    reach(g,()=>s.clipped);const firstSave=TideCableQuay.checkpoint(g);
+    assert.equal(a.hooks,1);assert.equal(firstSave.hooks,1);
+    // Lock the upper drum and hold one lower stroke. A held or jittering
+    // handle cannot repeatedly advance the chain without gathering another bite.
+    for(let i=0;i<180;i++)g.tick(step,[{...empty(),use:true,z:1},{...empty(),use:true,z:-1}]);
+    assert.ok(s.travel<.23&&s.load>.6);const held=s.travel;
+    for(let i=0;i<60;i++)g.tick(step,[{...empty(),use:true,z:1},empty()]);
+    assert.ok(s.travel<held+.05);
+    reach(g,()=>s.travel>.46&&s.clipped);const bought=s.travel;
+    for(let i=0;i<45;i++)g.tick(step,[{...empty(),use:true},{...empty(),use:true}]);
+    assert.equal(s.travel,bought);assert.equal(g.players[0].ground,w.float);
+    const oldHook=g.checkpoints[0];
+    for(let i=0;i<720&&s.clipped;i++)g.tick(step,[{...empty(),use:true},{...empty(),use:true,z:1}]);
+    assert.ok(!a.carried&&s.returning&&a.hooks===1);
+    const rider=g.players[0];for(let i=0;i<420&&s.returning;i++)g.tick(step,[empty(),empty()]);
+    assert.equal(rider.ground,w.float);assert.equal(s.travel,0);assert.equal(g.checkpoints[0],oldHook);
+    const retry=new Session(1);retry.stage=1;retry.begin();TideCableQuay.restore(retry,firstSave);
+    reach(retry,()=>retry.cable.warp.travel>.35&&retry.cable.warp.clipped);
+    const q=retry.cable,falls=retry.setbacks,other=retry.players[1];
+    for(let i=0;i<300&&retry.setbacks===falls;i++)retry.tick(step,[{...empty(),x:-1},{...empty(),use:true}]);
+    assert.equal(retry.setbacks,falls+1);assert.equal(q.hooks,1);assert.ok(!q.carried&&retry.cues.splash&&other.grounded);
+    reach(retry,()=>q.warp.phase==='far'&&q.warp.clipped);
+    assert.ok(!q.warp.released&&q.hooks===1);
+    reach(retry,()=>q.warp.released&&q.carried);reach(retry,()=>retry.stage===2);
+  }
 
   function verifyCableQuay(){
     const g=new Session(1),a=g.cable,w=g.world.cableQuay;

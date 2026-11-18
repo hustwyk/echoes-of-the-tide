@@ -339,7 +339,7 @@ window.TideAudioScene = (() => {
     }
     function snapshot(g) {
       return {game:g, section:g.state, fenderWinding:0,fenderPaid:0,fenderRung:0,fenderWall:null,
-        well:g.cistern?{caught:g.cistern.caught,stowed:g.cistern.cupKept,stroke:Math.floor(g.cistern.stroke*2),ports:g.cistern.ports,
+        warpGrip:false,warpTooth:0,warpReturn:0,warpSeated:false,well:g.cistern?{caught:g.cistern.caught,stowed:g.cistern.cupKept,stroke:Math.floor(g.cistern.stroke*2),ports:g.cistern.ports,
           blocked:g.cistern.blocked,moored:g.cistern.moored,basket:g.cistern.tape,hoist:Math.floor(g.cistern.hoist*8)}:null,
         stamp:g.optic?.stamp??0, guide:g.optic?.mount?.gate??0, notch:g.section.span?.notch, impact:g.section.span?.impact, cableBay:0,
         walkers:g.players.map(p => ({ground:p.grounded, fall:0, distance:0, heel:false})),
@@ -407,6 +407,14 @@ window.TideAudioScene = (() => {
     }
     function changes(g, now) {
       const q = g.state, spec = g.spec, type = spec.type;
+      if(g.stage===1&&g.cable){
+        const s=g.cable.warp,tooth=Math.floor(s.travel*42),back=Math.floor(s.stroke*5);
+        if(s.clipped&&!previous.warpGrip){click(now,-.48,.65);ring(now+.037,635,.16,.10,-.38);}
+        if(s.clipped&&tooth>previous.warpTooth){wheel(now,-.40,.54);ring(now+.015,194,.149,.09,-.38);}
+        if(s.work&&back<previous.warpReturn){click(now,-.4,.41);brush(now,'pink','bandpass',550,1.05,.005,.083,.12,-.38,.22,220);}
+        if(s.phase==='far'&&!previous.warpSeated){foot(now,-.4,'dock',1.12,true);ring(now+.063,112,.23,.12,-.47);}
+        previous.warpGrip=s.clipped;previous.warpTooth=tooth;previous.warpReturn=back;previous.warpSeated=s.phase==='far';
+      }
       if(g.cistern){
         const s=g.cistern,last=previous.well,stroke=Math.floor(s.stroke*2),link=Math.floor(s.hoist*8);
         if(s.caught&&!last.caught){ring(now,1114,.25,.085,.54);ring(now+.026,1725,.13,.045,.50);}

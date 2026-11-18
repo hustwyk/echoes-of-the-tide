@@ -12,15 +12,15 @@ const TideCableQuay=(()=>{
     const west=slab('cableQuay',-3.35,0,-1.23,4.1,14.54);
     slab('cableWash',-4.12,-.32,-9.72,3.18,3.46);
     slab('cableWash',-4.0,.04,-12.57,3.18,2.95);
-    const float=slab('cableFloat',-3.48,-.24,-15.38,2.52,1.95);
-    slab('cableWash',-3.55,.41,-17.93,3.50,2.78);
-    slab('cableQuay',-3.35,.45,-25.60,4.12,13.20);
+    const float=slab('cableFloat',-3.50,-.17,-15.31,2.52,2.0);
+    slab('cableWash',-3.55,.41,-22.86,3.50,2.78);
+    slab('cableQuay',-3.35,.45,-28.12,4.12,8.16);
     const east=slab('cableGallery',3.48,upper,-13.14,3.18,38.10);
     const w={float,key:site('key','干线试灯键',-3.35,0,-1.41),
       posts:postZ.map((z,i)=>site('post','回闪插口 '+(i+1),3.70,upper,z+.55,i)),
       head:site('lead','取水线接头',-3.52,0,-7.14),
-      saddles:[site('saddle','第一道瓷鞍',-4.0,.04,-12.00,0),site('saddle','第二道瓷鞍',-3.55,.41,-17.30,1)],
-      eyes:[point(-4.0,.99,-12.55),point(-3.55,1.36,-17.85)],
+      saddles:[site('saddle','第一道瓷鞍',-4.0,.04,-12.00,0),site('saddle','第二道瓷鞍',-4.48,.41,-22.20,1)],
+      eyes:[point(-4.0,.99,-12.55),point(-4.48,1.36,-22.75)],
       drum:site('drum','上廊放线筒',3.30,upper,-10.58),
       lamp:site('lamp','吊臂检修灯',-3.35,.45,-21.60),
       windows:windowZ.map((z,i)=>site('window','吊臂后窗 '+(i+1),3.03,upper,z,i)),
@@ -30,19 +30,20 @@ const TideCableQuay=(()=>{
     // The handle grips stand in front of each casing. Keep the service aisle open beside them.
     w.fixtures=[
       [-3.35,0,-2,.39],...postZ.map(z=>[3.70,upper,z,.38]),[3.3,upper,-11.2,.51],
-      [-4,.04,-12.55,.24],[-3.55,.41,-17.85,.24],[-3.35,.45,-22.2,.47],
+      [-4,.04,-12.55,.24],[-4.48,.41,-22.75,.24],[-3.35,.45,-22.2,.47],
       [-3.35,.45,-29.92,.41],[3.7,upper,-31,.52]
     ];
     const entry=[point(-3.35,0,3.20),point(3.55,upper,4.15)];
     const pairs=[[w.key,w.posts[1]],[w.saddles[1],w.drum],[w.breaker,w.mic]];
     const sections=TideMissions.chapters[1].map((spec,k)=>({spec,starts:k?pairs[k-1]:entry,
       ends:pairs[k],sites:pairs[k],mid:k?east:west,paths:[[],[]],returnDecks:[],danger:[],ferry:null}));
+    TideWarping.build(w);
     return {floors,sections,style:'dock',cableQuay:w};
   }
   function create(g){
     return g.world.cableQuay?{down:false,downAt:0,presses:[],signalled:false,lastSignal:-6,
       scan:-1,sample:0,survey:[false,false,false],route:-1,returns:[0,0,0],pilot:0,
-      payout:1.4,hooks:0,carried:false,wet:0,contact:point(0,0,0),clearance:0,slack:0,pull:0,water:-1.55,
+      warp:TideWarping.create(),payout:1.4,hooks:0,carried:false,wet:0,contact:point(0,0,0),clearance:0,slack:0,pull:0,water:-1.55,
       scanZ:-24.3,scanY:3.07,windows:[0,0,0],exposed:0,patched:-1,blown:0,
       backTest:false,returnReady:false,returnDown:false,returnAt:0,missed:false,received:[],backLight:0,
       overhead:-1,overLine:-1,subtitle:'',power:false,radio:'idle',clock:0,line:-1}:null;
@@ -51,7 +52,7 @@ const TideCableQuay=(()=>{
     const a=g.cable;if(!a)return;
     if(g.stage===1)a.overhead=0;
     if(g.stage>0){a.signalled=true;a.route=1;}
-    if(g.stage===2){a.hooks=2;a.payout=fixed(g)+.45;}
+    if(g.stage===2){TideWarping.docked(g);TideWarping.position(g,0);a.hooks=2;a.payout=fixed(g)+.45;}
     g.cues.water=a.water;
   }
   function nearest(p,places){
@@ -60,17 +61,18 @@ const TideCableQuay=(()=>{
   function target(g,i){
     const w=g.world.cableQuay,a=g.cable,p=g.players[i];
     if(g.stage===0)return i?nearest(p,w.posts):w.key;
-    if(g.stage===1)return i?w.drum:a.carried?w.saddles[Math.min(1,a.hooks)]:a.hooks?w.saddles[a.hooks-1]:w.head;
+    if(g.stage===1)return i?w.drum:TideWarping.needed(g)?TideWarping.site(g):a.carried?w.saddles[Math.min(1,a.hooks)]:a.hooks?w.saddles[a.hooks-1]:w.head;
     if(a.patched>=0)return i?(a.backTest?w.mic:w.windows[a.patched]):w.breaker;
     return i?nearest(p,w.windows):w.lamp;
   }
   function near(g,i){
     const s=target(g,i),p=g.players[i];
+    if(s.kind==='warp')return TideWarping.reach(g);
     const reachable=s.kind==='window'?p.x>=2.62:s.kind==='lead'||p.z>=s.z-.48;
     return reachable&&p.grounded&&Math.abs(p.y-s.y)<.26&&Math.hypot(p.x-s.x,p.z-s.z)<(s.kind==='window'?.92:1.12);
   }
   function working(g,i,input){
-    if(g.stage===1&&!i)return g.cable.carried&&near(g,0)&&input.use; // Grip the clamp to seat the ferrule.
+    if(g.stage===1&&!i)return g.cable.carried&&near(g,0)&&(input.use||!!g.cable.warp.pass); // Grip the clamp to seat the ferrule.
     return input.use&&near(g,i);
   }
   function collide(g,p){
@@ -87,7 +89,7 @@ const TideCableQuay=(()=>{
   function pose(g,i,dt){
     const p=g.players[i],s=target(g,i),blend=1-Math.exp(-dt*9);
     p.x+=(s.x-p.x)*blend;p.z+=(s.z-p.z)*blend;
-    const yaw=s.kind==='window'?Math.PI/2:0;
+    const yaw=s.kind==='window'?Math.PI/2:s.kind==='warp'?g.world.cableQuay.float.yaw:0;
     p.yaw+=Math.atan2(Math.sin(yaw-p.yaw),Math.cos(yaw-p.yaw))*blend;
   }
   function tip(p){return point(p.x-.29*Math.sin(p.yaw),p.y+1.04,p.z-.29*Math.cos(p.yaw));}
@@ -96,14 +98,18 @@ const TideCableQuay=(()=>{
     const w=g.world.cableQuay,a=g.cable;
     return (a.hooks>0?distance(w.source,w.eyes[0]):0)+(a.hooks>1?distance(w.eyes[0],w.eyes[1]):0);
   }
-  function length(g){return fixed(g)+distance(anchor(g),tip(g.players[0]));}
+  function endpoint(g){
+    const s=g.cable.warp,hand=tip(g.players[0]);
+    if(!s.pass)return s.clipped?TideWarping.attach(g):hand;
+    const peg=TideWarping.attach(g),u=clamp((g.time-s.handAt)/.38,0,1),smooth=u*u*(3-2*u),k=s.pass==='park'?smooth:1-smooth;
+    return point(hand.x+(peg.x-hand.x)*k,hand.y+(peg.y-hand.y)*k+.085*Math.sin(Math.PI*k),hand.z+(peg.z-hand.z)*k);
+  }
+  function length(g){return fixed(g)+distance(anchor(g),endpoint(g));}
   function sag(chord,paid){return Math.sqrt(Math.max(0,paid*paid-chord*chord))*.44;}
   function update(g,dt){
-    const a=g.cable,w=g.world.cableQuay,f=w.float,t=g.time,phase=t*1.21;
+    const a=g.cable,t=g.time,phase=t*1.21;
     a.water=-1.58+.37*Math.sin(phase)+.12*Math.sin(t*.53);g.cues.water=a.water;
-    const x=-3.48+.32*Math.sin(t*.83),y=-.29+.19*Math.sin(phase),z=-15.38+.14*Math.cos(t*.76);
-    for(const p of g.players)if(p.ground===f){p.x+=x-f.x;p.y+=y-f.y;p.z+=z-f.z;}
-    Object.assign(f,{x,y,z});
+    TideWarping.position(g,dt);TideWarping.narrate(g,dt);
     a.blown=Math.max(0,a.blown-dt);
     if(a.overhead>=0){
       a.overhead+=dt;
@@ -112,7 +118,7 @@ const TideCableQuay=(()=>{
     }
   }
   function restrain(g){
-    const a=g.cable;if(g.stage!==1||!a.carried)return;
+    const a=g.cable;if(g.stage!==1||!a.carried||a.warp.clipped||a.warp.pass)return;
     const p=g.players[0],from=anchor(g),end=tip(p),free=Math.max(.40,a.payout-fixed(g));
     const dx=end.x-from.x,dz=end.z-from.z,h=Math.hypot(dx,dz),dy=end.y-from.y;
     const limit=Math.sqrt(Math.max(.12,free*free-dy*dy));
@@ -123,7 +129,7 @@ const TideCableQuay=(()=>{
   }
   function fall(g,i){
     const a=g.cable;if(i||!a.carried||g.stage!==1)return;
-    a.carried=false;a.wet=0;a.payout=fixed(g)+1.4;
+    TideWarping.lose(g);a.carried=false;a.wet=0;a.payout=fixed(g)+1.4;
     g.alert('林澈：接头挂回了上一只鞍。再给我一点余线。',3.2);
   }
   function flash(t,code){
@@ -170,18 +176,18 @@ const TideCableQuay=(()=>{
     const a=g.cable,w=g.world.cableQuay,p=g.players[0];
     if(g.engaged[1]){
       const taut=a.carried?Math.min(a.payout,length(g)-.12):0;
-      a.payout=clamp(a.payout+input[1].z*2.55*dt,Math.max(fixed(g)+.30,taut),15.0);
+      a.payout=clamp(a.payout+input[1].z*2.55*dt,Math.max(fixed(g)+.30,taut),21.0);
     }
     if(!a.carried&&near(g,0)&&input[0].use){
       a.carried=true;a.wet=0;g.sound(295,.10);g.alert('提着接头走。东廊后拉放线，前推收线。');
     }
-    const paid=Math.max(0,a.payout-fixed(g)),from=anchor(g),end=a.carried?tip(p):from,chord=distance(from,end);
+    const paid=Math.max(0,a.payout-fixed(g)),from=anchor(g),end=a.carried?endpoint(g):from,chord=distance(from,end);
     a.slack=paid-chord;
     const hang=sag(chord,paid);let clearance=Infinity;
     for(let j=1;j<8;j++){
       const t=j/8,x=from.x+(end.x-from.x)*t,z=from.z+(end.z-from.z)*t;
       const y=from.y+(end.y-from.y)*t-hang*4*t*(1-t);
-      const gap=y-a.water-TideLookout.swell(x,z,g.time);
+      const gap=y-a.water-TideFloating.swell(x,z,g.time);
       if(gap<clearance){clearance=gap;a.contact.x=x;a.contact.z=z;}
     }
     a.clearance=clearance;
@@ -189,7 +195,7 @@ const TideCableQuay=(()=>{
     else a.wet=Math.max(0,a.wet-dt*1.8);
     a.pull=clamp((.4-a.slack)*2,0,1);
     if(a.wet>.90){
-      a.carried=false;a.payout=fixed(g)+1.4;a.wet=0;
+      TideWarping.lose(g);a.carried=false;a.payout=fixed(g)+1.4;a.wet=0;
       g.alert('线腹落水，接头滑回上一道托架。收短余线再提。',3.2);g.sound(149,.12);
     }
     const fitted=a.slack>=.22&&a.slack<=1.05;
@@ -197,12 +203,18 @@ const TideCableQuay=(()=>{
       caption:'已挂 '+a.hooks+' / 2　·　'+(!a.carried?'接头在架':a.slack<.22?'绷紧，需要放线':a.slack>1.05?'线腹太低，请收线':'有余量，可以挂鞍')});
     g.set(1,'到上廊抓住卷筒。后拉放线让同伴往前走，前推收起要碰水的线腹。',{
       vis:'dial',value:clamp(clearance/2.6,0,1),caption:'放出 '+a.payout.toFixed(1)+' m　·　'+(a.carried?'线腹离潮面 '+Math.round(clearance*100)+' cm':'等下层提线')});
+    if(TideWarping.needed(g)){TideWarping.work(g,input[0],dt);return;}
+    if(a.warp.released&&p.ground===w.float){
+      const rise=w.saddles[1].y-TideTraversal.surfaceHeight(w.float,p.x,p.z);
+      g.set(0,rise>.83?'岸沿还高。等浪把甲板托起，松开操作再长按跳跃':'船边已接近石台。松开操作，向对岸起跳',{
+        caption:'岸沿比脚下高 '+Math.round(rise*100)+' cm'});
+    }else if(a.warp.returning&&p.ground===w.float)g.set(0,'接头落水了。留在甲板上，回缆会把你带回第一道鞍');
     if(a.carried&&near(g,0)&&input[0].use&&input[0].jump){
       if(!fitted){g.alert(a.slack<.22?'接头绷得扣不上。请上廊再放一点。':'余线抵住鞍盖，让上廊收半圈。');return;}
       const idx=a.hooks++;a.carried=false;a.payout=fixed(g)+.72;a.wet=0;
       g.checkpoints=[{...w.saddles[idx],x:w.saddles[idx].x+.18},w.drum];g.sound(532,.14);
       if(a.hooks===2){g.alert('林澈：线头铁圈里是个缺月。记住它，去找吊臂背面的套管。',4);g.advance();}
-      else{g.events.checkpoint?.(g);g.alert('第一道鞍扣好。提回接头，跳过浮台去下一道。');}
+      else{g.events.checkpoint?.(g);g.alert('第一道鞍扣好。接头带上链渡，扣进船上的瓷夹。');}
     }
   }
   function beam(g){const a=g.cable;return [2.38,a.scanY,a.scanZ];}
@@ -302,7 +314,7 @@ const TideCableQuay=(()=>{
     if(!g.cable||mark?.signalled!==true)return;
     const a=g.cable,w=g.world.cableQuay;a.signalled=true;a.lastSignal=g.time;
     if(g.stage===1&&mark.hooks===1){
-      a.hooks=1;a.payout=fixed(g)+.72;g.checkpoints=[w.saddles[0],w.drum];
+      a.overhead=-1;a.subtitle='';a.hooks=1;a.payout=fixed(g)+.72;g.checkpoints=[w.saddles[0],w.drum];
     }
     if(g.stage===2&&mark.patched===2){
       a.patched=2;a.backTest=mark.backTest===true||mark.power===true;a.power=mark.power===true;a.radio=a.power&&mark.reply?'reply':'idle';
@@ -310,5 +322,5 @@ const TideCableQuay=(()=>{
     }
     g.players=g.checkpoints.map(TideTraversal.spawn);
   }
-  return {layout,create,begin,target,near,working,collide,pose,update,restrain,fall,interact,title,briefing,checkpoint,restore,tip,anchor,fixed,length,sag,beam,windowZ};
+  return {layout,create,begin,target,near,working,collide,pose,update,restrain,fall,interact,title,briefing,checkpoint,restore,tip,anchor,fixed,length,endpoint,sag,beam,windowZ};
 })();

@@ -11,6 +11,7 @@ const TideReceiverAudio=(()=>{
     });
     return loads[name];
   }
+  const loadWarp=()=>loadData('TideWarpMedia','assets/warp-media.js');
   const loadQuay=()=>loadData('TideQuayAudio','assets/cablequay-audio.js');
   const loadRelay=()=>loadData('TideRelayMedia','assets/relay-media.js');
   const loadSoundings=()=>loadData('TideSoundingsMedia','assets/soundings-media.js');
@@ -32,9 +33,10 @@ const TideReceiverAudio=(()=>{
         const mast=key.startsWith('mast/'),survey=key.startsWith('tide/'),horn=key.startsWith('horn/'),final=key.startsWith('pass/');
         const room=key.startsWith('room/'),well=key.startsWith('well/'),swing=key.startsWith('sway/');
         const berth=key.startsWith('dock/');
-        const stock=berth?await loadFender():swing?await loadSwing():well?await loadCistern():room?await loadGlass():final?await loadPass():horn?await loadFog():survey?await loadSoundings():mast?await loadRelay():(key==='receiver'||key==='hoist')?TideBreakwaterAudio:await loadQuay();
+        const warp=key.startsWith('haul/');
+        const stock=warp?await loadWarp():berth?await loadFender():swing?await loadSwing():well?await loadCistern():room?await loadGlass():final?await loadPass():horn?await loadFog():survey?await loadSoundings():mast?await loadRelay():(key==='receiver'||key==='hoist')?TideBreakwaterAudio:await loadQuay();
         if(!stock)return;
-        const bytes=Uint8Array.from(atob(stock[mast||survey||horn||final||room||well||swing||berth?key.slice(5):key]),v=>v.charCodeAt(0));
+        const bytes=Uint8Array.from(atob(stock[mast||survey||horn||final||room||well||swing||berth||warp?key.slice(5):key]),v=>v.charCodeAt(0));
         buffers[key]=await ctx.decodeAudioData(bytes.buffer);
       }finally{pending.delete(key);}
     }
@@ -68,8 +70,9 @@ const TideReceiverAudio=(()=>{
       const a=g.cable,button=a.down||a.returnDown;
       if(button&&!lastKey){relay=end(relay);relay=play('relay',.72);}
       lastKey=button;
-      const key=a.radio==='sending'?'shore':a.radio==='reply'?'ship':a.overhead>=0?'overhear':'';
-      const t=key==='overhear'?a.overhead:a.clock;
+      const key=a.radio==='sending'?'shore':a.radio==='reply'?'ship':a.overhead>=0?'overhear':a.warp.voice?'haul/'+a.warp.voice:'';
+      const t=key==='overhear'?a.overhead:key.startsWith('haul/')?a.warp.clock:a.clock;
+      if(g.stage===1)for(const id of Object.keys(TideWarpSpeech)){const token='haul/'+id;if(!buffers[token]&&!pending.has(token))decode(token).catch(()=>{});}
       if(!buffers.relay&&!pending.has('relay'))decode('relay').catch(()=>{});
       if(key&&!buffers[key]&&!pending.has(key))decode(key).catch(()=>{});
       if(key!==storyKey||story&&Math.abs(ctx.currentTime-story.start-t)>.55){story=end(story);storyKey=key;}
