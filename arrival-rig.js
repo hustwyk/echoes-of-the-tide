@@ -18,8 +18,15 @@ const TideArrivalRig=(()=>{
       mesh(station,cyl,rubber,x,.020,z,.029,.035,.029);
       mesh(station,cyl,bronze,x,1.036,z,.009,.006,.009);
     }
+    const fairlead=new T.Group();boat.root.add(fairlead);fairlead.position.set(1.63,-2.45,15.19);
+    mesh(fairlead,cube,iron,0,0,0,.28,.032,.14);
+    for(const side of [-1,1]){
+      mesh(fairlead,cyl,bronze,side*.10,.064,0,.032,.12,.032).rotation.z=-side*.24;
+      mesh(fairlead,cyl,iron,side*.102,.022,.048,.013,.013,.013);
+    }
     const radio=TidePocketSet.create(station);radio.root.position.y=1.037;
     const plate=TideHelmPlate.create(boat);
+    const sternGear=TideSternGear.create(scene),sternWater=TideSternWater.create(scene);let sternPose=null;
     const board=new T.Group(),post=TideArrival.cleat(g);board.position.set(post.x+.07,post.y-.14,post.z-.65);board.rotation.y=-.40;scene.add(board);
     const paintOff=track(new T.MeshStandardMaterial({color:0xd6c7a2,roughness:.72})),red=track(new T.MeshStandardMaterial({color:0x8e4c3b,roughness:.62}));
     mesh(board,cube,iron,0,.015,0,.23,.04,.19);
@@ -63,9 +70,41 @@ const TideArrivalRig=(()=>{
     const points=Array.from({length:sections},()=>new T.Vector3()),hands=[new T.Vector3(),new T.Vector3()],wipePoint=new T.Vector3();
     function vec(a){return new T.Vector3(a.x,a.y,a.z);}
     function world(x,y,z){return vec(TideArrival.deck(g,x,y,z));}
-    function shape(from,end,slack){
+    function bowContacts(s,t){
+      const at=world(1.61,-1.57,15.48),dir=world(1.63,-2.36,15.19).sub(at).normalize();
+      for(let n=0;n<2;n++){
+        const f=.5+.5*Math.cos(t*4.4+n*Math.PI);
+        hands[n].copy(at).addScaledVector(dir,s.haul?.06+f*.22:.08+n*.085);
+        hands[n].x+=(n?.063:-.063);
+      }
+      return hands;
+    }
+    function shape(from,end,slack,bow){
+      let fraction=1,edge=null;
+      if(bow){
+        const start=bow[3],shelf=g.world.fenders.shelf;
+        // Trace from the eye on the post toward the boat; the rope crosses the
+        // top of the quay before it can droop into the span over open water.
+        for(const [key,span] of [['x',shelf.w],['z',shelf.d]]){
+          const delta=start[key]-end[key];
+          if(Math.abs(delta)>.0001)fraction=Math.min(fraction,(shelf[key]+Math.sign(delta)*span*.5-end[key])/delta);
+        }
+        fraction=Math.max(0,Math.min(1,1-fraction));
+        edge=new T.Vector3().lerpVectors(start,end,fraction);edge.y=Math.max(edge.y,shelf.y+.031);
+      }
       for(let j=0;j<sections;j++){
-        const t=j/(sections-1);points[j].copy(from).lerp(end,t);points[j].y+=slack*Math.sin(t*Math.PI);
+        const t=j/(sections-1),v=points[j];
+        if(bow&&t<.53){
+          const k=t/.53*3,a=Math.min(2,Math.floor(k));v.lerpVectors(bow[a],bow[a+1],k-a);
+        }else{
+          const u=bow?(t-.53)/.47:t;
+          if(bow&&u>=fraction){
+            v.lerpVectors(edge,end,(u-fraction)/Math.max(.0001,1-fraction));
+          }else{
+            const f=bow?u/Math.max(fraction,.0001):u;
+            v.lerpVectors(bow?bow[3]:from,bow?edge:end,f);v.y+=slack*Math.sin(f*Math.PI);
+          }
+        }
       }
       for(let j=0;j<sections;j++){
         tangent.subVectors(points[Math.min(sections-1,j+1)],points[Math.max(0,j-1)]).normalize();
@@ -80,6 +119,8 @@ const TideArrivalRig=(()=>{
     }
     function update(t){
       const s=g.arrival,playing=TideArrival.active(g);root.visible=playing&&s.atBow>.6&&!s.moored;
+      sternPose=TideSternLine.equipment(g);sternGear.update(sternPose);
+      sternWater.update({...sternPose,active:playing&&!!s?.stern,time:t,water:g.cues.water});
       if(!playing)return;
       plate.update(s,t);
       const speech=TideArrival.speech(s.voice),level=s.voice==='captain'?(speech.mouth?.levels[Math.floor(s.voiceAt*20)]||0)/100:0;
@@ -101,10 +142,22 @@ const TideArrivalRig=(()=>{
         if(!f.hit&&k>=1){loop.position.lerp(throwSite,Math.min(1,(f.age-.7)/.46));}
       }else if(s.attached){loop.position.copy(vec(target));loop.rotation.set(-Math.PI*.5,0,0);}
       loop.updateWorldMatrix(true,false);knot.set(.008,-.267,0).applyMatrix4(loop.matrixWorld);
-      shape(from,knot,s.attached?-.19:s.flight?-.44:-.12);
+      let bow=null;
+      if(s.stern){
+        const grip=bowContacts(s,t);
+        // The crew draw the standing part over the low bronze guide. The
+        // bight stays on deck while the long span sags toward the shore post.
+        bow=[world(1.48,-2.55,15.94),grip[1],grip[0],world(1.63,-2.36,15.19)];
+      }
+      shape(from,knot,s.attached?(s.haul?-.055:-.34):s.flight?-.44:-.12,bow);
     }
     function grips(i){
       const s=g.arrival;if(!TideArrival.active(g)||s.moored)return null;
+      if(i&&s.stern){
+        if(!sternPose?.poleVisible||s.stern.phase==='fast')return null;
+        return TideSternPose.grips(g,sternPose,hands);
+      }
+      if(!i&&s.stern)return bowContacts(s,g.time);
       if(!i&&s.atBow<.23)return radio.contacts();
       if(!i){
         if(s.atBow<.78)return null;
@@ -119,7 +172,7 @@ const TideArrivalRig=(()=>{
       return hands;
     }
     function shot(i,yaw,pitch,ready,aspect){
-      const s=g.arrival;if(!TideArrival.active(g)||s.moored&&s.walking>.60)return null;
+      const s=g.arrival;if(!TideArrival.active(g)||s.moored&&s.walking>=.93)return null;
       const look=clampPan(yaw),rise=Math.max(-.4,Math.min(.6,pitch));
       let eye,at,fov;
       if(i){
@@ -140,6 +193,23 @@ const TideArrivalRig=(()=>{
         at.lerp(world(-1.60,-1.30,16.05),1-entry);
       }
       if(i)at.lerp(vec(TideArrival.cleat(g)).add(new T.Vector3(0,.55,0)),.23);
+      if(i&&s.stern){
+        const progress=s.stern.travel,weight=progress*progress*(3-2*progress);
+        const target=vec(sternPose.pivot).lerp(vec(sternPose.eye),.38);target.y+=.05;
+        const shoulder=world(-3.19+look*.24,-.51+rise*.32,16.82);
+        const inspect=s.stern.look*s.stern.look*(3-2*s.stern.look);
+        if(inspect>0){
+          shoulder.lerp(world(-3.56+look*.18,-.92+rise*.29,16.49),inspect);
+          const opening=vec(sternPose.eye).lerp(vec(sternPose.tip),.27);opening.y+=.07;
+          target.lerp(opening,inspect);
+        }
+        eye.lerp(shoulder,weight);at.lerp(target,weight);fov+=(53-11*inspect-fov)*weight;
+      }
+      if(!i&&s.stern){
+        const f=s.stern.travel;
+        eye.lerp(world(2.32+look*.25,-.79+rise*.24,16.46),f);
+        at.lerp(world(1.62,-1.98,15.04),f);fov+=(57-fov)*f;
+      }
       const glance=i?s.plate.look:0;
       if(glance>0){
         const closeup=plate.shot(aspect),blend=glance*glance*(3-2*glance);
@@ -147,15 +217,16 @@ const TideArrivalRig=(()=>{
         fov+=(closeup.fov-fov)*blend;
       }
       const close=!i&&s.atBow<.65&&entry>.91;
-      return {eye:eye.toArray(),at:at.toArray(),fov,handsOnly:close||glance>.82,focus:close&&s.atBow<.05?eye.distanceTo(at):0};
+      const away=Math.min(1,s.walking/.93),blend=1-away*away*(3-2*away);
+      return {eye:eye.toArray(),at:at.toArray(),fov,blend,handsOnly:close||glance>.82,focus:close&&s.atBow<.05?eye.distanceTo(at):0};
     }
     function seat(){
-      const s=g.arrival;if(!TideArrival.active(g)||s.walking>.17)return null;
-      return {weight:Math.max(0,1-s.walking/.15),hip:world(-5.907,-2.0456,16.65),
+      const s=g.arrival;if(!TideArrival.active(g)||s.walking>.17||s.stern?.travel>=.24)return null;
+      return {weight:Math.max(0,1-s.walking/.15-(s.stern?.travel||0)/.24),hip:world(-5.907,-2.0456,16.65),
         feet:[world(-5.556,-2.486,16.45),world(-5.514,-2.486,16.85)]};
     }
     function clampPan(v){return Math.max(-1,Math.min(1,Math.sin(v)));}
-    return {update,grips,shot,seat,plate,dispose(){plate.dispose();radio.dispose();station.removeFromParent();board.removeFromParent();root.removeFromParent();for(const o of owned)o.dispose();}};
+    return {update,grips,shot,seat,plate,get stern(){return sternPose;},dispose(){sternWater.dispose();sternGear.dispose();plate.dispose();radio.dispose();fairlead.removeFromParent();station.removeFromParent();board.removeFromParent();root.removeFromParent();for(const o of owned)o.dispose();}};
   }
   return {create};
 })();

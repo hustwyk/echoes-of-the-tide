@@ -6,7 +6,7 @@ const journal=[];
 try {
   progress=Math.max(0,Math.min(levels.length,Math.floor(Number(localStorage.getItem('tide-progress'))||0)));
   const save=JSON.parse(localStorage.getItem('tide-3d-checkpoint'));
-  if(save && Number.isInteger(save.index) && save.index===progress && Number.isInteger(save.stage) && (save.stage>0||save.stage===0&&(save.index===0&&['moored','upper','exit','done'].includes(save.fenders?.berth)||save.index===3&&['inspect','board'].includes(save.cistern?.phase)||save.index===5&&save.glass?.keyed||save.index===10&&save.fog?.key||save.index===8&&save.survey?.taken||save.index===7&&save.relay?.low||save.index===1&&save.cable?.signalled===true||save.index===2&&save.signal?.starter==='latched'||save.index===9&&(save.lantern?.far===true||['middle','stairs','file','inside'].includes(save.lantern?.gallery))||save.index===4&&save.archive?.count>0)) && save.stage<TideMissions.chapters[save.index]?.length)resume=save;
+  if(save && Number.isInteger(save.index) && save.index===progress && Number.isInteger(save.stage) && (save.stage>0||save.stage===0&&(save.index===0&&['stern','moored','upper','exit','done'].includes(save.fenders?.berth)||save.index===3&&['inspect','board'].includes(save.cistern?.phase)||save.index===5&&save.glass?.keyed||save.index===10&&save.fog?.key||save.index===8&&save.survey?.taken||save.index===7&&save.relay?.low||save.index===1&&save.cable?.signalled===true||save.index===2&&save.signal?.starter==='latched'||save.index===9&&(save.lantern?.far===true||['middle','stairs','file','inside'].includes(save.lantern?.gallery))||save.index===4&&save.archive?.count>0)) && save.stage<TideMissions.chapters[save.index]?.length)resume=save;
 } catch {}
 const sound=new HarborSound();
 let wantsAudio=true;try{wantsAudio=localStorage.getItem('tide-audio')!=='off';}catch{}
@@ -186,8 +186,11 @@ function openLevel(n,stage=0,mark=null){
   const level=levels[n],act=acts[Math.floor(n/3)];mode='story';
   $('act').textContent=act.name+'　/　'+String(n+1).padStart(2,'0')+' OF 12';$('level-title').textContent=level.name;
   $('elapsed').textContent='';showStatus('两名玩家 · 独立视角');
-  overlay.innerHTML='<div class="story"><small>行动简报</small><h3>'+level.name+'</h3><p>'+level.story+'</p><blockquote>'+level.quote+'</blockquote><div id="brief-seats"></div><button class="primary">'+(stage||mark?'从检查点继续':n===0?'登上交通艇':'进入关卡')+'　›</button></div>';
-  seatPanel=TideCrewInput.panel($('brief-seats'),TideArrival.active(session)?session.arrival.radio:null);
+  const sternMark=mark?.berth==='stern';
+  const briefing=sternMark?'发动机已经停了，首缆仍套在岸桩上。沈遥走到艇尾，堤沿的绿绳眼还要绕过船舷，才能落在艇尾桩上。':level.story;
+  const openingLine=sternMark?(session.arrival.stern.phase==='fast'?'沈遥：“在桩上了。现在能松手了。”':session.arrival.stern.phase==='draw'?'沈遥：“勾住了。等我把它带回来。”':'沈遥：“船尾还在摆。我去够那只绿绳眼。”'):level.quote;
+  overlay.innerHTML='<div class="story"><small>行动简报</small><h3>'+level.name+'</h3><p>'+briefing+'</p><blockquote>'+openingLine+'</blockquote><div id="brief-seats"></div><button class="primary">'+(stage||mark?'从检查点继续':n===0?'登上交通艇':'进入关卡')+'　›</button></div>';
+  seatPanel=TideCrewInput.panel($('brief-seats'),TideArrival.active(session)?(session.arrival.stern?'stern':session.arrival.radio):null);
   overlay.querySelector('.primary').onclick=()=>startPlaying(true);
   TideWindows.focus(overlay.querySelector('.primary'));view.draw(session,0,false);
 }
@@ -339,9 +342,9 @@ function pause(){
   mode='paused';clearInput();sound.stopScene();window.speechSynthesis?.cancel();
   $('pause').textContent='继续';
   const arrival=TideArrival.active(session),gallery=TideGallery.active(session);
-  const hint=gallery?'西台与背风台各有一架手轮。握住操作键左右转轮，松手停车；另一人从黄边起跳。过白漆台后，两人沿梯进灯室。':arrival&&session.arrival.radio==='line'?'林澈移动缆圈，瞄准岸桩后投缆。沈遥收油回空挡，等船慢下来后按住操作键停机；林澈才拉得动缆绳。':arrival?'无线电的工作频道刻在舵座。掌舵的人按住操作键俯身，再左右擦开铜牌。船首的人听到频道后调台，按住发话键等自己说完。':'站到彩色光圈内，按住操作键使用设备。操作时可左右微调，按跳跃键确认。拖动各自的画面调整视角，双击可回正。';
+  const hint=gallery?'西台与背风台各有一架手轮。握住操作键左右转轮，松手停车；另一人从黄边起跳。过白漆台后，两人沿梯进灯室。':arrival&&session.arrival.stern?'林澈收首缆，让沈遥把船钩送进岸边的绿绳眼。听她喊勾住便松开。沈遥握杆向后拉，等绳眼来到艇尾桩上方再松手。':arrival&&session.arrival.radio==='line'?'林澈移动缆圈，瞄准岸桩后投缆。沈遥收油回空挡，等船慢下来后按住操作键停机；林澈才拉得动缆绳。':arrival?'无线电的工作频道刻在舵座。掌舵的人按住操作键俯身，再左右擦开铜牌。船首的人听到频道后调台，按住发话键等自己说完。':'站到彩色光圈内，按住操作键使用设备。操作时可左右微调，按跳跃键确认。拖动各自的画面调整视角，双击可回正。';
   overlay.innerHTML='<div class="story"><h3>行动暂停</h3><p>'+levels[index].name+'　/　'+(gallery?(session.gallery.phase==='file'?'灯室潮尺原数联':'绕塔检修台'):arrival?'交通艇进港':TideFenders.active(session)?'护舷井登岸':session.cable?TideCableQuay.title(session):session.spec.title)+'</p><p class="hint">'+hint+'</p><div class="pause-options"><button id="unpause">继续行动</button><button id="retry">重试此段</button><button id="quit">返回档案</button><button id="voice"></button><button id="quality"></button></div></div>';
-  seatPanel=TideCrewInput.panel(overlay.querySelector('.story'),arrival?session.arrival.radio:null);
+  seatPanel=TideCrewInput.panel(overlay.querySelector('.story'),arrival?(session.arrival.stern?'stern':session.arrival.radio):null);
   addJournal(overlay.querySelector('.story'),journal);
   $('unpause').onclick=()=>startPlaying(false);$('quit').onclick=()=>game.close();$('retry').onclick=()=>openLevel(index,session.stage,TideLantern.checkpoint(session)||TideGallery.checkpoint(session)||TideFenders.checkpoint(session)||TideSwing.checkpoint(session)||TideCistern.checkpoint(session)||TideGlass.checkpoint(session)||TideLastPass.checkpoint(session)||TideFogSignal.checkpoint(session)||TideSoundings.checkpoint(session)||TideRelay.checkpoint(session)||TideCableQuay.checkpoint(session)||TideLandfall.checkpoint(session)||TideSignal.checkpoint(session)||TideArchive.checkpoint(session));
   const update=()=>{$('voice').textContent='设备语音　'+(voice?'开':'关');$('quality').textContent='画质　'+(view.quality===1?'高':'流畅');};update();

@@ -307,7 +307,7 @@
       const boatEye=v(x-.19,y-.046,z-.20);
       // A crossing turn takes the load round the horns before the rope passes
       // the polished gunwale. The shore eye stays around its own, bolted cleat.
-      line(cord,'#a39673',[[x+.19,y+.017,z-.008],[x+.132,y+.037,z+.045],[x+.036,y+.015,z+.048],
+      if(farSide>0)line(cord,'#a39673',[[x+.19,y+.017,z-.008],[x+.132,y+.037,z+.045],[x+.036,y+.015,z+.048],
         [x-.14,y+.012,z-.035],[x-.17,y+.057,z+.007],[x-.111,y+.043,z+.045],
         [x+.085,y+.010,z-.046],[x+.146,y+.028,z+.007],[x+.077,y+.047,z+.043],
         [x-.100,y+.020,z],boatEye.toArray()],.024,34,8);
@@ -318,7 +318,7 @@
       }
       buckets=shoreBuckets;
       cleat(end.x,d.y,end.z,.90);
-      line(cord,'#ada181',[end.toArray(),[end.x+.086,d.y+.102,end.z+.049],
+      if(farSide>0)line(cord,'#ada181',[end.toArray(),[end.x+.086,d.y+.102,end.z+.049],
         [end.x+.158,d.y+.101,end.z+.032],[end.x+.173,d.y+.111,end.z-.024],
         [end.x+.093,d.y+.088,end.z-.047],[end.x-.104,d.y+.102,end.z+.048],
         [end.x-.158,d.y+.103,end.z+.027],[end.x-.137,d.y+.112,end.z-.028],
@@ -326,7 +326,7 @@
       buckets=hullBuckets;
       const h=Math.hypot(end.x-boatEye.x,end.z-boatEye.z);
       const length=arcLength(h,end.y-boatEye.y,.38);
-      springs.push({boatEye,end,length,segments:Math.max(12,Math.min(36,Math.round(length/pitch)))});
+      if(farSide>0)springs.push({boatEye,end,length,segments:Math.max(12,Math.min(36,Math.round(length/pitch)))});
     }
     warp(a-.52,w.lower,-1);warp(f+.63,w.shelf,1);
 
