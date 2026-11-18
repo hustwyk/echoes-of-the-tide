@@ -1058,7 +1058,7 @@
   }
   function prepareSupport(actor,st,m,reset,dt){
     const frame=m.groundFloor;
-    if(!frame||!Number.isFinite(frame.w)||!Number.isFinite(frame.d)||!m.groundWorld||m.grounded===false||m.grips||m.operating||m.climbing||m.swing||m.wall){
+    if(!frame||!Number.isFinite(frame.w)||!Number.isFinite(frame.d)||!m.groundWorld||st.helm?.w>.00001||m.grounded===false||m.grips||m.operating||m.climbing||m.swing||m.wall){
       if(st.support){st.support=null;for(const f of st.feet)f.planted=false;}
       return null;
     }
@@ -1154,6 +1154,57 @@
     return maxHips;
   }
 
+  const seatVector=new T.Vector3(),seatNormal=new T.Vector3();
+  const seatTilt=new T.Quaternion(),seatFrame=new T.Quaternion(),seatHeel=new T.Vector3();
+  function seatPoint(out,p){return Array.isArray(p)?out.fromArray(p):out.set(p.x,p.y,p.z);}
+  // Pan and tread points are actual world-space surfaces, including all of a
+  // pitching launch's motion. Store actor-local goals for a brief stand-up after
+  // the controls release, without pinning the old boat to the character.
+  function helmPose(actor,m,st,dt,reset){
+    const supplied=m.helmSeat;
+    if(m.grounded===false||m.swing||m.climbing||m.wall||(!supplied&&(reset||m.grips||m.operating))){
+      st.helm=null;return null;
+    }
+    let h=st.helm;
+    const want=supplied?gaitClamp(supplied.weight??1,0,1):0;
+    if(!h){
+      if(!want)return null;
+      h=st.helm={blend:reset||!dt?want:0,w:0,pan:new T.Vector3(),feet:[new T.Vector3(),new T.Vector3()],up:new T.Vector3(),
+        hands:[0,1].map(()=>({aim:new T.Vector3(),actual:new T.Vector3(),delta:new T.Vector3(),world:new T.Vector3(),known:false,t:1,hold:0}))};
+    }
+    if(supplied){
+      actor.worldToLocal(seatPoint(h.pan,supplied.hip));
+      for(let i=0;i<2;i++)actor.worldToLocal(seatPoint(h.feet[i],supplied.feet[i]));
+      if(supplied.up)seatPoint(seatNormal,supplied.up).normalize();
+      else{const x=m.slopeX||0,z=m.slopeZ||0;seatNormal.set(x,Math.sqrt(Math.max(.10,1-x*x-z*z)),z).normalize();}
+      h.up.copy(seatNormal).applyQuaternion(actor.getWorldQuaternion(seatFrame).invert()).normalize();
+      h.pan.addScaledVector(h.up,.163);
+    }
+    for(let i=0;i<2;i++){
+      const hand=h.hands[i];
+      if(m.grips){
+        actor.worldToLocal(seatVector.copy(m.grips[i]));
+        if(hand.known&&seatVector.distanceToSquared(hand.aim)>.20*.20){
+          // Switching to the throttle is a reach across the console. Use the
+          // live lever position all the way through the reach and after contact.
+          hand.delta.subVectors(hand.actual,seatVector);hand.t=0;
+        }
+        hand.aim.copy(seatVector);hand.t=Math.min(1,hand.t+dt/.225);
+        hand.actual.copy(hand.aim).addScaledVector(hand.delta,1-easeStep(0,1,hand.t));
+        hand.actual.y+=.036*Math.sin(Math.PI*hand.t);
+        hand.hold=1;hand.known=true;
+      }else if(hand.known)hand.hold=Math.max(0,hand.hold-dt/.225);
+      if(hand.hold>0)actor.localToWorld(hand.world.copy(hand.actual));
+    }
+    // Already seated at a teleport or an opening shot. For subsequent entries
+    // the operator bends over several frames; a zero-weight handoff also eases.
+    if(reset&&supplied)h.blend=want;
+    else h.blend+=gaitClamp(want-h.blend,-dt*5.65,dt*4.30);
+    h.w=h.blend*h.blend*(3-2*h.blend);
+    if(h.w<.000001&&!want){st.helm=null;return null;}
+    return h;
+  }
+
   function animate(actor,motion,dt,time) {
     const rig=actor.userData.rig,b=rig.bones;
     TideCrew.express(rig.face,rig.id,time,!!motion.talking);
@@ -1173,6 +1224,7 @@
     const vx=Number.isFinite(motion.vx)?motion.vx:-si*speed,vz=Number.isFinite(motion.vz)?motion.vz:-co*speed;
     const horizontal=Math.hypot(vx,vz),dirX=horizontal>.025?vx/horizontal:-si,dirZ=horizontal>.025?vz/horizontal:-co;
     const vy=Number.isFinite(motion.vy)?motion.vy:s>.00001&&!reset?(actor.position.y-st.y)/s:0;
+    const seated=helmPose(actor,motion,st,s,reset);
     const support=prepareSupport(actor,st,motion,reset,s);
     if(support&&support.still>=.085)speed=0;
     let distance=0;
@@ -1258,6 +1310,21 @@
       const maxY=stepFeet(actor,motion,st,support,s,cycle,stance,move,run,speed,co,si,dirX,dirZ);
       b.hips.position.y=Math.min(b.hips.position.y,maxY);
     }
+    if(seated){
+      const h=seated,w=h.w;
+      b.hips.position.lerp(h.pan,w);
+      seatTilt.setFromUnitVectors(legUp,h.up);
+      b.hips.quaternion.slerp(seatTilt,w);
+      let shift=0,reach=0;
+      if(grips){
+        actor.worldToLocal(seatVector.copy(grips[1]));
+        shift=gaitClamp((seatVector.x-h.pan.x-.13)*.80,-.27,.32);
+        reach=gaitClamp((h.pan.z-seatVector.z-.23)*.62,-.03,.20);
+      }
+      b.chest.rotation.set(gaitMix(b.chest.rotation.x,-.235-reach,w),
+        gaitMix(b.chest.rotation.y,-.23*shift,w),gaitMix(b.chest.rotation.z,-.41*shift,w));
+      b.head.rotation.x=gaitMix(b.head.rotation.x,.084+reach*.55,w);
+    }
     b.hips.position.add(st.hangOffset);
     b.hips.updateMatrix();inversePelvis.copy(b.hips.matrix).invert();
     anklePlane.set(co*nx-si*nz,ny,si*nx+co*nz).normalize();
@@ -1305,6 +1372,16 @@
         const k=(1+Math.sin(actor.position.y*Math.PI/.29+i*Math.PI))*.5;
         b['thigh'+i].rotation.set(.26+.72*k,0,0);b['shin'+i].rotation.set(-.44-1.17*k,0,0);
         b['boot'+i].rotation.set(.18+.38*k,0,0);
+      }else if(seated){
+        const w=seated.w,h=seated;
+        const toeYaw=sign*.088;
+        seatTilt.setFromUnitVectors(legUp,h.up).multiply(seatFrame.setFromEuler(soleEuler.set(0,toeYaw,0,'YXZ')));
+        // The deepest point of the rounded tread is 44 mm towards the toe.
+        seatHeel.set(0,-.059,-.044).applyQuaternion(seatTilt);
+        seatVector.copy(h.feet[i]).sub(seatHeel);
+        seatNormal.copy(anklePlane).lerp(h.up,w).normalize();
+        placeLeg(b,i,gaitMix(x,seatVector.x,w),gaitMix(y,seatVector.y,w),gaitMix(z,seatVector.z,w),
+          seatNormal,pitch*(1-w),gaitMix(footYaw,toeYaw,w),0);
       }else if(support){const f=support.feet[i];placeLeg(b,i,f.x,f.y,f.z,f.normal,f.pitch,f.yaw,0);}
       else placeLeg(b,i,x,y,z,anklePlane,pitch,footYaw,0);
       const arm=b['arm'+i],forearm=b['forearm'+i],wrist=b['wrist'+i];
@@ -1313,7 +1390,10 @@
         +air*(.25+.18*rise+(i===st.leftLead?-.23:.20)),0,sign*(.081+.075*work+.16*air+.19*fall*air+.061*Math.abs(turnLean)));
       forearm.rotation.set(.148+.47*run*move+.13*air+.23*rise*air+(.32+.15*Math.sin(time*4.3+i*Math.PI))*work,0,0);
       wrist.rotation.set(grips?0:.08*work+.035*run*move,0,0);
-      if(grips)handleArm(b.chest,arm,forearm,grips[i],i,ride?1:reaching?st.reach:work);
+      if(seated&&seated.hands[i].hold>0){
+        const hand=seated.hands[i],weight=grips?Math.max(seated.w,work):easeStep(0,1,hand.hold)*seated.w;
+        handleArm(b.chest,arm,forearm,hand.world,i,weight);
+      }else if(grips)handleArm(b.chest,arm,forearm,grips[i],i,ride?1:reaching?st.reach:work);
     }
     if(motion.pointAt||rig.pointing)pointGesture(actor,motion,s);
     if(motion.wall||rig.wallPose)wallPose(actor,motion,s);

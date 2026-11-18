@@ -1,0 +1,144 @@
+{
+  "license": "CC0 1.0 Universal",
+  "licensePage": "https://polyhaven.com/license",
+  "dedication": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "collection": "https://polyhaven.com/collections/smugglers_cove/all/collection%3A%20smugglers_cove",
+  "adaptation": "Original UV charts and source photoscan surfaces. Meshoptimizer 1.3.0 attribute-aware simplification; quantized positions/UV, signed normalized normals. Original 2048px glTF PBR images decoded then WebP encoded. Diffuse 2048, positive-Y normal 1280 and AO/roughness/metalness 768. A short inward/downward continuation is appended to the open scan rim below the spray zone; its UVs sample the adjacent source edge. Sloped concrete foundations separately modeled for this game. Runtime downloads: none.",
+  "assets": [
+    {
+      "id": "coast_rocks_05",
+      "title": "Coast Rocks 05",
+      "authorRolesFromPublisher": {
+        "Rob Tuytel": "All"
+      },
+      "sourcePage": "https://polyhaven.com/a/coast_rocks_05",
+      "downloadManifest": "https://api.polyhaven.com/files/coast_rocks_05",
+      "sourceGeometryTriangles": 771724,
+      "levels": [
+        {
+          "triangles": 11198,
+          "scanTriangles": 10798,
+          "seamTriangles": 400,
+          "vertices": 7915
+        },
+        {
+          "triangles": 3419,
+          "scanTriangles": 3199,
+          "seamTriangles": 220,
+          "vertices": 2998
+        },
+        {
+          "triangles": 952,
+          "scanTriangles": 840,
+          "seamTriangles": 112,
+          "vertices": 793
+        }
+      ],
+      "downloads": [
+        {
+          "file": "model.gltf",
+          "directURL": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/2k/coast_rocks_05/coast_rocks_05_2k.gltf",
+          "sourceBytes": 2821,
+          "sha256": "731e3c8651c6afd097b91e9d0100ef23e874f34f1f2bc0a741f3c07b0f38eb29",
+          "publisherMD5": "07ab41335ee4dfe909957c5f64b327ce"
+        },
+        {
+          "file": "coast_rocks_05_nor_gl_2k.jpg",
+          "directURL": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/coast_rocks_05/coast_rocks_05_nor_gl_2k.jpg",
+          "sourceBytes": 4858393,
+          "sha256": "2392a5d3ace4365cb6b7d5fd533c5c214a5e5c0a6e4dbfc84565737888f2c5f0",
+          "publisherMD5": "4db2c3d7c6253deb32a437e9b1f956b1"
+        },
+        {
+          "file": "coast_rocks_05_diff_2k.jpg",
+          "directURL": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/coast_rocks_05/coast_rocks_05_diff_2k.jpg",
+          "sourceBytes": 3549600,
+          "sha256": "3e95fdf0955df96007bddec6053ddb8809575426337ca3a10901649037f9e7c7",
+          "publisherMD5": "87d8b0b68fd17706ce9ba63e5f1aa838"
+        },
+        {
+          "file": "coast_rocks_05.bin",
+          "directURL": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/coast_rocks_05/coast_rocks_05.bin",
+          "sourceBytes": 22102224,
+          "sha256": "c46b19d62dd5d42d5f03bc7508e22fdc00ec88fa197b4fdf8db8e40929ea13cc",
+          "publisherMD5": "9d4e639dd13128e96335a5d9828b3f47"
+        },
+        {
+          "file": "coast_rocks_05_arm_2k.jpg",
+          "directURL": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/coast_rocks_05/coast_rocks_05_arm_2k.jpg",
+          "sourceBytes": 3063412,
+          "sha256": "e610fb57fa8539249432ba0435e6d8bd8df22833b423b8f33737d8143ef17d25",
+          "publisherMD5": "fec6b0ed07a8e77730037e49b1621aa9"
+        }
+      ]
+    },
+    {
+      "id": "coast_land_rocks_03",
+      "title": "Coast Land Rocks 03",
+      "authorRolesFromPublisher": {
+        "Rob Tuytel": "Photography, processing",
+        "Rico Cilliers": "cleanup"
+      },
+      "sourcePage": "https://polyhaven.com/a/coast_land_rocks_03",
+      "downloadManifest": "https://api.polyhaven.com/files/coast_land_rocks_03",
+      "sourceGeometryTriangles": 1096655,
+      "levels": [
+        {
+          "triangles": 15131,
+          "scanTriangles": 14399,
+          "seamTriangles": 732,
+          "vertices": 10130
+        },
+        {
+          "triangles": 4539,
+          "scanTriangles": 4199,
+          "seamTriangles": 340,
+          "vertices": 3652
+        },
+        {
+          "triangles": 1221,
+          "scanTriangles": 1049,
+          "seamTriangles": 172,
+          "vertices": 1406
+        }
+      ],
+      "downloads": [
+        {
+          "file": "model.gltf",
+          "directURL": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/2k/coast_land_rocks_03/coast_land_rocks_03_2k.gltf",
+          "sourceBytes": 2853,
+          "sha256": "975cde44cd21bfc660efaf3e98f7d1b450a218f685f97c3246d1060a82670dbf",
+          "publisherMD5": "9e77774ad5373127461aed5c10ceee0a"
+        },
+        {
+          "file": "coast_land_rocks_03.bin",
+          "directURL": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/coast_land_rocks_03/coast_land_rocks_03.bin",
+          "sourceBytes": 31202420,
+          "sha256": "69692370dbf2f19ee39eea284397663ce99373c153bb477fea3cbe087f9fec38",
+          "publisherMD5": "d2a834f2d0121d0f54b4a4486ceeb362"
+        },
+        {
+          "file": "coast_land_rocks_03_arm_2k.jpg",
+          "directURL": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/coast_land_rocks_03/coast_land_rocks_03_arm_2k.jpg",
+          "sourceBytes": 2890440,
+          "sha256": "56dfc261dd41f7fe73f95e2e71330a1bf6cfd70e9b0eb2d88c759476b05e4031",
+          "publisherMD5": "83c77efe7766a20f210b6fc1c8b8c636"
+        },
+        {
+          "file": "coast_land_rocks_03_nor_gl_2k.jpg",
+          "directURL": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/coast_land_rocks_03/coast_land_rocks_03_nor_gl_2k.jpg",
+          "sourceBytes": 4416818,
+          "sha256": "06700c592ec7e396d11d20bfcaea3578daad67d1bf5458a3c4b82c0efd248bcd",
+          "publisherMD5": "45294df5eabf1581c967321a3c672822"
+        },
+        {
+          "file": "coast_land_rocks_03_diff_2k.jpg",
+          "directURL": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/coast_land_rocks_03/coast_land_rocks_03_diff_2k.jpg",
+          "sourceBytes": 3110657,
+          "sha256": "95faed3dbcf102d09e87f0b889c948ca107a20be6bcd1ed9cc3f0729522b6383",
+          "publisherMD5": "6192fdc072f4a02068fb8d0ffcd645ae"
+        }
+      ]
+    }
+  ]
+}

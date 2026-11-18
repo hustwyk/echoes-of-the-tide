@@ -29,10 +29,11 @@ const TideFloating=(()=>{
     for(const floor of floors){floor.buoyant=true;floor.rest={x:floor.x,y:floor.y,z:floor.z};}
     return p;
   }
-  function step(p,players,water,t,dt,cx=p.anchorX,cz=p.anchorZ){
+  function step(p,players,water,t,dt,cx=p.anchorX,cz=p.anchorZ,heading=0){
     const feet=players.map((actor)=>actor.grounded&&p.floors.includes(actor.ground)?local(p,actor.x,actor.y,actor.z):null);
     const large=p.spanX>3,x=p.spanX,z=p.spanZ;
-    const bow=swell(cx+x,cz,t),stern=swell(cx-x,cz,t),port=swell(cx,cz-z,t),starboard=swell(cx,cz+z,t);
+    const c=Math.cos(heading),s=Math.sin(heading);
+    const bow=swell(cx+x*c,cz-x*s,t),stern=swell(cx-x*c,cz+x*s,t),port=swell(cx-z*s,cz-z*c,t),starboard=swell(cx+z*s,cz+z*c,t);
     let heave=water+p.freeboard+(bow+stern+port+starboard)*.25;
     let roll=Math.atan((bow-stern)/(2*x))*.90,pitch=-Math.atan((starboard-port)/(2*z))*.79;
     for(let i=0;i<feet.length;i++){
@@ -48,7 +49,7 @@ const TideFloating=(()=>{
       p.pitchSpeed+=((pitch-p.pitch)*18-p.pitchSpeed*5.6)*dt;p.pitch+=p.pitchSpeed*dt;
     }
     p.x=cx+(large?.115:.145)*Math.sin(t*.76+cz*.27);
-    p.z=cz+(large?.11:.085)*Math.cos(t*.86+cx*.33);p.yaw=.026*Math.sin(t*.62+cz*.21);
+    p.z=cz+(large?.11:.085)*Math.cos(t*.86+cx*.33);p.yaw=heading+.026*Math.sin(t*.62+cz*.21);
     p.axes=basis(p);
     for(const f of p.floors){
       const rest=f.rest;
