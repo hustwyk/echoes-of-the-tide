@@ -42,3 +42,6 @@ dialog{width:min(590px,calc(100% - 22px));max-height:94vh;color:var(--text);back
 .file-side{z-index:1;padding:8px max(12px,3vw);align-self:end;font-size:clamp(11px,1.15vw,17px);text-shadow:0 1px 4px #101817}
 .file-side small{color:#ffe5ae}.file-side p{margin:4px 0 8px}.file-side button{margin:2px}
 #file-note{grid-column:1/-1;text-align:center;margin:2px;height:1.5em;font-size:clamp(12px,1.15vw,18px)}
+
+.pin.pin-left{transform:translate(0,-50%)}.pin.pin-right{transform:translate(-100%,-50%)}
+.partner-pin span{white-space:pre;text-align:center}.partner-pin.seen:not(.at-edge) i{border-color:#f5ffeb;box-shadow:0 0 0 2px #1a392e}

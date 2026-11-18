@@ -139,13 +139,14 @@ const TideRegattaView=(()=>{
       renderer.setScissorTest(true);renderer.shadowMap.autoUpdate=false;renderer.shadowMap.needsUpdate=true;
       for(let i=0;i<2;i++){
         const l=Math.floor(w*i/2),ww=Math.floor(w*(i+1)/2)-l,cam=cams[i];cam.aspect=ww/h;cam.updateProjectionMatrix();camera(r,i,dt);
-        renderer.setViewport(l,0,ww,h);renderer.setScissor(l,0,ww,h);reflection.use(i,cam,ww,h,t,quality);renderer.render(scene,cam);
+        TideHarbor.viewport(renderer,l,ww,h);reflection.use(i,cam,ww,h,t,quality);renderer.render(scene,cam);
       }
     }
+    const gateLimits={side:.80,up:.62,down:.32},gateScreen={};
     function target(r,i){
-      const b=r.boats[i],g=TideRegatta.gates[b.gate],cam=cams[i];pv.set(g.x,.19,g.z).project(cam);
-      const behind=pv.z>1;const dx=g.x-b.x,dz=g.z-b.z,side=dx*Math.cos(b.h)+dz*Math.sin(b.h);
-      return {x:behind?(side<0?.10:.90):Math.max(.10,Math.min(.90,(pv.x+1)/2)),y:behind?.53:Math.max(.19,Math.min(.66,(1-pv.y)/2)),edge:behind||Math.abs(pv.x)>.82};
+      const g=TideRegatta.gates[r.boats[i].gate];
+      TideBearings.project(pv.set(g.x,.19,g.z),cams[i],gateLimits,gateScreen);
+      return {x:(gateScreen.x+1)*.5,y:(1-gateScreen.y)*.5,direction:gateScreen.direction};
     }
     function toggle(i){chart[i]=!chart[i];snap[i]=true;return chart[i];}
     function dispose(){alive=false;prize.dispose();reflection.dispose();for(const a of actors)a.dispose();sun.shadow.dispose();for(const x of owned)x.dispose();scene.clear();}

@@ -3,7 +3,8 @@ const TideHarbor = (() => {
   const T=THREE;
   const colors=[0xffad65,0x71e5db];
   const clamp=TideTraversal.clamp;
-  const vector=new T.Vector3();
+  const vector=new T.Vector3(),pinLimits={side:.88,up:.67,down:.40},pinScreen={};
+  const pinArrows={向左:'←',向右:'→',上方:'↑',下方:'↓',左后方:'↶',右后方:'↷',身后:'↶'};
   function targetFor(g,i) {
     if(TideGallery.active(g))return TideGallery.target(g,i);
     const sec=g.section, s=g.spec,q=g.state;
@@ -53,6 +54,14 @@ const TideHarbor = (() => {
     renderer.shadowMap.type=T.PCFSoftShadowMap;
     renderer.setScissorTest(true);
     return renderer;
+  }
+  function viewport(renderer,start,width,height){
+    // Three.js floors offset and width separately after converting CSS pixels.
+    // Adjacent views must share the very same physical pixel boundary at any DPR.
+    const ratio=renderer.getPixelRatio();
+    const pixels=Math.floor((start+width)*ratio)-Math.floor(start*ratio);
+    const span=(pixels+.125)/ratio;
+    renderer.setViewport(start,0,span,height);renderer.setScissor(start,0,span,height);
   }
   class WorldView {
     constructor(canvas,onPoint,renderer=null) {
@@ -370,7 +379,8 @@ const TideHarbor = (() => {
         const berthShot=TideFenders.active(g)&&ready?TideFenders.shot(g,i,yaw,this.pitch[i]):null;
         const atTin=g.section.tram&&!g.section.tram.heard&&g.engaged[i]&&g.state.taps?.length;
         const pocketShot=ready&&(g.state.pocket||atTin)?this.bridgework?.pocketShot(i):null;
-        const shot=this.cinema.shot(g,i)||(TideGallery.active(g)?TideGallery.shot(g,i,yaw,this.pitch[i],ready):null)||(TideArrival.active(g)?this.arrivalRig.shot(i,yaw,this.pitch[i],ready):null)||pocketShot||berthShot||(ready&&TideSwing.active(g)?this.swingYard.shot(g,i):null)||(ready&&g.cistern?this.cisternRoom.shot(g,i):null)||(ready&&g.glass?this.glassRoom.shot(g,i):null)||(ready&&g.lastPass?TideLastPass.shot(g,i):null)||relayShot||cableShot||rescueShot||floodShot||tapeShot||signalShot||lanternShot||(scoped?TideLookout.camera(g):paperView?TidePaper.camera(g,i):beam);
+        const cinemaShot=this.cinema.shot(g,i);
+        const shot=cinemaShot||(TideGallery.active(g)?TideGallery.shot(g,i,yaw,this.pitch[i],ready):null)||(TideArrival.active(g)?this.arrivalRig.shot(i,yaw,this.pitch[i],ready):null)||pocketShot||berthShot||(ready&&TideSwing.active(g)?this.swingYard.shot(g,i):null)||(ready&&g.cistern?this.cisternRoom.shot(g,i):null)||(ready&&g.glass?this.glassRoom.shot(g,i):null)||(ready&&g.lastPass?TideLastPass.shot(g,i):null)||relayShot||cableShot||rescueShot||floodShot||tapeShot||signalShot||lanternShot||(scoped?TideLookout.camera(g):paperView?TidePaper.camera(g,i):beam);
         cam.fov=shot?.fov|| (cableShot?cableShot.fov:floodShot?floodShot.fov:tapeShot?tapeShot.fov:signalShot?signalShot.fov:lanternShot?lanternShot.fov:scoped?31:lighting?39:paperView?Math.max(54,2*Math.atan(1.19*height/(1.75*vw))*180/Math.PI):57);
         if(shot){
           cam.position.fromArray(shot.eye);
@@ -384,6 +394,8 @@ const TideHarbor = (() => {
           cam.lookAt(this.look[i]);
         }
         cam.aspect=vw/height;cam.updateProjectionMatrix();
+        const canLook=ready&&count===2&&!g.engaged[i]&&p.grounded&&(!shot||TideGallery.active(g)&&!shot.handsOnly&&!cinemaShot);
+        const watching=this.pointing.follow(i,canLook,t,dt);
         if(paperView)for(let j=0;j<2;j++)this.actors[j].visible=!g.engaged[j];
         if(shot?.handsOnly)for(const part of this.coats[i])part.visible=false;
         if(lanternShot&&i===g.optic.observer&&(!g.optic.mount||g.optic.mount.done))this.actors[i].visible=false;
@@ -391,14 +403,14 @@ const TideHarbor = (() => {
         this.transitGlass?.update(g,cam,i,cam.aspect,Boolean(shot?.transit));
         if(shot?.transit)cam.layers.enable(TideTransitOptics.layer);else cam.layers.disable(TideTransitOptics.layer);
         this.seaReflection?.use(i,cam,vw,height,t,this.quality);
-        e.setViewport(start,0,vw,height);e.setScissor(start,0,vw,height);
+        viewport(e,start,vw,height);
         if(shot?.focus&&this.quality>=.85&&e.capabilities.isWebGL2){
-          this.lens ||= TideLens.create(e);this.lens.render(this.scene,cam,start,vw,height,shot.focus);
+          this.lens ||= TideLens.create(e);this.lens.render(this.scene,cam,start,vw,height,shot.focus,Math.ceil(width/count));
         }else e.render(this.scene,cam);
         if(shot?.handsOnly)for(const part of this.coats[i])part.visible=true;
         if(lanternShot)this.actors[i].visible=true;
         if(paperView)for(const actor of this.actors)actor.visible=true;
-        if(ready){this.pin(g,i);this.pointing.draw(i,g.time,p);}
+        if(ready){this.pin(g,i,watching);this.pointing.draw(i,g.time,p);}
       }
       this.childDuo?.setView?.(-1);
       this.snap=false;
@@ -426,18 +438,20 @@ const TideHarbor = (() => {
       }
       return hands;
     }
-    pin(g,i){
+    pin(g,i,watching=false){
       const {p,name}=targetFor(g,i),player=g.players[i],cam=this.cameras[i];
       const node=document.getElementById('pin'+i);
-      const dist=Math.hypot(player.x-p.x,player.z-p.z);
-      vector.set(p.x,p.y+2.05,p.z).project(cam);
-      const behind=vector.z>1;
-      node.style.left=clamp(behind?.5:(vector.x+1)/2,.13,.87)*100+'%';
-      node.style.top=clamp(behind?.36:(1-vector.y)/2,.16,.70)*100+'%';
-      const label=(behind?'↶ ':vector.x>1?'→ ':vector.x< -1?'← ':'◇ ')+name+'　'+Math.round(dist)+'m';
+      const dx=p.x-player.x,dz=p.z-player.z,dy=p.y-player.y,dist=Math.hypot(dx,dy,dz);
+      node.hidden=watching||TideTinMemory.active(g)||g.engaged[i]||dist<1.6||(g.rig?.lightOn&&!g.rig.lit&&g.spec.driver!==i);
+      if(node.hidden)return;
+      vector.set(p.x,p.y+(p.w&&p.d ? .40 : 1.36),p.z);
+      const s=TideBearings.project(vector,cam,pinLimits,pinScreen);
+      node.classList.toggle('pin-left',s.x<-.58);node.classList.toggle('pin-right',s.x>.58);
+      node.style.left=(s.x+1)*50+'%';node.style.top=(1-s.y)*50+'%';
+      const level=Math.abs(dy)>2.1&&Math.hypot(dx,dz)<5?(dy>0?'高处':'低处'):'';
+      const label=(pinArrows[s.direction]||'◇')+' '+name+'　'+[s.behind?s.direction:'',level,Math.round(dist)+' m'].filter(Boolean).join(' ');
       if(node.textContent!==label)node.textContent=label;
-      node.hidden=TideTinMemory.active(g)||g.engaged[i] || dist<1.6 || (g.rig?.lightOn&&!g.rig.lit&&g.spec.driver!==i);
     }
   }
-  return {WorldView,targetFor,makeRenderer};
+  return {WorldView,targetFor,makeRenderer,viewport};
 })();
