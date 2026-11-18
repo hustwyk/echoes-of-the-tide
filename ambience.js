@@ -292,7 +292,7 @@ window.TideAudioScene = (() => {
       const gust = clamp(.47 + .25 * Math.sin(t * .37 + index) + .18 * Math.sin(t * .171 + 1.8) + .09 * Math.sin(t * .83));
       const tide = type === 'tide' ? (1 + Math.cos(t * 2 * Math.PI / 5 - 1.5)) / 2 : .5 + .5 * Math.sin(t * .83 + .75 * Math.sin(t * .29));
       const both = g.engaged[0] || g.engaged[1], tuning = type === 'radio' || type === 'tape';
-      const pumpLoad = cellar ? (type === 'ride' && g.engaged[g.spec.driver] ? .98 : .51) : type === 'power' && both ? .72 : 0;
+      const pumpLoad = g.spec.mode==='raft' ? .23+.70*Math.abs(g.rig?.flow||0) : cellar ? .51 : type==='power'&&both ? .72 : 0;
       const blade = .77 + .23 * Math.sin(t * (7.7 + pumpLoad));
       const whistle = high ? Math.pow(gust,2.2) * (secluded ? .13 : 1) : 0;
       const layers = run.layers;

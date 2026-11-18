@@ -41,6 +41,7 @@ window.TideEquipment = (() => {
     const tread=own(new T.MeshStandardMaterial({
       vertexColors:true,map:floorMap,bumpMap:floorMap,bumpScale:.015,metalness:.48,roughness:.42
     }));
+    const quay=own(TideConcrete.material(0xe3daca,-1.1));
     const lensGlass = own(new T.MeshPhysicalMaterial({color:0xb9e0cf,transparent:true,opacity:.64,metalness:.18,roughness:.16,clearcoat:1,depthWrite:false}));
     const lampMats = [0,1].map(i=>own(new T.MeshStandardMaterial({color:accent[i],emissive:accent[i],emissiveIntensity:2.1, roughness:.24})));
 
@@ -122,6 +123,18 @@ window.TideEquipment = (() => {
         for (const x of [-r+.05,r-.05]) frame.box(x,-.10,0,.11,.17,d,edge);
         const n=Math.max(2,Math.ceil(d/.40));
         for (let i=0;i<n;i++) frame.cyl(0,-.055,(i+.5)*d/n-f,.046,.046,Math.max(.1,w-.1),brass,0,PI/2,10);
+      } else if(style==='quay') {
+        surface.box(0,-1.48,0,w,2.96,d,ivory);
+        // An inset trench drain runs along one edge of the poured landing.
+        const drainX=r-.32;
+        frame.box(drainX,.004,0,.27,.01,d-.30,charcoal);
+        for(let z=-f+.22;z<f-.10;z+=.13)frame.box(drainX,.014,z,.249,.014,.036,steel);
+        for(const z of [-f+.12,f-.12]) {
+          for(const x of [-r+.34,r-.68]) {
+            frame.box(x,.011,z,.47,.022,.16,'#bd9655');
+            for(const offset of [-.15,.15])frame.cyl(x+offset,.030,z,.023,.028,.022,steel,0,0,6);
+          }
+        }
       } else {
         const plane=shape('floor',()=>new T.PlaneGeometry(1,1));
         surface.add(plane,[0,0,0],[w,d,1],[-PI/2,0,0],bronze?'#e0c4a1':floating?'#a7c1b3':'#d2dddc',1.65);
@@ -178,7 +191,7 @@ window.TideEquipment = (() => {
           }
         }
       }
-      frame.mesh(group);surface.mesh(group,tread);
+      frame.mesh(group);surface.mesh(group,style==='quay'?quay:tread);
       models.set(key,group);return group.clone(true);
     }
 

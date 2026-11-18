@@ -31,7 +31,8 @@ const TideTraversal = (() => {
       return slab;
     }
     function dock(xs,y,z) {
-      return xs.map(x=>floor(x,y,z,5.8,5.6));
+      const landingStyle=index===0||index===3?'quay':style;
+      return xs.map(x=>floor(x,y,z,5.8,5.6,landingStyle));
     }
     let starts=dock(centers,height,z);
     floor(0,height,z,5,3.4);
@@ -66,7 +67,8 @@ const TideTraversal = (() => {
           } else if(s.rough && j===count-2 && side===(k%2)) section.danger.push(deck);
         }
         const home=ride && side===s.driver?a:(s.cross?ends[1-side]:b);
-        section.sites.push({x:home.x,y:home.y,z:home.z+(ride&&side===s.driver?-.5:.55),kind:s.tools[side]});
+        const workX=s.type==='paper'?mid.x+Math.sign(home.x-mid.x)*1.16:home.x;
+        section.sites.push({x:workX,y:home.y,z:home.z+(ride&&side===s.driver?-.5:.55),kind:s.tools[side]});
       }
       if(s.type==='ride') {
         const r=1-s.driver,a=starts[r],b=ends[r];

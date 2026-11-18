@@ -3,9 +3,9 @@ const TideMissions = (() => {
   const step = (type, title, tools, radio, options={}) => ({type,title,tools,radio,...options});
   const chapters = [
     [
-      step('ride','低台试吊',['winch','breaker'],'沈遥：吊篮到底了。我先过去，把那架梯子踢下来。',{driver:0,length:11,mode:'basket',rise:1.4}),
-      step('ride','横渡浪沟',['winch','breaker'],'林澈：篮底会摆。看到对面的灯再跳。',{driver:0,length:17,mode:'basket',rise:1.8,swing:1.15}),
-      step('ride','放梯接人',['ladder','winch'],'沈遥：这次我拉。你看到我再松手。',{driver:1,length:12,mode:'basket',rise:.65})
+      step('ride','低台试吊',['winch','breaker'],'沈遥：吊篮到底了。我先过去，把那架梯子踢下来。',{driver:0,length:17,mode:'basket',rise:1.4}),
+      step('ride','横渡浪沟',['winch','breaker'],'林澈：篮底会摆。看到对面的灯再跳。',{driver:0,length:23,mode:'basket',rise:1.8,swing:1.15}),
+      step('ride','放梯接人',['ladder','winch'],'沈遥：这次我拉。你看到我再松手。',{driver:1,length:18,mode:'basket',rise:.65})
     ],
     [
       step('cable','岸上试灯',['breaker','radio'],'林澈：铜牌上刻的是试灯的节拍。',{code:0}),
@@ -18,12 +18,12 @@ const TideMissions = (() => {
       step('blackout','遮光与叫停',['brake','radio'],'梁青：收到，北线可以进入。\n沈遥：等等！船在向碎浪转！')
     ],
     [
-      step('ride','降下浮架',['pump','breaker'],'林澈：浮架在高处，先把水排下去。',{driver:0,mode:'raft',length:12,rise:-1.55}),
-      step('ride','反注水越窗',['pump','brake'],'沈遥：导索锁住了。让水把我送上窗台。',{driver:0,mode:'raft',length:13,rise:2.3}),
-      step('ride','旁通管与柜顶',['tape','pump'],'沈遥：旁通管交给我。你去拿柜顶的带子。',{driver:1,mode:'raft',length:12,rise:-1.2})
+      step('ride','降下浮架',['pump','breaker'],'林澈：浮架在高处，先把水排下去。',{driver:0,mode:'raft',length:16,rise:-1.55}),
+      step('ride','反注水越窗',['pump','brake'],'沈遥：导索锁住了。让水把我送上窗台。',{driver:0,mode:'raft',length:18,rise:2.3}),
+      step('ride','旁通管与柜顶',['tape','pump'],'沈遥：旁通管交给我。你去拿柜顶的带子。',{driver:1,mode:'raft',length:16,rise:-1.2})
     ],
     [
-      step('tape','校准带速',['tape','radio'],'磁带里的沈遥：猜一猜，这是什么声音？',{v:[.26,.67],clip:'哐啷……铁皮盒。'}),
+      step('tape','校准带速',['tape','radio'],'磁带里的沈遥：猜一猜，这是什么声音？',{v:[.26,.67],clip:'哐啷。哐、哐……另一轨空了十秒。'}),
       step('tape','寻找继电器触点',['tape','radio'],'林澈：听见咔的一响再锁轨。',{v:[.63,.33],clip:'值班员：灯机回转正常。'}),
       step('tape','接回空白的十五秒',['tape','radio'],'沈遥：别替她补那半句话。',{v:[.78,.46],clip:'测潮员：北线……还要复测。'})
     ],
