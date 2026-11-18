@@ -3,10 +3,10 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const box=vm.createContext({});
-for(const name of ['missions','traversal','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','lookout','paper','lantern','signal','archive','relay-speech','relay','soundings-speech','soundings','fog-speech','fogsignal','pass-speech','lastpass','cooperation']){
+for(const name of ['missions','traversal','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','lookout','glass-speech','chartroom','paper','lantern','signal','archive','relay-speech','relay','soundings-speech','soundings','fog-speech','fogsignal','pass-speech','lastpass','cooperation']){
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../dist',name+'.js'),'utf8'),box);
 }
-const {Session,near,surface,lookout,ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass})',box);
+const {Session,near,surface,lookout,ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideGlass,TidePaper}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideGlass,TidePaper})',box);
 const empty=()=>({x:0,z:0,use:false,jump:false});
 function steer(g,i,target,keys){
   const p=g.players[i],dx=target.x-p.x,dz=target.z-p.z,dist=Math.hypot(dx,dz);
@@ -321,8 +321,55 @@ function fogInputs(g,out){
   }
   return out;
 }
+const cartRuns=new WeakMap();
+function glassInputs(g,out){
+  const r=g.glass,c=r.cart,axis=n=>Math.max(-1,Math.min(1,n)),wrap=a=>Math.atan2(Math.sin(a),Math.cos(a));
+  for(let i=0;i<2;i++){
+    const p=g.players[i],target=TideGlass.target(g,i),z=p.z-TideGlass.origin.z,x=p.x-TideGlass.origin.x;
+    if(TideGlass.near(g,i)){out[i].use=true;continue;}
+    let dest=target;
+    // Pass through the open left end of the eastern drying rack.
+    const tz=target.z-TideGlass.origin.z;
+    if((z< -2.04&&tz> -1.2||z> -1.3&&tz< -2.4)&&x>1.03)dest=TideGlass.at(.83,z);
+    else if(z> -2.49&&tz< -2.4&&target.x> TideGlass.origin.x+.8&&z< -1.25)dest=TideGlass.at(.83,-2.60);
+    else if(z< -1.12&&tz> -1.12&&target.x>TideGlass.origin.x+1.2)dest=TideGlass.at(.83,-1.05);
+    // Reach the desk along its ends, leaving room for the stowed plan cart.
+    if(r.docked&&tz < -3.4&&Math.abs(x)<.89&&z> -3.60)dest=TideGlass.at(i?1.13:-1.13,z);
+    const dx=dest.x-p.x,dz=dest.z-p.z,dist=Math.hypot(dx,dz);out[i].x=dx/Math.max(.75,dist);out[i].z=dz/Math.max(.75,dist);
+  }
+  if(r.phase==='cabinet'){
+    if(out[0].use){out[0].x=1;out[0].z=r.keyed?1:0;}
+    if(out[1].use){out[1].z=axis((r.lift-TideGlass.hookHeight(r))*16);out[1].jump=r.drawer>=.997;}
+  }else if(r.phase==='cart'&&out.every(k=>k.use)){
+    // Porters rotate in place at the tape ends, then push in parallel to the next bend.
+    let plan=cartRuns.get(g);
+    if(!plan){plan={i:r.leg===2?3:r.leg===1?1:0};cartRuns.set(g,plan);}
+    const paths=[[2.22,3.52,-Math.PI/2],[2.22,-.08,0],[-.11,-.08,Math.PI/2],[-.11,-3.04,0]];
+    const [x,z,a]=paths[plan.i],err=wrap(a-c.a),dist=(x-c.x)*(-Math.sin(a))+(z-c.z)*(-Math.cos(a));
+    const turn=axis(err*3.0),speed=Math.abs(err)<.030?axis(dist*2.0):0;
+    out[0].z=-axis(speed-turn);out[1].z=-axis(speed+turn);
+    if(Math.abs(dist)<.055&&Math.abs(err)<.019&&plan.i<3)plan.i++;
+    if(TideGlass.parked(c))out[0].jump=true;
+  }else if(r.phase==='proof'){
+    for(let i=0;i<2;i++)if(out[i].use&&!r.clipped[i]){
+      const desired=i?0:2;out[i].x=axis((desired-r.slide[i])*10);out[i].jump=Math.abs(desired-r.slide[i])<.04;
+    }
+  }else if(r.phase==='desk'&&out.every(k=>k.use)){
+    const p=g.paper,h=p.holder,reader=1-h,[dx,dy]=TidePaper.residual(p,p.pin);
+    if(!p.pinned){out[h].x=axis(-dx*16);out[h].z=axis(dy*16);out[h].jump=Math.hypot(dx,dy)<.037;}
+    else{out[reader].x=axis(p.angle*16);out[reader].z=axis((p.light-p.lightTarget)*16);out[reader].jump=p.revealed;}
+  }else if(r.phase==='margin'){
+    const b=TideGlass.bands[r.fragment];
+    if(out[0].use)out[0].x=1;
+    if(out[1].use){out[1].x=axis((b.x-r.beam)*17);out[1].z=axis((r.rake-b.rake)*17);out[1].jump=TideGlass.light(r,r.fragment)>.70&&out[0].use;}
+  }else if(r.phase==='record'){
+    for(let i=0;i<2;i++)if(out[i].use&&!r.signed[i]){const v=i?0:1;out[i].x=axis((v-r.entry[i])*15);out[i].jump=Math.abs(r.entry[i]-v)<.05;}
+  }
+  return out;
+}
 function control(g){
   const out=[empty(),empty()],sec=g.section,s=g.spec,q=g.state;
+  if(g.glass)return glassInputs(g,out);
   if(g.fog)return fogInputs(g,out);
   if(g.survey)return surveyInputs(g,out);
   if(g.relay)return relayInputs(g,out);
@@ -877,6 +924,44 @@ if(require.main===module){
   }
   assert.ok(bridge.complete&&bridge.skipTin,'Both passengers may walk off together without making a recording.');
 
+  {
+    const g=new Session(5),r=g.glass;
+    reach(g,()=>r.keyed&&TideGlass.near(g,1));const atLock=TideGlass.checkpoint(g);
+    for(let j=0;j<120;j++)g.tick(step,[{...empty(),use:true,z:1},empty()]);
+    assert.equal(r.drawer,atLock.drawer);
+    reach(g,()=>r.receiving&&r.transfer>.18);
+    const transfer=r.transfer;for(let j=0;j<24;j++)g.tick(step,[{...empty(),use:true},empty()]);
+    assert.equal(r.transfer,transfer);
+    reach(g,()=>r.phase==='cart'&&g.engaged.every(Boolean));
+    const c=r.cart,start={...c};
+    for(let j=0;j<80;j++)g.tick(step,[{...empty(),use:true,z:-1},empty()]);
+    assert.equal(c.x,start.x);assert.equal(c.z,start.z);
+    for(let j=0;j<250;j++)g.tick(step,[{...empty(),use:true,z:-1},{...empty(),use:true,z:-1}]);
+    assert.ok(r.blocked&&c.z>2.10&&c.z<3.50);assert.ok(TideGlass.fits(c));
+    const transit=new Session(5);TideGlass.restore(transit,atLock);
+    reach(transit,()=>transit.glass.leg===1);
+    const saved=TideGlass.checkpoint(transit),resume=new Session(5);TideGlass.restore(resume,saved);
+    assert.equal(resume.glass.cart.x,saved.cart.x);assert.equal(resume.glass.cart.z,saved.cart.z);
+    reach(resume,()=>resume.glass.phase==='unload'&&resume.glass.unload>.15);
+    const unloaded=resume.glass.unload;
+    for(let j=0;j<30;j++)resume.tick(step,[{...empty(),use:true},empty()]);
+    assert.equal(resume.glass.unload,unloaded);
+    reach(resume,()=>resume.paper.pinned);const pin=TideGlass.checkpoint(resume),table=new Session(5);
+    TideGlass.restore(table,pin);assert.ok(table.paper.pinned&&table.glass.docked);
+    reach(table,()=>table.glass.phase==='proof'&&table.engaged.every(Boolean));
+    for(let j=0;j<55;j++){const k=control(table);k[0].x=k[1].x=0;k[0].jump=k[1].jump=j===10;table.tick(step,k);}
+    assert.equal(table.glass.phase,'proof');assert.ok(!table.glass.clipped.every(Boolean));
+    reach(table,()=>table.stage===2&&table.glass.phase==='margin');
+    assert.ok(table.section.sites[0].x>table.section.sites[1].x);
+    for(let j=0;j<165;j++){const k=control(table);k[0].use=false;k[1].jump=true;table.tick(step,k);}
+    assert.ok(!table.glass.rubs[0]);
+    reach(table,()=>table.glass.rubs[0]);const first=TideGlass.checkpoint(table),evidence=new Session(5);evidence.stage=2;evidence.begin();
+    TideGlass.restore(evidence,first);assert.equal(evidence.glass.fragment,1);assert.ok(!evidence.glass.rubs[1]);
+    reach(evidence,()=>evidence.glass.phase==='record');
+    for(let j=0;j<60;j++){const k=control(evidence);k[0].x=k[1].x=0;k[0].jump=k[1].jump=true;evidence.tick(step,k);}
+    assert.deepEqual(Array.from(evidence.glass.signed),[false,false]);
+    reach(evidence,()=>evidence.complete);assert.ok(evidence.glass.signed.every(Boolean));
+  }
   const chart=new Session(5);
   reach(chart,()=>chart.paper.pinned);
   const h=chart.paper.holder,r=1-h;

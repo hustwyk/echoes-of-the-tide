@@ -21,7 +21,7 @@ window.TideCinema = (() => {
     const at=hub.sites[idx===7?1:0];
     shelf.position.set(at.x+.98,at.y+.85,at.z-1.15);
     if(idx===4)shelf.position.set(0,.85,-3.42);
-    if(idx===5){shelf.position.x+=2.15;shelf.position.y+=.23;}
+    if(idx===5){const o=TideGlass.origin;shelf.position.set(o.x+2.32,o.y+.99,o.z-4.99);}
     let clock=0, duration=0, playing=false, disposed=false;
     let cupboard, cup, tape, tin, screw, sheet, packet, green, marker;
     let tender, cable, workroom, paperStrip, hand, newLabel, voiceCoils;
@@ -494,10 +494,10 @@ window.TideCinema = (() => {
       }
       if(![5,6].includes(idx))return null;
       const t=clock,mid=hub.tram?.deck||hub.mid,hand=side?1:-1;
-      const speaking=idx===5?(side===0?t<2.67:t>=2.74&&t<5.53):
+      const speaking=idx===5?TideGlass.film(t).actor===side:
         idx===6?(side===0?t<3.23:t>=3.42&&t<6.65):(side===0&&t<2.65);
-      const listening=t>=(idx===5?5.65:7);
-      return {x:mid.x+hand*.58,y:mid.y,z:mid.z+.29+side*.04,yaw:hand*.48,
+      const listening=idx===5?TideGlass.film(t).actor<0:t>=7;
+      return {x:idx===5?TideGlass.origin.x+(side?2.73:1.56):mid.x+hand*.58,y:mid.y,z:idx===5?TideGlass.origin.z-4.16:mid.z+.29+side*.04,yaw:hand*.48,
         talking:speaking,gaze:hand*(listening?-.12:.29),incline:listening?.045:.085+.045*Math.sin(t*.92+side)};
     }
     function portrait(side,t){
@@ -524,8 +524,10 @@ window.TideCinema = (() => {
         return subject(shelf,[.39-f*.12,.43,.48],[.06,.10,-.014]);
       }
       if(idx===5){
-        if(!i&&t>=2.7)return portrait(1,t);
-        if(i&&t<2.7)return portrait(0,t);
+        const radioView=assets.glassRoom?.filmShot(i,t);if(radioView)return radioView;
+        const actor=TideGlass.film(t).actor;
+        if(!i&&actor!==0)return portrait(1,t);
+        if(i&&actor===0)return portrait(0,t);
         return !i?subject(shelf,[sheet.position.x*.90,1.1,.54],[sheet.position.x+.055,.06,.10]):
           subject(shelf,[.28-f*.07,.76,.41],[.12,.05,.13]);
       }
@@ -558,7 +560,7 @@ window.TideCinema = (() => {
         const captions=window.TideArchiveMedia?.coda?.captions||[[0,'林澈　丙三柜。我去拿原图。'],[3.0,'梁青　阿棠，从船尾再看一眼。'],[6.2,'阿棠　旧标和白浪，叠在一起了。'],[10,'梁青　我这边错开半扇窗。两处都记上。']];
         let line='';for(const [at,text] of captions){if(t<at)break;line=text;}return line;
       }
-      if(idx===5)return t<2.7?'林澈　我看见备注没印出来。还在这儿划了一下。':t<5.65?'沈遥　我替我们两个人，按了那个确认。':'梁青　要是还不知道，就告诉我不知道。我可以给你们报浪。';
+      if(idx===5)return TideGlass.film(t).subtitle;
       if(idx===6)return t<3.4?'林澈　那次你猜的是雷声。':'沈遥　铁皮饼干盒。想再听一遍才故意猜错的。';
       if(idx===7)return t<2.8?'阿棠　船尾收到。让我再看一眼。':'阿棠　白浪后面有截断桩。等浪落下去，我再给你们报。';
       if(idx===11){
@@ -572,7 +574,7 @@ window.TideCinema = (() => {
     }
     function begin(kind){
       if(disposed||kind!=='chapter-end'||!durations[idx])return false;
-      clock=0;duration=(idx===4?window.TideArchiveMedia?.coda?.duration:null)||durations[idx];playing=true;renderedText='';
+      clock=0;duration=idx===5?TideGlass.filmLength():(idx===4?window.TideArchiveMedia?.coda?.duration:null)||durations[idx];playing=true;renderedText='';
       if(idx===11){setupFinal();newLabel.userData.repaint();}
       return true;
     }

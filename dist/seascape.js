@@ -245,6 +245,10 @@ window.TideCoast = (() => {
       sunTarget.position.set(-56,1,-123);sun.position.set(-84,41,-151);
       Object.assign(sun.shadow.camera,{left:-20,right:20,top:20,bottom:-20,near:24,far:94});
     }
+    if(index===5){
+      sunTarget.position.set(-57,3.2,-98);sun.position.set(-83,34,-127);
+      Object.assign(sun.shadow.camera,{left:-11,right:11,top:12,bottom:-12,near:18,far:76});
+    }
     if(index===7){
       sunTarget.position.set(-33,1,-85);sun.position.set(-61,40,-111);
       Object.assign(sun.shadow.camera,{left:-19,right:19,top:19,bottom:-19,near:20,far:90});
@@ -430,7 +434,7 @@ window.TideCoast = (() => {
     for(let i=0;i<56;i++){
       const side=i%2?1:-1, r=rng(), z=9-rng()*124, x=side*(29+rng()*51);
       const drawX=x<0&&z< -77&&x> -57?x-45:x;
-      const clearPier=index===2&&Math.hypot(drawX+61,z+128)<20||index===8&&Math.hypot(drawX+45,z+94)<22;
+      const clearPier=index===5&&Math.hypot(drawX+57,z+98)<19||index===2&&Math.hypot(drawX+61,z+128)<20||index===8&&Math.hypot(drawX+45,z+94)<22;
       rock(clearPier?drawX-29:drawX,-5.1+rng(),z,2+r*10,2+r*r*9,2+rng()*9,i);
     }
     for(let i=0;i<11;i++){
