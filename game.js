@@ -11,7 +11,7 @@ const sound=new HarborSound();
 let wantsAudio=true;try{wantsAudio=localStorage.getItem('tide-audio')!=='off';}catch{}
 const keys=new Set(),jumps=[false,false],toolTaps=[false,false],gamepadDown=[false,false];
 let session=null,view=null,index=0,mode='menu',last=0,remainder=0,redraw=0,voice=false;
-const padSlots=[null,null],cameraButtons=[false,false];
+const padSlots=[null,null],cameraButtons=[false,false],pointTaps=[false,false];
 let menuPadState=new Set(),padApiAvailable=true;
 function gamepads(){
   if(!padApiAvailable)return [];
@@ -56,7 +56,7 @@ function savePoint(g){
   try{localStorage.setItem('tide-3d-checkpoint',JSON.stringify(resume));}catch{}
 }
 function clearInput(){
-  keys.clear();jumps.fill(false);toolTaps.fill(false);gamepadDown.fill(false);cameraButtons.fill(false);last=0;remainder=0;
+  view?.pointing?.cancel();pointTaps.fill(false);keys.clear();jumps.fill(false);toolTaps.fill(false);gamepadDown.fill(false);cameraButtons.fill(false);last=0;remainder=0;
 }
 function note(line){
   if(line && journal.at(-1)!==line)journal.push(line);
@@ -84,7 +84,7 @@ function radio(line,duration=5){
   session.notice=line;session.noticeUntil=session.time+duration;say(line);
 }
 function onStage(g){
-  savePoint(g);note(g.spec.radio);g.notice=g.spec.radio;g.noticeUntil=g.time+6;
+  view?.pointing?.clear();savePoint(g);note(g.spec.radio);g.notice=g.spec.radio;g.noticeUntil=g.time+6;
   if(mode==='playing'&&!g.swing?.voice&&!g.cistern?.voice)say(g.spec.radio);
 }
 function openLevel(n,stage=0,mark=null){
@@ -96,7 +96,7 @@ function openLevel(n,stage=0,mark=null){
   $('split').hidden=true;showStatus('正在准备场景');
   overlay.innerHTML='<div class="story"><h3>正在进入北岬</h3></div>';
   try{
-    view??=new TideHarbor.WorldView(canvas);
+    view??=new TideHarbor.WorldView(canvas,i=>sound.tone(i?690:518,.10,'sine',.11));
     if(n===6)TideReceiverAudio.loadSwing();
     if(n===3)TideReceiverAudio.loadCistern();
     if(n===5)TideReceiverAudio.loadGlass();
@@ -227,8 +227,11 @@ function pollInputs(now,connected){
     view.yaws[i]-=orbit*now*2.30;
     const center=!!pad?.buttons[11]?.pressed;if(center&&!cameraButtons[i])recenter(i);cameraButtons[i]=center;
     if(pad){view.yaws[i]-=dead(pad.axes[2])*now*2.4;view.pitch[i]=TideTraversal.clamp(view.pitch[i]+dead(pad.axes[3])*now*2,-1.15,2.1);}
-    return {x:Math.max(-1,Math.min(1,Number(keys.has(right))-Number(keys.has(left))+dead(pad?.axes[0]))),
-      z:Math.max(-1,Math.min(1,Number(keys.has(back))-Number(keys.has(front))+dead(pad?.axes[1]))),
+    const x=TideTraversal.clamp(Number(keys.has(right))-Number(keys.has(left))+dead(pad?.axes[0]),-1,1);
+    const z=TideTraversal.clamp(Number(keys.has(back))-Number(keys.has(front))+dead(pad?.axes[1]),-1,1);
+    const pointing=view.pointing.input(i,pointTaps[i]||keys.has(i?'Semicolon':'KeyF')||!!pad?.buttons[4]?.pressed,x,z,now,session.time);
+    pointTaps[i]=false;
+    return {x:pointing?0:x,z:pointing?0:z,
       use:toolTaps[i]||keys.has(i?'Enter':'KeyE')||!!pad?.buttons[7]?.pressed,jumpHeld:(i?keys.has('Slash')||keys.has('ShiftRight'):keys.has('Space'))||down,jump};
   });
 }
@@ -295,13 +298,14 @@ $('skip').onclick=()=>{if(mode==='cinema'){view.cinema.skip();showDebrief(sessio
 $('pause').onclick=pause;$('sound').onclick=$('field-audio').onclick=toggleAudio;
 $('expand').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else if(game.requestFullscreen)await game.requestFullscreen();}catch{showStatus('当前窗口已使用可用的最大画面');}};
 $('brief').onclick=()=>{showInfo('<h2>北岬灯塔 · 紧急任务</h2><p>海雁号失去动力。机修员林澈和信号员沈遥必须在潮水吞没北礁前恢复电台，找出灯塔旧档案里的误判，重新校准光束。</p><p>十二关贯穿四幕。两人各自操作一名角色，共用同一个三维世界。</p><p><a href="story.html" target="_blank" rel="noopener">阅读原作调研、原创故事与十二关设计（含剧透）</a></p>');addJournal($('info-content'),levels.slice(0,progress).map((l,i)=>'第 '+(i+1)+' 关　'+l.name+'　'+l.after));};
-$('help').onclick=()=>showInfo('<h2>双人操作指南</h2><p>林澈用 WASD 移动、空格跳跃，按住 E 操作。沈遥用方向键移动、斜杠 / 或右 Shift 跳跃，按住 Enter 操作。轻点跳跃可以越过短阶，按住则跳得更高。</p><p>林澈用 Q / R 转镜头，C 回到人物身后。沈遥用逗号 / 句号转镜头，反斜杠回正。两人可以同时转动各自的镜头。</p><p>跟随各自画面内的设备标记。在光圈里按住操作键，左右键调节仪器，跳跃键确认读数或发送信号。站在移动甲板上会随甲板运动，可从边缘跃向对岸。</p><p>拖动半屏可转动该玩家的镜头，双击回正。标准手柄使用左摇杆移动、A 跳跃、RT 操作、右摇杆转动视角、按下回到身后，按接入顺序分配给两位玩家。方向键选菜单，A 确认，B 返回，Start 或 Esc 暂停，章节与段落检查点保存在此浏览器。</p>');
-const moveCodes=new Set(['KeyW','KeyA','KeyS','KeyD','KeyE','Space','ArrowUp','ArrowLeft','ArrowDown','ArrowRight','Enter','Slash','ShiftRight','KeyQ','KeyR','KeyC','Comma','Period','Backslash']);
+$('help').onclick=()=>showInfo('<h2>双人操作指南</h2><p>林澈用 WASD 移动、空格跳跃，按住 E 操作。沈遥用方向键移动、斜杠 / 或右 Shift 跳跃，按住 Enter 操作。轻点跳跃可以越过短阶，按住则跳得更高。</p><p>林澈用 Q / R 转镜头，C 回到人物身后。沈遥用逗号 / 句号转镜头，反斜杠回正。两人可以同时转动各自的镜头。</p><p>要给同伴指路，林澈按住 F，沈遥按住分号，手柄按住 LB。用移动键或左摇杆瞄准实物，松开即可。也可以在自己的半屏右击。标记会跟着甲板或船移动。</p><p>跟随各自画面内的设备标记。在光圈里按住操作键，左右键调节仪器，跳跃键确认读数或发送信号。站在移动甲板上会随甲板运动，可从边缘跃向对岸。</p><p>拖动半屏可转动该玩家的镜头，双击回正。标准手柄使用左摇杆移动、A 跳跃、RT 操作、右摇杆转动视角、按下回到身后，按接入顺序分配给两位玩家。方向键选菜单，A 确认，B 返回，Start 或 Esc 暂停，章节与段落检查点保存在此浏览器。</p>');
+const moveCodes=new Set(['KeyW','KeyA','KeyS','KeyD','KeyE','Space','ArrowUp','ArrowLeft','ArrowDown','ArrowRight','Enter','Slash','ShiftRight','KeyQ','KeyR','KeyC','Comma','Period','Backslash','KeyF','Semicolon']);
 document.addEventListener('keydown',e=>{
   if(!game.open)return;
   if(e.code==='Escape'&&(mode==='playing'||mode==='paused')){e.preventDefault();if(!e.repeat)pause();return;}
   if(mode!=='playing'||!moveCodes.has(e.code))return;
   e.preventDefault();keys.add(e.code);
+  if(!e.repeat&&(e.code==='KeyF'||e.code==='Semicolon'))pointTaps[e.code==='KeyF'?0:1]=true;
   if(!e.repeat&&(e.code==='KeyC'||e.code==='Backslash'))recenter(e.code==='KeyC'?0:1);
   if(!e.repeat&&session?.cable&&((session.stage===0&&e.code==='KeyE')||
     (session.stage===2&&session.cable.patched>=0&&!session.cable.backTest&&e.code==='Enter')))toolTaps[e.code==='KeyE'?0:1]=true;
@@ -314,6 +318,11 @@ game.addEventListener('close',()=>{if(!game.open){mode='menu';clearInput();sound
 game.addEventListener('cancel',e=>{
   if(mode==='cinema'){e.preventDefault();$('skip').click();}
   else if(mode==='playing'||mode==='paused'){e.preventDefault();pause();}
+});
+canvas.addEventListener('contextmenu',e=>{
+  if(mode!=='playing')return;e.preventDefault();
+  const b=canvas.getBoundingClientRect(),u=(e.clientX-b.left)/b.width,i=u<.5?0:1;
+  view.pointing.place(i,(u*2-i)*2-1,1-2*(e.clientY-b.top)/b.height,session.time);
 });
 canvas.tabIndex=-1;
 $('field-audio').textContent=wantsAudio?'音效 开':'音效 关';

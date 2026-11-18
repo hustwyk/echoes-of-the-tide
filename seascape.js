@@ -119,7 +119,7 @@ window.TideCoast = (() => {
       gl_Position=projectionMatrix*viewMatrix*world;
     }`;
   const waterFragment = `
-    uniform sampler2D uNoise,uSky;
+    uniform sampler2D uNoise,uSky,uSceneMap;uniform mat4 uSceneProject;uniform float uSceneLevel,uSceneWeight;
     uniform float uTime,uHasSky,uSignal,uBearing,uInside,uSurvey;
     uniform vec2 uPilot;
     ${surveyWaves}
@@ -148,9 +148,31 @@ window.TideCoast = (() => {
         dx=(surveySwell(p+vec2(.1,0.),t)-surveySwell(p-vec2(.1,0.),t))*5.;
         dz=(surveySwell(p+vec2(0.,.1),t)-surveySwell(p-vec2(0.,.1),t))*5.;
       }
-      vec3 normal=normalize(vec3(-dx+(noiseA.r+noiseB.g-1.)*.59*fine,1.,-dz+(noiseB.r+noiseA.g-1.)*.59*fine));
-      vec3 r=reflect(-eye,normal);r.y=max(r.y,.025);
+      // Short gravity waves break into wind-aligned ripples. Fade the
+      // sub-pixel capillaries independently of the broad travelling swell.
+      vec2 wind=vec2(.872,.49),crosswind=vec2(-.49,.872);
+      float wx=dot(p,wind),wy=dot(p,crosswind);
+      float warp=2.1*(noiseA.r-.5)+.44*sin(wy*.74+t*.34);
+      float ripple=.083*cos(wx*6.83+.51*sin(wy*1.68)+warp-t*4.16)
+                  +.047*cos(wx*12.3+wy*2.7-warp*1.7-t*6.14);
+      float capillary=.024*cos(wx*28.7-wy*5.9+warp*3.2-t*9.14)*(1.-smoothstep(9.,42.,dist));
+      vec2 micro=wind*(ripple+capillary)+crosswind*.033*sin(wy*6.2+wx*1.9+t*3.17);
+      vec2 rough=vec2(noiseA.r+noiseB.g-1.,noiseB.r+noiseA.g-1.)*.31;
+      vec3 normal=normalize(vec3(-dx+(rough.x+micro.x)*fine,1.,-dz+(rough.y+micro.y)*fine));
+      vec3 reflected=reflect(-eye,normal),r=reflected;r.y=max(.018,r.y);
       vec3 sky=mix(vec3(.30,.42,.47),texture2D(uSky,envUV(r)).rgb,uHasSky);
+      sky=mix(vec3(.085,.146,.16),sky,.34+.66*smoothstep(-.14,.11,reflected.y));
+      if(uSceneWeight>.5){
+        vec4 surfaceImage=uSceneProject*vec4(p.x,uSceneLevel,p.y,1.);
+        vec2 uv=surfaceImage.xy/max(surfaceImage.w,.001)*.5+.5;
+        vec2 tilt=clamp(normal.xz,vec2(-.8),vec2(.8));
+        vec2 curl=vec2(dot(tilt,vec2(.69,-.39)),dot(tilt,vec2(.33,.74)));
+        vec2 base=uv+curl*.036;
+        vec2 blur=vec2(.0009+.0018*abs(curl.x),.0012+.0021*abs(curl.y));
+        vec4 image=.5*texture2D(uSceneMap,base)+.25*(texture2D(uSceneMap,base+blur)+texture2D(uSceneMap,base-blur));
+        float edge=smoothstep(.0,.035,min(min(base.x,base.y),min(1.-base.x,1.-base.y)));
+        if(surfaceImage.w>0.)sky=mix(sky,image.rgb/max(image.a,.001),edge*clamp(image.a,0.,1.)*.91);
+      }
       float fresnel=.09+.70*pow(1.-max(dot(normal,eye),0.),3.);
       vec3 deep=mix(vec3(.019,.045,.054),vec3(.040,.094,.102),noiseA.r);
       vec3 lit=mix(deep,sky*.99,fresnel);
@@ -159,8 +181,9 @@ window.TideCoast = (() => {
       float shine=pow(max(dot(reflect(-uSun,normal),eye),0.),77.);
       lit+=vec3(1.,.61,.30)*shine*.8;
       // Choppy crests break first; turbulence erodes each crest into filaments.
-      float crest=smoothstep(.49,1.02,vHeight+.26*noiseA.r);
-      float foam=crest*smoothstep(.45,.68,noiseA.g*.48+noiseB.r*.52);
+      float crest=smoothstep(.58,1.03,vHeight+.19*(noiseA.r-.12));
+      float windward=smoothstep(-.12,.35,-dot(normal.xz,wind)+.35*(noiseA.r-.4));
+      float foam=crest*(.28+.72*windward)*smoothstep(.45,.68,noiseA.g*.48+noiseB.r*.52);
       lit=mix(lit,vec3(.49,.55,.53),foam*.55);
       float ledX=14.+(p.y+85.)*tan(clamp(uBearing,-.7,.7));
       float streak=exp(-abs(p.x-ledX)*.38)*(noiseB.r*.8+.1);
@@ -265,6 +288,31 @@ window.TideCoast = (() => {
       sunTarget.position.set(14,22,-91);sun.position.set(-17,65,-127);
       Object.assign(sun.shadow.camera,{left:-12,right:12,top:12,bottom:-12,near:25,far:91});
     }
+    // Fit the light-space rectangle to both players. A texel-aligned centre
+    // keeps stationary rail and boot shadows from swimming when a partner walks.
+    const followSun=[0,1,6,11].includes(index);
+    const lightAxis=sun.position.clone().sub(sunTarget.position).normalize();
+    const rightAxis=new T.Vector3().crossVectors(new T.Vector3(0,1,0),lightAxis).normalize();
+    const highAxis=new T.Vector3().crossVectors(lightAxis,rightAxis);
+    const midpoint=new T.Vector3(),span=new T.Vector3();
+    let shadowExtent=0;
+    function frameShadow(players){
+      if(!players||!followSun)return;
+      const [a,b]=players;
+      midpoint.set((a.x+b.x)*.5,(a.y+b.y)*.5+1,(a.z+b.z)*.5);
+      span.set(a.x-b.x,a.y-b.y,a.z-b.z);
+      const need=10.5+.5*Math.max(Math.abs(span.dot(rightAxis)),Math.abs(span.dot(highAxis)));
+      if(need>shadowExtent||need<shadowExtent-3){
+        shadowExtent=Math.ceil(need/2)*2;
+        Object.assign(sun.shadow.camera,{left:-shadowExtent,right:shadowExtent,top:shadowExtent,bottom:-shadowExtent,near:1,far:170});
+        sun.shadow.camera.updateProjectionMatrix();
+      }
+      const texel=2*shadowExtent/sun.shadow.mapSize.x;
+      const snap=(v,step)=>Math.round(v/step)*step;
+      const x=snap(midpoint.dot(rightAxis),texel),y=snap(midpoint.dot(highAxis),texel);
+      sunTarget.position.copy(rightAxis).multiplyScalar(x).addScaledVector(highAxis,y).addScaledVector(lightAxis,snap(midpoint.dot(lightAxis),.5));
+      sun.position.copy(sunTarget.position).addScaledVector(lightAxis,83);
+    }
     sun.shadow.camera.updateProjectionMatrix();
     sun.shadow.normalBias=.045;sun.shadow.bias=-.00016;
     const rim=new T.DirectionalLight(act===1?0xffb87c:0xafddff,act===1?1.05:.68);
@@ -278,7 +326,7 @@ window.TideCoast = (() => {
       vertices.setX(i,320*Math.sign(x)*Math.pow(Math.abs(x),1.55));
       vertices.setZ(i,270*Math.sign(z)*Math.pow(Math.abs(z),1.45));
     }
-    const uniforms={uPilot:{value:new T.Vector2()},uSurvey:{value:index===8?1:0},uTime:{value:0},uNoise:{value:noise},uSky:{value:noise},uHasSky:{value:0},uSignal:{value:0},
+    const uniforms={uSceneMap:{value:null},uSceneProject:{value:new T.Matrix4()},uSceneWeight:{value:0},uSceneLevel:{value:-4},uPilot:{value:new T.Vector2()},uSurvey:{value:index===8?1:0},uTime:{value:0},uNoise:{value:noise},uSky:{value:noise},uHasSky:{value:0},uSignal:{value:0},
       uShoreLamp:{value:index===2?0:-1},uTurningShip:{value:new T.Vector4()},
       uNearOptic:{value:new T.Vector4(0,0,1,-1)},uFarOptic:{value:new T.Vector4()},uGhost:{value:new T.Vector2()},uRangeAxis:{value:new T.Vector2(Math.sin(TideLantern.yaw),Math.cos(TideLantern.yaw))},
       basin:{value:new T.Vector4()},uBearing:{value:0},uInside:{value:act===1?.9:0},uSun:{value:new T.Vector3(-.42,.40,-.82).normalize()},uFog:{value:fogColor}};
@@ -721,32 +769,7 @@ window.TideCoast = (() => {
     }));
     const rain=new T.LineSegments(rainGeo,rainMat);rain.frustumCulled=false;group.add(rain);
 
-    // Puffs of spindrift form downwind of the off-shore basalt stacks.
-    const spray=[];
-    for(let i=0;i<160;i++){
-      const sign=i%2?1:-1;
-      spray.push(sign*(21+rng()*38),rng()*5.2,9-rng()*111,rng()*TAU);
-    }
-    const fogPoints=geom(new T.BufferGeometry()),trackPositions=[],seeds=[];
-    for(let i=0;i<spray.length;i+=4){trackPositions.push(...spray.slice(i,i+3));seeds.push(spray[i+3]);}
-    fogPoints.setAttribute('position',new T.Float32BufferAttribute(trackPositions,3));
-    fogPoints.setAttribute('seed',new T.Float32BufferAttribute(seeds,1));
-    const mistMaterial=mat(new T.ShaderMaterial({uniforms:{t:{value:0},baseY:{value:-4},map:{value:noise}},
-      transparent:true,depthWrite:false,
-      vertexShader:`attribute float seed;uniform float t,baseY;varying float age; varying float vSeed;
-      void main(){age=fract(seed+t*.11);vSeed=seed;vec3 p=position;
-        p.x+=age*4.6;p.y=baseY+position.y*.24+sin(age*1.87)*1.7;
-        vec4 mv=viewMatrix*vec4(p,1.);
-        gl_PointSize=clamp((600.+age*950.)/max(-mv.z,1.),2.,68.);
-        gl_Position=projectionMatrix*mv;}`,
-      fragmentShader:`uniform sampler2D map;varying float age,vSeed;
-      void main(){vec2 p=gl_PointCoord*2.-1.;float mask=max(0.,1.-dot(p,p));
-        float billow=texture2D(map,gl_PointCoord*.38+vec2(vSeed,age*.12)).r;
-        float opacity=mask*mask*sin(3.14159*age)*smoothstep(.25,.78,billow)*.21;
-        gl_FragColor=vec4(.72,.79,.81,opacity);}`
-    }));
-    const spindrift=new T.Points(fogPoints,mistMaterial);spindrift.frustumCulled=false;
-    spindrift.visible=act!==1;group.add(spindrift);
+    const surf=act===1?null:TideSurf.create(group,{water,rockMaterial:rockMat,index,fog});
 
     const glowGeo=geom(new T.BufferGeometry());
     const glowPos=[],glowTint=[];
@@ -764,9 +787,9 @@ window.TideCoast = (() => {
     group.add(new T.Points(glowGeo,glow));
 
     return {
-      marker,
-      update(t,cues={}){
-        uniforms.uTime.value=t;
+      marker,water,
+      update(t,cues={},players){
+        frameShadow(players);uniforms.uTime.value=t;
         if(cues.vessel){
           const s=cues.vessel;uniforms.uShoreLamp.value=cues.rangeGreen;
           uniforms.uTurningShip.value.set(s.x,s.z,s.yaw,cues.wake||0);
@@ -775,8 +798,7 @@ window.TideCoast = (() => {
         rainMat.uniforms.uTime.value=t;
         const strength=T.MathUtils.clamp(cues.light||0,0,1);
         water.position.y=Number.isFinite(cues.water)?cues.water:-4;
-        mistMaterial.uniforms.t.value=t;
-        mistMaterial.uniforms.baseY.value=water.position.y;
+        surf?.update(t,water.position.y);
         marker.position.set(marks.buoy.x,water.position.y+(index===8?TideSoundings.swell:TideLookout.swell)(marks.buoy.x,marks.buoy.z,t),marks.buoy.z);
         marker.rotation.set(.08*Math.sin(t*.79),.5,.095*Math.sin(t*.88));
         const angle=Number.isFinite(cues.angle)?cues.angle:Math.sin(t*.14)*.32;
@@ -803,7 +825,7 @@ window.TideCoast = (() => {
       dispose(){
         if(disposed)return;
         disposed=true;
-        scene.remove(group);
+        surf?.dispose();scene.remove(group);
         if(scene.background===sky || scene.background===fogColor){
           scene.background=previous.background;
           scene.backgroundIntensity=previous.intensity;

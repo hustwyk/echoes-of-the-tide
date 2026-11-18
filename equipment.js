@@ -110,7 +110,10 @@ window.TideEquipment = (() => {
       return {add,box,cyl,bar,ring,mesh};
     }
 
-    function deck(width,depth,style='dock') {
+    const pier=TidePierDeck.create({own,models,quay});
+    function deck(width,depth,style='dock',visibleRects) {
+      const detailed=pier.deck(width,depth,style,visibleRects);
+      if(detailed)return detailed;
       const w=Math.max(.08,width), d=Math.max(.08,depth);
       const key='deck:'+style+':'+w+':'+d;
       if (models.has(key)) return models.get(key).clone(true);
