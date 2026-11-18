@@ -208,6 +208,10 @@ const TideTinMemory=(()=>{
   }
   function step(g,k,dt){
     const m=g.archive.memory;m.age+=dt;m.elapsed+=dt;voiceStep(g,dt);
+    if(m.phase==='playback'&&!m.poolVisited){
+      m.poolHold=k.every(input=>input.jumpHeld&&!input.use)?(m.poolHold||0)+dt:0;
+      if(m.poolHold>=.45){m.poolRequested=m.poolVisited=true;}
+    }
     g.near=[true,true];g.engaged=k.map(input=>input.use);act(g,k,dt);readings(g);
   }
   function readings(g){
@@ -218,6 +222,8 @@ const TideTinMemory=(()=>{
       if(m.phase==='ready'&&m.releaseQueued&&sender)line='手指按好螺丝了。扶稳画板，等沈遥端起盒子。';
       if(m.phase==='return')line='把盒子和画板递过桌子，下一颗换你来。';
       if(m.phase==='playback'||m.phase==='home')line=m.replay<0?'把手里的东西放下，一起听刚才录的两声。':'听十秒钟北岬。';
+      if(m.phase==='playback'&&!m.poolVisited)line='两人按住跳跃去窗外赛船，或留下听完这盘带子。';
+      if(m.phase==='playback'&&Number.isInteger(m.poolResult))line=(m.poolResult===-1?'窗台上，两艘船分着一个瓶盖。':(m.poolResult===0?'林澈':'沈遥')+'把瓶盖留在了窗台上。')+'听，带子还在转。';
       const impulse=m.events.filter(e=>e.replay&&e.type!=='grain'&&e.type!=='settle').at(-1);
       const heard=impulse&&m.elapsed-impulse.time<.45?(impulse.type==='tin'?'叮　·　螺丝落进铁盒':impulse.type==='peg'?'嗒　·　撞过图钉':impulse.type==='edge'?'擦过板边':'松开螺丝'):'磁带回放';
       g.set(i,line,{caption:m.phase==='miss'?'掉在木头上　·　这一颗重来':m.phase==='caught'?'落进铁盒　·　录下来了':m.phase==='playback'&&m.replay>=0?heard:sender?'画板　·　'+(m.dir===1?'第一颗':'第二颗'):'饼干铁盒'});

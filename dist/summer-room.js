@@ -100,6 +100,8 @@ window.TideSummerRoom=(()=>{
         c+=water*glint*smoothstep(.28,.65,c.g)*.035;gl_FragColor=vec4(c,1.);
         #include <colorspace_fragment>
       }`}));
+    const models=TideRegattaBoats.createShelf(root);models.root.position.set(.81,.849,-2.25);
+    const prize=TideRegattaBoats.createCap(root);prize.model.visible=false;
     const horizon=add(own(new T.PlaneGeometry(20,13)),coastMat,0,1.25,-6);horizon.castShadow=horizon.receiveShadow=false;
     // Fluorescent installation, enamel push switch, and conduit also seen in the present-day station.
     for(const z of [-1.07,1.41]){box(iron,0x68786c,.73,2.55,z,1.16,.094,.17);for(const dz of [-.038,.038]){bar(chine,0xd9d6b7,[.2,2.495,z+dz],[1.25,2.495,z+dz],.014);}}
@@ -240,6 +242,9 @@ window.TideSummerRoom=(()=>{
         if(show){scene.traverse(o=>{if((o.isDirectionalLight||o.isAmbientLight||o.isHemisphereLight)&&!roomLights.has(o)){suspended.push([o,o.visible]);o.visible=false;}});}else restore();active=show;
       }
       if(!show)return;
+      const winner=g.archive.memory.poolResult;
+      prize.model.visible=Number.isInteger(winner);
+      if(prize.model.visible)prize.model.position.set(.81+(winner===-1?0:winner?.12:-.12),.853,-2.104);
       autotime=Number.isFinite(t)?t:Number.isFinite(g.time)?g.time:autotime+.016;seaTime.value=autotime;
       for(let j=0;j<verts.count;j++){
         const x=rest[j*3],y=rest[j*3+1],lo=.5-y/1.02;
@@ -247,7 +252,7 @@ window.TideSummerRoom=(()=>{
       }
       verts.needsUpdate=true;curtainGeo.computeVertexNormals();
     }
-    function dispose(){if(disposed)return;disposed=true;restore();root.removeFromParent();daylight.shadow.dispose();for(const obj of stampCount)obj.dispose();for(const obj of resources)obj.dispose();}
+    function dispose(){if(disposed)return;disposed=true;restore();prize.dispose();models.dispose();root.removeFromParent();daylight.shadow.dispose();for(const obj of stampCount)obj.dispose();for(const obj of resources)obj.dispose();}
     return {update,dispose};
   }
   return {create};

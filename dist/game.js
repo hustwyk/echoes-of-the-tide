@@ -100,6 +100,40 @@ function onStage(g){
   view?.pointing?.clear();savePoint(g);const line=TideFenders.active(g)?TideFenders.briefing:g.spec.radio;note(line);g.notice=line;g.noticeUntil=g.time+6;
   if(mode==='playing'&&!TideFenders.active(g)&&!g.swing?.voice&&!g.cistern?.voice)say(line);
 }
+let race=null,sharedRenderer=null,loadingRace=null,raceEntry=0;
+function fieldRenderer(){return sharedRenderer??=TideHarbor.makeRenderer(canvas);}
+function poolModule(){
+  if(typeof TideRegattaPool!=='undefined')return Promise.resolve();
+  return loadingRace??=new Promise((ok,bad)=>{
+    const tag=document.createElement('script');tag.src='regatta-pool.js';
+    tag.onload=()=>{tag.remove();ok();};tag.onerror=()=>{tag.remove();loadingRace=null;bad(Error('未能读取试船池场景'));};document.head.append(tag);
+  });
+}
+async function enterRegatta(fromMemory=false){
+  if(race||mode==='regatta-loading')return;
+  const entry=++raceEntry;if(info.open)info.close();if(!game.open)game.showModal();
+  if(wantsAudio)sound.enable(true).then(updateAudio);
+  clearInput();sound.stopScene();window.speechSynthesis?.cancel();
+  mode='regatta-loading';$('split').hidden=$('film').hidden=true;overlay.replaceChildren();
+  $('act').textContent='夏日回忆　/　北岬试船池';$('level-title').textContent='瓶盖杯';$('elapsed').textContent='';
+  showStatus('正在把船模放进水里');$('pause').disabled=true;
+  function leave(winner=null){
+    race?.dispose();race=null;clearInput();menuPadState=new Set(gamepads().flatMap(p=>p.buttons.flatMap((b,j)=>b.pressed?[j]:[])));
+    if(fromMemory&&session){
+      if(Number.isInteger(winner))session.archive.memory.poolResult=winner;
+      view.w=0;view.snap=true;$('act').textContent=acts[Math.floor(index/3)].name+'　/　'+String(index+1).padStart(2,'0')+' OF 12';
+      $('level-title').textContent=levels[index].name;startPlaying(false);
+    }else game.close();
+  }
+  try{
+    await poolModule();if(raceEntry!==entry||!game.open)return;
+    race=TideRegattaUI.create(fieldRenderer(),fromMemory,leave);mode='regatta';$('pause').disabled=false;$('pause').textContent='暂停';canvas.focus();
+  }catch(error){
+    if(raceEntry!==entry||!game.open)return;
+    showStatus('试船池暂时无法显示。'+error.message);const back=document.createElement('button');
+    back.textContent=fromMemory?'回到录音桌':'返回行动档案';back.onclick=leave;overlay.replaceChildren(back);
+  }
+}
 function openLevel(n,stage=0,mark=null){
   closeFiling();if(info.open)info.close();
   if(!game.open)game.showModal();
@@ -109,7 +143,7 @@ function openLevel(n,stage=0,mark=null){
   $('split').hidden=true;showStatus('正在准备场景');
   overlay.innerHTML='<div class="story"><h3>正在进入北岬</h3></div>';
   try{
-    view??=new TideHarbor.WorldView(canvas,i=>sound.tone(i?690:518,.10,'sine',.11));
+    view??=new TideHarbor.WorldView(canvas,i=>sound.tone(i?690:518,.10,'sine',.11),fieldRenderer());
     if(n===0){TideReceiverAudio.loadFender();if(!stage&&!mark)TideReceiverAudio.loadArrival();}
     if(n===6)TideReceiverAudio.loadSwing();
     if(n===3)TideReceiverAudio.loadCistern();
@@ -298,6 +332,7 @@ function drawFiling(dt,pads){
 function showStatus(text){if($('status').textContent!==text)$('status').textContent=text;}
 function timeLabel(t){return Math.floor(t/60)+':'+String(Math.floor(t%60)).padStart(2,'0');}
 function pause(){
+  if(race){race.pause();return;}
   if(mode==='paused'){startPlaying(false);return;}
   if(mode!=='playing')return;
   mode='paused';clearInput();sound.stopScene();window.speechSynthesis?.cancel();
@@ -378,6 +413,8 @@ function frame(now){
   requestAnimationFrame(frame);
   if(document.hidden)return;
   const pads=gamepads();
+  if(mode==='regatta'&&race){race.frame(now,pads);return;}
+  if(mode==='regatta-loading')return;
   if(mode!=='receipt'&&(pads.length||menuPadState.size))padMenus(pads);
   if(!game.open||document.hidden||!session||!view||mode==='error')return;
   const dt=last?Math.min((now-last)/1000,.10):0;last=now;
@@ -397,6 +434,7 @@ function frame(now){
     }
   }
   if(mode!=='playing')return;
+  if(session.archive?.memory?.poolRequested){session.archive.memory.poolRequested=false;enterRegatta(true);return;}
   view.draw(session,dt,true,remainder*60);
   if(sound.enabled){sound.scene?.update(session,dt);sound.tape?.update(session);sound.receiver?.update(session);}
   if(!redraw||now-redraw>55){
@@ -417,6 +455,7 @@ $('help').onclick=()=>showInfo('<h2>双人操作指南</h2><p>林澈用 WASD 移
 const moveCodes=new Set(['KeyW','KeyA','KeyS','KeyD','KeyE','Space','ArrowUp','ArrowLeft','ArrowDown','ArrowRight','Enter','Slash','ShiftRight','KeyQ','KeyR','KeyC','Comma','Period','Backslash','KeyF','Semicolon']);
 document.addEventListener('keydown',e=>{
   if(!game.open)return;
+  if(race){race.key(e);return;}
   if(mode==='receipt'){
     const action={KeyA:'left',KeyD:'right',KeyE:'clip',Enter:'file',Escape:'close'}[e.code];
     if(action&&!(e.code==='Enter'&&e.target.closest('button'))){e.preventDefault();if(!e.repeat)fileAction(action);}
@@ -432,11 +471,12 @@ document.addEventListener('keydown',e=>{
     (session.stage===2&&session.cable.patched>=0&&!session.cable.backTest&&e.code==='Enter')))toolTaps[e.code==='KeyE'?0:1]=true;
   if(!e.repeat && ['Space','Slash','ShiftRight'].includes(e.code))jumps[e.code==='Space'?0:1]=true;
 });
-document.addEventListener('keyup',e=>keys.delete(e.code));
-window.addEventListener('blur',()=>{if(mode==='playing')pause();else clearInput();});
-document.addEventListener('visibilitychange',()=>{if(document.hidden)filing?.reply.pause();if(document.hidden&&mode==='playing')pause();if(document.hidden&&mode==='cinema'){sound.tape?.stop();sound.receiver?.stop();}clearInput();});
-game.addEventListener('close',()=>{if(!game.open){closeFiling();mode='menu';clearInput();sound.stopScene();window.speechSynthesis?.cancel();view?.free();session=null;}});
+document.addEventListener('keyup',e=>{keys.delete(e.code);race?.up(e.code);});
+window.addEventListener('blur',()=>{race?.pause(true);if(mode==='playing')pause();else clearInput();});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){race?.pause(true);filing?.reply.pause();}if(document.hidden&&mode==='playing')pause();if(document.hidden&&mode==='cinema'){sound.tape?.stop();sound.receiver?.stop();}clearInput();});
+game.addEventListener('close',()=>{if(!game.open){raceEntry++;race?.dispose();race=null;closeFiling();mode='menu';clearInput();sound.stopScene();window.speechSynthesis?.cancel();view?.free();session=null;}});
 game.addEventListener('cancel',e=>{
+  if(race){e.preventDefault();race.pause();return;}
   if(mode==='cinema'){e.preventDefault();$('skip').click();}
   else if(mode==='playing'||mode==='paused'){e.preventDefault();pause();}
 });
@@ -449,3 +489,6 @@ canvas.tabIndex=-1;
 $('field-audio').textContent=wantsAudio?'音效 开':'音效 关';
 $('sound').setAttribute('aria-pressed',String(wantsAudio));
 campaign();
+
+$('regatta-open').onclick=()=>enterRegatta(false);
+if(new URLSearchParams(location.search).get('play')==='regatta')enterRegatta(false);
