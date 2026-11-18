@@ -44,6 +44,10 @@ function campaign() {
         entry.onclick = () => resume?.index===n?openLevel(n,resume.stage,storedMark(resume)):openLevel(n);
         $('level-list').append(entry);
       }
+      if(i===3&&progress===12){
+        const reply=document.createElement('button');reply.className='level-link';
+        reply.textContent='尾声 · 顾岚的回件';reply.onclick=()=>openFiling(true);$('level-list').append(reply);
+      }
     };
     return button;
   }));
@@ -62,6 +66,7 @@ function savePoint(g){
   try{localStorage.setItem('tide-3d-checkpoint',JSON.stringify(resume));}catch{}
 }
 function clearInput(){
+  if(view)view.lastTick=null;
   view?.pointing?.cancel();pointTaps.fill(false);keys.clear();jumps.fill(false);toolTaps.fill(false);gamepadDown.fill(false);cameraButtons.fill(false);last=0;remainder=0;
 }
 function note(line){
@@ -94,7 +99,7 @@ function onStage(g){
   if(mode==='playing'&&!TideFenders.active(g)&&!g.swing?.voice&&!g.cistern?.voice)say(line);
 }
 function openLevel(n,stage=0,mark=null){
-  if(info.open)info.close();
+  closeFiling();if(info.open)info.close();
   if(!game.open)game.showModal();
   sound.stopScene();window.speechSynthesis?.cancel();$('film').hidden=true;$('pause').disabled=true;
   journal.length=0;
@@ -195,8 +200,91 @@ function showDebrief(g){
   const coda='天亮后，两人把旧报告和自己的更正发给港口、渡轮与事故家属。阿棠寄来十秒钟的声音：绳子绷紧，杯盖落地，有人笑。沈遥在新带盒上写下了「北岬，第二盘」。';
   overlay.innerHTML='<div class="story"><small>无线电回话</small><h3>'+(final?'天亮之后':'行动完成')+'</h3><p>'+levels[index].after+'</p>'+(final?'<p>'+coda+'</p>':'')+'<p class="hint">用时 '+timeLabel(g.time)+'　·　安全索回收 '+g.setbacks+' 次</p><button class="primary">'+(final?'返回行动档案':'前往下一关')+'　›</button></div>';
   overlay.querySelector('button').onclick=()=>final?game.close():openLevel(index+1);
+  if(final){
+    const reply=document.createElement('button');reply.className='secondary';reply.textContent='打开顾岚的回件';
+    reply.onclick=()=>openFiling(false);overlay.querySelector('.story').append(reply);
+  }
   overlay.querySelector('button').focus();say(levels[index].after);
 }
+let filing=null;
+function openFiling(fromArchive=false){
+  if(fromArchive){openLevel(11);if(mode==='error')return;}
+  clearInput();sound.stopScene();window.speechSynthesis?.cancel();
+  mode='receipt';$('split').hidden=true;$('film').hidden=true;$('pause').disabled=true;
+  overlay.replaceChildren();
+  const book=view.cinema.openReceipt(),panel=$('filing');
+  try{if(localStorage.getItem('tide-gu-lan-filed')==='1')book.restore();}catch{}
+  const reply=new Audio('assets/gu-lan-reply.mp3');reply.volume=.79;
+  panel.hidden=false;
+  panel.innerHTML='<div class="file-exit"><button data-act="close">合上档案　Esc</button></div>'+
+    '<div class="file-side"><small>林澈　／　见证位置</small><p id="bay-label"></p><div><button data-act="left" aria-label="上一栏">‹ A</button><button data-act="right" aria-label="下一栏">D ›</button><button data-act="clip"></button></div></div>'+
+    '<div class="file-side"><small>沈遥　／　顾岚的回件</small><p>“'+TideReceipt.testimony+'”</p><div><button data-act="listen">重听留言</button><button data-act="file">附入原话　Enter</button></div></div><p id="file-note" role="status"></p>';
+  filing={book,reply,fromArchive,down:new Set()};
+  // Ignore the press that opened the archive until each pad releases it.
+  filing.down=receiptButtons(gamepads());
+  panel.onclick=e=>{const a=e.target.closest('button')?.dataset.act;if(a)fileAction(a);};
+  fileFeedback();canvas.focus();showStatus('天亮之后　／　收件人的回话');
+  if(wantsAudio){sound.enable(true).then(updateAudio);reply.play().catch(()=>{});}
+  view.draw(session,0,false);
+}
+function fileFeedback(){
+  const s=filing.book.state,panel=$('filing');
+  $('bay-label').textContent=TideReceipt.bays[s.bay]+(s.held?'　·　签页已夹住':'　·　移动签页到她当时站的位置');
+  const pad=padSlots[0]!==null;
+  panel.querySelector('[data-act=clip]').textContent=(s.held?'松夹':'扣夹')+(pad?'　RT':'　E');
+  panel.querySelector('[data-act=left]').textContent=pad?'◂':'‹ A';panel.querySelector('[data-act=right]').textContent=pad?'▸':'D ›';
+  panel.querySelector('[data-act=file]').textContent='附入原话　'+(padSlots[1]!==null?'RT':'Enter');
+  for(const a of ['left','right'])panel.querySelector('[data-act='+a+']').disabled=s.held;
+  for(const a of ['file','clip'])panel.querySelector('[data-act='+a+']').disabled=s.filed;
+  $('file-note').textContent=s.filed?'后甲板　／　顾岚的原话已随更正稿归档。':s.pending===1?'沈遥：“纸还在动。把你这边的夹子扣上。”':s.pending===2?'沈遥：“她说自己当时站在哪儿？把夹子松开，再看一眼。”':'';
+}
+function fileAction(action){
+  if(!filing)return;
+  const {book,reply,fromArchive}=filing;
+  if(action==='close'){
+    closeFiling();if(fromArchive){game.close();return;}showDebrief(session);return;
+  }
+  if(action==='listen'){
+    if(!wantsAudio){wantsAudio=true;try{localStorage.setItem('tide-audio','on');}catch{}sound.enable(true).then(updateAudio);}
+    reply.currentTime=0;reply.play().catch(()=>{});return;
+  }
+  if(action==='clip')book.clip();
+  else if(action==='file'){
+    book.file();
+    if(book.state.filed)try{localStorage.setItem('tide-gu-lan-filed','1');}catch{}
+  }
+  else book.change(action==='left'?-1:1);
+  sound.cue(book.state.filed?'ending':'radio',action==='file'?1:0);
+  fileFeedback();
+}
+function closeFiling(){
+  if(!filing)return;
+  filing.reply.pause();filing=null;view.cinema.skip();$('filing').hidden=true;
+  $('filing').replaceChildren();$('filing').onclick=null;
+}
+function receiptButtons(pads){
+  const held=new Set();
+  assignPads(pads);
+  for(const p of pads){
+    const side=padSlots.indexOf(p.index);if(side<0)continue;
+    if(p.buttons[1]?.pressed)held.add('close');
+    if(side===0){
+      if(p.buttons[14]?.pressed||p.axes[0]<-.55)held.add('left');
+      if(p.buttons[15]?.pressed||p.axes[0]>.55)held.add('right');
+      if(p.buttons[7]?.pressed||p.buttons[0]?.pressed)held.add('clip');
+    }else{
+      if(p.buttons[0]?.pressed||p.buttons[7]?.pressed)held.add('file');
+      if(p.buttons[4]?.pressed)held.add('listen');
+    }
+  }return held;
+}
+function drawFiling(dt,pads){
+  const oldSlots=padSlots.slice(),down=receiptButtons(pads),prev=filing.down;filing.down=down;
+  if(oldSlots.some((id,i)=>id!==padSlots[i]))fileFeedback();
+  for(const action of down)if(!prev.has(action))fileAction(action);
+  if(filing)view.draw(session,dt,false);
+}
+
 function showStatus(text){if($('status').textContent!==text)$('status').textContent=text;}
 function timeLabel(t){return Math.floor(t/60)+':'+String(Math.floor(t%60)).padStart(2,'0');}
 function pause(){
@@ -217,15 +305,19 @@ function updateAudio(){
 async function toggleAudio(){
   wantsAudio=!wantsAudio;
   try{localStorage.setItem('tide-audio',wantsAudio?'on':'off');}catch{}
+  if(filing&&!wantsAudio)filing.reply.pause();
   await sound.enable(wantsAudio);updateAudio();
   if(sound.enabled)sound.tone(440);else window.speechSynthesis?.cancel();
 }
 function recenter(i){view.yaws[i]=session.players[i].yaw;view.pitch[i]=0;}
-function pollInputs(now,connected){
+function assignPads(connected){
   for(let i=0;i<2;i++)if(!connected.some(p=>p.index===padSlots[i]))padSlots[i]=null;
   for(const pad of connected)if(!padSlots.includes(pad.index)){
     const slot=padSlots.indexOf(null);if(slot>=0)padSlots[slot]=pad.index;
   }
+}
+function pollInputs(now,connected){
+  assignPads(connected);
   return [0,1].map(i=>{
     const pad=connected.find(p=>p.index===padSlots[i]);
     const right=i?'ArrowRight':'KeyD',left=i?'ArrowLeft':'KeyA',back=i?'ArrowDown':'KeyS',front=i?'ArrowUp':'KeyW';
@@ -274,9 +366,10 @@ function frame(now){
   requestAnimationFrame(frame);
   if(document.hidden)return;
   const pads=gamepads();
-  if(pads.length||menuPadState.size)padMenus(pads);
+  if(mode!=='receipt'&&(pads.length||menuPadState.size))padMenus(pads);
   if(!game.open||document.hidden||!session||!view||mode==='error')return;
   const dt=last?Math.min((now-last)/1000,.10):0;last=now;
+  if(mode==='receipt'){drawFiling(dt,pads);return;}
   if(mode==='cinema'){drawFilm(dt);return;}
   if(mode!=='playing'){
     if(mode==='story' && (!redraw||now-redraw>450)){view.draw(session,0,false);redraw=now;}
@@ -284,14 +377,15 @@ function frame(now){
   }
   remainder+=dt;
   if(remainder>=1/60){
-    const inputs=pollInputs(dt,pads);jumps.fill(false);toolTaps.fill(false);
+    const inputs=pollInputs(Math.floor(remainder*60)/60,pads);jumps.fill(false);toolTaps.fill(false);
     while(remainder>=1/60 && mode==='playing'){
+      view.rememberPose(session);
       session.tick(1/60,inputs,view.yaws);remainder-=1/60;
       for(const input of inputs)input.jump=false;
     }
   }
   if(mode!=='playing')return;
-  view.draw(session,dt);
+  view.draw(session,dt,true,remainder*60);
   if(sound.enabled){sound.scene?.update(session,dt);sound.tape?.update(session);sound.receiver?.update(session);}
   if(!redraw||now-redraw>55){
     TideHud.update(session,padSlots);
@@ -311,6 +405,11 @@ $('help').onclick=()=>showInfo('<h2>双人操作指南</h2><p>林澈用 WASD 移
 const moveCodes=new Set(['KeyW','KeyA','KeyS','KeyD','KeyE','Space','ArrowUp','ArrowLeft','ArrowDown','ArrowRight','Enter','Slash','ShiftRight','KeyQ','KeyR','KeyC','Comma','Period','Backslash','KeyF','Semicolon']);
 document.addEventListener('keydown',e=>{
   if(!game.open)return;
+  if(mode==='receipt'){
+    const action={KeyA:'left',KeyD:'right',KeyE:'clip',Enter:'file',Escape:'close'}[e.code];
+    if(action&&!(e.code==='Enter'&&e.target.closest('button'))){e.preventDefault();if(!e.repeat)fileAction(action);}
+    return;
+  }
   if(e.code==='Escape'&&(mode==='playing'||mode==='paused')){e.preventDefault();if(!e.repeat)pause();return;}
   if(mode!=='playing'||!moveCodes.has(e.code))return;
   e.preventDefault();keys.add(e.code);
@@ -322,8 +421,8 @@ document.addEventListener('keydown',e=>{
 });
 document.addEventListener('keyup',e=>keys.delete(e.code));
 window.addEventListener('blur',()=>{if(mode==='playing')pause();else clearInput();});
-document.addEventListener('visibilitychange',()=>{if(document.hidden&&mode==='playing')pause();if(document.hidden&&mode==='cinema'){sound.tape?.stop();sound.receiver?.stop();}clearInput();});
-game.addEventListener('close',()=>{if(!game.open){mode='menu';clearInput();sound.stopScene();window.speechSynthesis?.cancel();view?.free();session=null;}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)filing?.reply.pause();if(document.hidden&&mode==='playing')pause();if(document.hidden&&mode==='cinema'){sound.tape?.stop();sound.receiver?.stop();}clearInput();});
+game.addEventListener('close',()=>{if(!game.open){closeFiling();mode='menu';clearInput();sound.stopScene();window.speechSynthesis?.cancel();view?.free();session=null;}});
 game.addEventListener('cancel',e=>{
   if(mode==='cinema'){e.preventDefault();$('skip').click();}
   else if(mode==='playing'||mode==='paused'){e.preventDefault();pause();}

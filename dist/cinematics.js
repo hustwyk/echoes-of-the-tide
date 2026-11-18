@@ -25,7 +25,7 @@ window.TideCinema = (() => {
     let clock=0, duration=0, playing=false, disposed=false;
     let cupboard, cup, tape, sheet, packet, green, marker;
     let tender, cable, workroom, paperStrip, hand, newLabel, voiceCoils;
-    let sternSet;
+    let sternSet, receipt, tapeProps;
     let renderedText='';
     const scratch=new T.Vector3(), end=new T.Vector3();
     const filmTime=()=>playing?clock:0;
@@ -343,7 +343,9 @@ window.TideCinema = (() => {
       part(workroom,geometry('shade',()=>new T.ConeGeometry(.27,.22,24)),lampshade,-1.72,2.34,-2.24);
       const cabinLight=new T.PointLight(0xffe3ac,15,9,1.9);cabinLight.position.set(-1.1,2.3,1.4);workroom.add(cabinLight);
       const windowLight=new T.PointLight(0xb9e6f2,11,8,1.9);windowLight.position.set(1.2,2.05,-2.14);workroom.add(windowLight);
-      const d=group(workroom,0,.89,-.69);makeDesk(d,2.92,1.09);
+      const desktop=group(workroom,0,.89,-.69);makeDesk(desktop,2.92,1.09);
+      tapeProps=group(desktop);const d=tapeProps;
+      receipt=TideReceipt.create(desktop,{group,box,disc,material,label,ring,rod});
       const tin1=biscuitTin(d);tin1.position.set(.28,.027,.06);tin1.rotation.y=-.07;
       const one=cassette(d,'十秒钟北岬');one.position.set(-.31,.036,-.10);one.rotation.y=.27;
       const blank=cassette(d,'');blank.position.set(.27,.058,.064);
@@ -445,6 +447,7 @@ window.TideCinema = (() => {
         sheet.position.set(-.46*lift,.009+Math.sin(lift*Math.PI)*.13,-.15*lift);
         sheet.rotation.set(-.14*Math.sin(lift*Math.PI),.12*lift,.018*lift);
       }else if(idx===11&&playing)finalAt(clock,dt);
+      else if(receipt?.folder.visible)receipt.update(dt);
     }
 
     function relative(node,a){
@@ -476,7 +479,13 @@ window.TideCinema = (() => {
       shot.focus=Math.hypot(...eyeLine.map((v,i)=>v-shot.eye[i]));return shot;
     }
     function shot(g,side) {
-      if(!playing || disposed)return null;
+      if(disposed)return null;
+      if(receipt?.folder.visible){
+        const center=side?.35:-.35;
+        const view=subject(receipt.folder,[center+.012,.87,.38],[center,.025,.001]);
+        view.fov=side?44:46;return view;
+      }
+      if(!playing)return null;
       const t=clock,f=t/duration,i=side?1:0;
       if(idx===2){
         if(!i)return deckview([-9.3+f*.9,4.6+f*.5,-11.6],[-.16,1.68,-1.8]);
@@ -548,7 +557,7 @@ window.TideCinema = (() => {
     }
     function skip(){
       clock=duration;playing=false;
-      if(workroom){workroom.visible=false;tender.visible=false;cable.visible=false;}
+      if(workroom){workroom.visible=false;tender.visible=false;cable.visible=false;tapeProps.visible=true;receipt.folder.visible=false;}
     }
     function step(dt){
       if(!playing)return false;
@@ -565,7 +574,11 @@ window.TideCinema = (() => {
       for(const obj of geos.values())obj.dispose();
       root.clear();
     }
-    return {begin,step,update,shot,performance,subtitle,skip,dispose,get ended(){return !playing;},
+    function openReceipt(){
+      setupFinal();skip();workroom.visible=true;receipt.folder.visible=true;
+      tapeProps.visible=false;receipt.reset();return receipt;
+    }
+    return {begin,step,update,shot,performance,subtitle,skip,dispose,openReceipt,get ended(){return !playing;},
       get shared(){return playing&&idx===11&&clock>=7.72;},
       get duration(){return duration;},get time(){return clock;}};
   }
