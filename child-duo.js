@@ -12,10 +12,10 @@ const TideChildDuo=(()=>{
   const vec=(x=0,y=0,z=0)=>new T.Vector3(x,y,z);
   const group=(p,n)=>{const g=new T.Group();g.name=n;p.add(g);return g};
   function coordinates(p,n=3){return new T.Float32BufferAttribute(p,n)}
-  function create(scene){
-    const root=group(scene,'十秒钟北岬 · 童年的两个人');root.position.x=32;root.visible=false;
+  function create(scene,regatta=false){
+    const root=group(scene,regatta?'暑期船模 / 两位小舵手':'十秒钟北岬 · 童年的两个人');root.position.x=regatta?0:32;root.visible=false;
     const heads=[],owned=new Set();let kids=null,disposed=false,previous=0,viewport=null,portraitView=false;
-    const unitSphere=new T.SphereGeometry(1,16,12),unitTube=new T.CylinderGeometry(1,1,1,12);
+    const unitSphere=new T.SphereGeometry(1,regatta?12:16,regatta?8:12),unitTube=new T.CylinderGeometry(1,1,1,regatta?10:12);
     owned.add(unitSphere);owned.add(unitTube);
     const solid=new T.MeshStandardMaterial({vertexColors:true,roughness:.76,side:T.DoubleSide});
     owned.add(solid);
@@ -111,7 +111,14 @@ const TideChildDuo=(()=>{
         const x=pos[3*i],y=pos[3*i+1],mouthY=pos[13*3+1],corner=Math.exp(-(((Math.abs(x)-.023)/.015)**2)-(((y-mouthY)/.015)**2));
         smile[3*i]=Math.sign(x)*corner*.0023;smile[3*i+1]=corner*.0034;
       }
-      g.morphTargetsRelative=true;g.morphAttributes.position=[coordinates(blink),coordinates(smile)];
+      const speech=new Float32Array(pos.length),lip=pos[14*3+1];
+      for(let i=0;i<468;i++){
+        const x=pos[i*3],drop=lip-pos[i*3+1];
+        if(drop<-.0005||drop>.047||Math.abs(x)>.044)continue;
+        const weight=Math.exp(-(x*x)/.00078-(drop*drop)/.00082);
+        speech[i*3+1]=-.006*weight;speech[i*3+2]=-.0016*weight;
+      }
+      g.morphTargetsRelative=true;g.morphAttributes.position=[coordinates(blink),coordinates(smile),coordinates(speech)];
       const face=mesh(p,g,portraitMat,'童年面部／'+(id?'沈遥':'林澈'));
       const eyeGeo=geometry(pos,eyes,uv);mesh(p,eyeGeo,eyeMat,'眼神');
       const eyePoints=Array.from(new Set(eyes)),eyeUV=eyeGeo.attributes.uv;
@@ -218,15 +225,144 @@ const TideChildDuo=(()=>{
         h.rod(p.skinLight,c,d,r*.80);h.oval(p.skinLight,d,[r*.87,r*.75,r]);
         if(nail)h.oval(p.nail,[d[0],d[1]+r*.60,d[2]+r*.20],[r*.75,r*.19,r*.69],[-.2,0,0]);
       };
-      finger(P(.020,-.01,.028),P(.016,.0002,.017),P(.008,.0012,.007),P(0,.0023,0),.0053,true);
+      if(!regatta)finger(P(.020,-.01,.028),P(.016,.0002,.017),P(.008,.0012,.007),P(0,.0023,0),.0053,true);
       for(let i=0;i<4;i++){
         const z=-.0016+i*.009,short=i===0?.0017:i===3?.006:0,r=.0048-.00032*i;
-        finger(P(.027,-.012,z),P(.023,-.025,z-.007),P(.012+short,-.030,z-.008),P(.004+short,-.023,z-.007),r);
+        if(regatta)finger(P(.027,-.012,z),P(.034,-.021,z-.004),P(.036,-.035,z-.008),P(.026+short,-.041,z-.009),r);
+        else finger(P(.027,-.012,z),P(.023,-.025,z-.007),P(.012+short,-.030,z-.008),P(.004+short,-.023,z-.007),r);
       }
       h.add(hand,solid,'掌纹、五指与指甲');
       const thumb=group(hand,'指腹接触点'); // zero at its tangent plane
-      return {sgn,arm,fore,hand,thumb,shoulderRest,upper,lower,wristOffset:vec(...wrist)};
+      const txThumb=regatta?opposableThumb(id,hand,sgn):null;
+      return {sgn,arm,fore,hand,thumb,txThumb,shoulderRest,upper,lower,wristOffset:vec(...wrist)};
     }
+    function transmitter(k,metal,bakelite,bevelBox){
+      const id=k.id,p=palette[id],body=group(k.chest,id?'二艇／手制双通道发射机':'一艇／手制双通道发射机');
+      body.position.set(0,.144,-.213);body.rotation.x=.31;
+      const bits=new Batch(),casework=new Batch(),strap=new Batch(),sticks=[];
+      const box=(batch,color,at,w,h,d)=>batch.geo(bevelBox,color,at,[w,h,d]);
+      const shell=id?'#587b75':'#9b6350',panel=id?'#a6afa0':'#c1a476',dark='#302e29',alloy='#a0a59b',brass='#aa8b55';
+      box(casework,dark,[0,-.004,0],.200,.046,.118);
+      box(casework,shell,[0,.002,0],.202,.043,.119);
+      box(casework,'#665f51',[0,.020,0],.195,.009,.112);
+      box(bits,panel,[0,.024,0],.187,.005,.107);
+      // Two peened repairs and the battery-panel edge have been polished by years of handling.
+      box(bits,'#93866c',[0,-.011,-.060],.093,.015,.002);
+      for(const side of [-1,1]){
+        bits.oval('#675b42',[side*.041,-.011,-.0615],[.0024,.0024,.0011]);
+        for(let j=0;j<6;j++){
+          const x=side*(.054+.0064*j),y=.012+.00065*((j*7)%4);
+          bits.rod(j%2?'#af997f':'#958370',[x,y,-.0592],[x+.0025+((j*3)%4)*.0012,y-.0012,-.0593],.00036);
+        }
+      }
+      // Slotted screws and turned ferrules sit proud of the hand-filed cover.
+      for(const side of [-1,1])for(const z of [-.043,.043]){
+        bits.oval(alloy,[side*.084,.0275,z],[.0036,.0019,.0036]);
+        box(casework,dark,[side*.084,.0292,z],.0048,.0005,.00082);
+      }
+      for(const side of [-1,1]){
+        for(let j=0;j<7;j++)
+          box(casework,j%2?'#4c4842':'#46433e',[side*.097,-.003,-.032+j*.010],.008,.033,.004);
+        const x=side*.064;
+        bits.geo(unitTube,alloy,[x,.027,0],[.0225,.0032,.0225]);
+        casework.geo(unitTube,'#332f2a',[x,.029,0],[.0196,.002,.0196]);
+        casework.oval('#494b42',[x,.0295,0],[.016,.004,.016]);
+        const stick=group(body,side<0?'机舱／油门杆':'舵机／转向杆');stick.position.set(x,.029,0);
+        const s=new Batch();s.rod(alloy,[0,0,0],[0,.011,0],.0023);
+        s.oval(id?'#694438':'#4b3b30',[0,.0127,0],[.0065,.0046,.0065]);
+        for(let j=0;j<3;j++)s.rod('#a17c54',[-.003,.0165,(j-1)*.0016],[.003,.0165,(j-1)*.0016],.00045);
+        s.add(stick,metal,'滚花操纵帽');
+        const contact=group(stick,'摇杆／拇指垫');contact.position.y=.0173;sticks.push({stick,contact});
+        // The transmitter's wire bail was bent around a dowel then soldered to the lid.
+        bits.rod(brass,[side*.044,.027,.043],[side*.044,.039,.046],.0028);
+        bits.rod(alloy,[side*.044,.039,.046],[side*.052,.039,.046],.0021);
+      }
+      // Analogue battery meter, moving needle, a ceramic frequency crystal and switch.
+      box(casework,'#514a3e',[.002,.028,-.019],.050,.004,.025);
+      box(casework,'#dbd2ad',[.002,.030,-.019],.045,.001,.020);
+      for(let j=0;j<7;j++){
+        const a=(j-3)*.19;
+        bits.rod(j>4?'#ac4b39':dark,[.002+Math.sin(a)*.029,.0312,-.006-Math.cos(a)*.019],[.002+Math.sin(a)*.031,.0312,-.006-Math.cos(a)*.0216],.00052);
+      }
+      const needle=group(body,'电压表指针');needle.position.set(.002,.032,-.006);
+      const n=new Batch();n.rod('#6c2b26',[0,0,0],[0,0,-.017],.00084);n.add(needle,solid,'仪表指针');
+      box(bits,alloy,[-.065,.029,.036],.018,.005,.006);
+      casework.oval('#262e2b',[-.064,.034,.036],[.005,.006,.004]);
+      box(bits,'#6d6c5a',[.067,.031,-.034],.017,.008,.009);
+      box(casework,id?'#d4b06a':'#d3c6a4',[.067,.036,-.034],.012,.003,.006);
+      // Telescoping whip, sleeve transitions and a piece of channel-colour cotton.
+      const baseX=id?.043:-.041,lean=id?.095:-.084,antenna=(s)=>[baseX+lean*s,.022+.350*s,-.049-.228*s];
+      bits.rod(brass,antenna(0),antenna(.037),.0078);
+      for(let j=0;j<4;j++){
+        bits.rod(alloy,antenna(j===0?.030:j/4-.003),antenna((j+1)/4+.005),.00312-j*.00055);
+        if(j<3)bits.rod('#6c756f',antenna((j+1)/4-.009),antenna((j+1)/4+.004),.00325-j*.00047);
+      }
+      bits.oval('#b1b5a9',antenna(1),[.0031,.0031,.0031]);
+      const knot=antenna(.92);
+      casework.rod(id?'#c4894f':'#9c5148',knot,[knot[0]+.027,knot[1]-.019,knot[2]-.005],.00245);
+      // Satin ribbon wraps behind the collar. A flattened width, real camber and
+      // woven edge piping remain visible across the printed shirt.
+      for(const side of [-1,1]){
+        const pts=[[side*.042,.393,.029],[side*.059,.398,-.006],[side*.065,.368,-.067],[side*.072,.327,-.092],
+          [side*.068,.277,-.137],[side*.065,.222,-.163],[side*.049,.164,-.163]];
+        const color=id?'#815440':'#596157';
+        for(let j=0;j<pts.length-1;j++){
+          const p0=pts[j],p1=pts[j+1],left=v=>[v[0]-.0067,v[1],v[2]],right=v=>[v[0]+.0067,v[1],v[2]];
+          const quad=[left(p0),right(p0),right(p1),left(p1)],gg=geometry(quad.flat(),[0,1,2,0,2,3],[0,0,1,0,1,1,0,1]);
+          strap.geo(gg,color);owned.delete(gg);gg.dispose();
+          strap.rod(id?'#ae8b66':'#8c9177',left(p0),left(p1),.00085);
+          strap.rod(id?'#ae8b66':'#8c9177',right(p0),right(p1),.00085);
+        }
+      }
+      const label=document.createElement('canvas');label.width=256;label.height=92;const ctx=label.getContext('2d');
+      ctx.fillStyle=id?'#d1c4a5':'#c5bd94';ctx.fillRect(0,0,256,92);
+      for(let j=0;j<320;j++){const v=(Math.sin(j*29.17+9)*4191)%1;ctx.fillStyle=v<0?'#a29372':'#e0d6b1';ctx.fillRect(Math.abs(j*137.41%256),Math.abs((j*83.13)%92),j%4+1,.9);}
+      ctx.fillStyle='#383832';ctx.textAlign='center';ctx.font='600 43px serif';ctx.fillText(id?'沈 遥 · 02':'林 澈 · 01',125,45);
+      ctx.font='23px monospace';ctx.fillText(id?'40.710 MHz':'27.145 MHz',128,76);
+      const tex=new T.CanvasTexture(label);tex.colorSpace=T.SRGBColorSpace;tex.anisotropy=4;owned.add(tex);
+      const labelMat=new T.MeshStandardMaterial({map:tex,roughness:.93});owned.add(labelMat);
+      const card=new T.PlaneGeometry(.069,.024);owned.add(card);const plate=mesh(body,card,labelMat,'手写呼号和晶体频点');
+      plate.position.set(0,.0277,.024);plate.rotation.x=-Math.PI/2;plate.rotation.z=id?-.047:.027;
+      casework.add(body,bakelite,'胶木机匣、胶带和接头');bits.add(body,metal,'双摇杆面板、抽节天线');strap.add(k.chest,fabric,'驾驶员的织带');
+      return {body,sticks,needle};
+    }
+    // A radiused stamped lid rather than the original unit cube's hard edges.
+    function radioBox(){
+      const positions=[],uv=[],idx=[];
+      for(const [y,rx,rz,b] of [[-.50,.449,.437,.105],[-.420,.5,.5,.114],[.405,.5,.5,.114],[.49,.456,.46,.098]]){
+        for(const [cx,cz,a] of [[rx-b,rz-b,0],[-rx+b,rz-b,Math.PI/2],[-rx+b,-rz+b,Math.PI],[rx-b,-rz+b,3*Math.PI/2]]){
+          for(let i=0;i<4;i++){
+            const ang=a+i*Math.PI/6;
+            positions.push(cx+b*Math.cos(ang),y,cz+b*Math.sin(ang));uv.push(.5+positions[positions.length-3],.5+positions[positions.length-1]);
+          }
+        }
+      }
+      for(let r=0;r<3;r++)for(let i=0;i<16;i++){const a=r*16+i,b=r*16+(i+1)%16;idx.push(a,a+16,b,b,a+16,b+16);}
+      for(let i=1;i<15;i++)idx.push(0,i,i+1,48,48+i+1,48+i);
+      return geometry(positions,idx,uv);
+    }
+    function opposableThumb(id,hand,sgn){
+      const p=palette[id],lengths=[.021,.024],joints=lengths.map((len,i)=>{
+        const pivot=group(hand,i?'拇指末节':'拇指近节'),b=new Batch(),r=i?.0048:.0060;
+        b.rod(i?p.skinLight:p.skin,[0,0,0],[0,-len,0],r);
+        b.oval(i?p.skinLight:p.knuckle,[0,0,0],[r*1.06,r*1.02,r*1.08]);
+        b.oval(p.skinLight,[0,-len,0],[r*.93,r*.75,r*.98]);
+        if(i)b.oval(p.nail,[0,-len*.77,-.0036],[.00338,.0052,.00125]);
+        b.add(pivot,solid,i?'指甲与指腹':'拇指指根');return pivot;
+      });
+      return {lengths,joints,base:vec(sgn*.023,-.008,.027)};
+    }
+    function bendThumb(limb,capLocal){
+      const rig=limb.txThumb,base=rig.base;
+      axis.subVectors(capLocal,base);const d=axis.length();axis.divideScalar(Math.max(.0001,d));
+      bend.set(-.28*limb.sgn,.95,-.10);bend.addScaledVector(axis,-axis.dot(bend)).normalize();
+      const l0=rig.lengths[0],l1=rig.lengths[1],len=clamp(d,.005,l0+l1-.0001),along=(l0*l0-l1*l1+len*len)/(2*len);
+      elbow.copy(base).addScaledVector(axis,along).addScaledVector(bend,Math.sqrt(Math.max(0,l0*l0-along*along)));
+      const a=rig.joints[0],b=rig.joints[1];a.position.copy(base);a.quaternion.setFromUnitVectors(down,reach.subVectors(elbow,base).normalize());
+      b.position.copy(elbow);b.quaternion.setFromUnitVectors(down,reach.subVectors(capLocal,elbow).normalize());
+      b.scale.y=reach.subVectors(capLocal,elbow).length()/l1;limb.thumb.position.copy(capLocal);
+    }
+
     function shirt(id,chest){
       const p=palette[id],b=new Batch(),detail=new Batch();
       // Body rings widen into the shoulder blade and individual raglan sleeves.
@@ -279,8 +415,15 @@ const TideChildDuo=(()=>{
         const h=group(actor,'裤腿 '+sg);legs.push({obj:h,top:vec(...top),knee:vec(...kn)});h.position.set(...top);h.quaternion.setFromUnitVectors(vec(0,-1,0),vec(...kn).sub(vec(...top)).normalize());
         const k=new Batch();k.loft([[-.264,.057,.055],[-.258,.061,.056],[-.243,.060,.055],[-.242,.061,.055],[-.172,.061,.063],
           [-.09,.068,.071],[.009,.079,.075],[.045,.076,.077]],(a,y)=>y<-.243?p.hem:p.pants,{n:26,fold,fade});k.add(h,fabric,'旧夏裤');
-        s.rod(p.skin,[kn[0],.384,kn[2]],ankle,.035,.036);
-        s.oval(p.skin,[(kn[0]+ankle[0])*.5,.245,(kn[2]+ankle[2])*.5+.006],[.038,.108,.041],[.085,0,sg*.019]);
+        const calf=regatta?new Batch():s;
+        const belowKnee=q=>regatta?q.map((v,j)=>v-ankle[j]):q;
+        calf.rod(p.skin,belowKnee([kn[0],.384,kn[2]]),belowKnee(ankle),.035,.036);
+        calf.oval(p.skin,belowKnee([(kn[0]+ankle[0])*.5,.245,(kn[2]+ankle[2])*.5+.006]),[.038,.108,.041],[.085,0,sg*.019]);
+        if(regatta){
+          const l=legs[legs.length-1];l.ankle=vec(...ankle);l.shin=group(actor,'膝至踝 '+sg);l.shin.position.copy(l.ankle);
+          l.shinAxis=l.knee.clone().sub(l.ankle);l.shinLength=l.shinAxis.length();l.shinAxis.normalize();l.thighLength=l.top.distanceTo(l.knee);
+          calf.add(l.shin,solid,'小腿');
+        }
         const shx=ankle[0],shz=ankle[2]-.023;
         s.oval('#9d9887',[shx,.089,shz+.015],[.035,.042,.040]);
         for(let j=0;j<2;j++)s.oval(j?'#c1bca4':'#87897e',[shx,.089+j*.013,shz+.014],[.035,.007,.039]);
@@ -293,14 +436,19 @@ const TideChildDuo=(()=>{
     }
     function child(id,actor,head){
       const chest=group(actor,'躯干'),neck=new Batch(),p=palette[id];
-      shirt(id,chest);const lower=lowerBody(id,actor);head.position.set(0,.397,-.004);
+      shirt(id,chest);
+      if(regatta){
+        const throat=new Batch();throat.loft([[.375,.040,.032,.004],[.391,.042,.033,.004],[.410,.038,.030,.004],[.424,.032,.028,.008]],p.skin,{n:18});throat.add(chest,solid,'领口里的颈根');
+      }
+      const lower=lowerBody(id,actor);head.position.set(0,.397,-.004);
       chest.add(head);
       neck.loft([[-.018,.037,.033,.009],[.006,.041,.035,.008],[.031,.035,.032,.004],[.062,.034,.030,.006],[.079,.040,.036,.005]],
         (a,y)=>y>.055?p.knuckle:p.skin,{n:28});
       neck.add(head,solid,'颈部');const face=surfaces(head,id);
       return {id,actor,chest,head,...lower,...face,arms:[limbs(id,actor,chest,-1),limbs(id,actor,chest,1)]};
     }
-    const actors=[0,1].map(i=>{const a=group(root,i?'童年沈遥':'童年林澈');a.position.z=i?.74:-.74;a.rotation.y=i?0:Math.PI;
+    const actors=[0,1].map(i=>{const a=group(root,i?'童年沈遥':'童年林澈');if(regatta){a.position.set(i?.68:-.86,.17,2.38);a.rotation.y=0;}
+      else{a.position.z=i?.74:-.74;a.rotation.y=i?0:Math.PI;}
       heads.push(group(a,i?'童年沈遥／头部':'童年林澈／头部'));return a;});
     const shoulder=vec(),axis=vec(),bend=vec(),elbow=vec(),wrist=vec(),reach=vec(),down=vec(0,-1,0),gaze=vec(),origin=vec();
     const contact=vec(),buffer=vec();
@@ -324,9 +472,10 @@ const TideChildDuo=(()=>{
       return turns;
     }
     function toLocal(a,target,q,baseZ){target.set(a.x*q,a.y,(a.z-baseZ)*q);return target}
-    function solveArm(k,limb,target,m,isBoard,dir,settle){
+    function solveArm(k,limb,target,m,isBoard,dir,settle,orientation=null){
       const {sgn,arm,fore,hand,upper,lower}=limb;
-      hand.rotation.set(isBoard?Math.atan((m.slope||0)*dir):.13,0,isBoard?Math.atan((m.bank||0)*dir):sgn*.17,'YXZ');
+      if(orientation)hand.quaternion.copy(orientation);
+      else hand.rotation.set(isBoard?Math.atan((m.slope||0)*dir):.13,0,isBoard?Math.atan((m.bank||0)*dir):sgn*.17,'YXZ');
       if(settle){hand.rotation.x+=.08*settle;hand.rotation.z+=.11*sgn*settle}
       shoulder.copy(limb.shoulderRest).applyMatrix4(k.chest.matrix);
       wrist.copy(limb.wristOffset).applyQuaternion(hand.quaternion).add(target);
@@ -396,6 +545,80 @@ const TideChildDuo=(()=>{
       for(const i of k.eyePoints)k.eyeUV.setXY(i,k.uv[2*i]+du,k.uv[2*i+1]+dv);
       k.eyeUV.needsUpdate=true;
     }
+    const txQuat=new T.Quaternion(),capPoint=vec(),seat=vec(),capLocal=vec(),tempQ=new T.Quaternion();
+    let regattaPhase='',phaseBegan=0;
+    function updateRegatta(r,t){
+      if(disposed)return;root.visible=!!r?.boats?.length;
+      if(!root.visible){previous=0;regattaPhase='';return;}
+      if(!kids){
+        resources();
+        const metal=new T.MeshStandardMaterial({vertexColors:true,roughness:.49,metalness:.47}),resin=new T.MeshStandardMaterial({vertexColors:true,roughness:.68,metalness:.08,side:T.DoubleSide});
+        owned.add(metal);owned.add(resin);const box=radioBox();
+        kids=actors.map((a,i)=>{const k=child(i,a,heads[i]);k.tx=transmitter(k,metal,resin,box);
+          k.inputs=[0,0];k.headYaw=0;k.headPitch=0;k.react=0;return k;});
+      }
+      t=Number.isFinite(t)?t:Number(r.time)||0;const reset=!previous||t<previous,dt=reset?.08:clamp(t-previous,0,.14);
+      if(reset||r.phase!==regattaPhase){phaseBegan=t;regattaPhase=r.phase;}
+      const age=Math.max(0,t-phaseBegan),focus=reset?1:1-Math.exp(-dt*7.8),stickWeight=reset?1:1-Math.exp(-dt*19.5);
+      for(const k of kids){
+        const i=k.id,b=r.boats[i]||{},other=kids[1-i],phase=r.phase||'ready',result=phase==='result',win=r.winner===i,tie=r.winner===-1;
+        const breath=Math.sin(t*2.10+i*.94),bx=Number.isFinite(b.x)?b.x:(i?.5:-.5),bz=Number.isFinite(b.z)?b.z:0;
+        const turning=clamp(Number(b.rudder)||0,-1,1),throttle=clamp(Number(b.throttle)||0,-1,1);
+        const underway=phase==='race',count=phase==='count',celebration=result?sm(age,.08,.62)*(1-sm(age,1.75,3.55)):0;
+        const glance=result?sm(age,.36,.98)*(1-sm(age,1.64,3.28))*(tie?.72:win?.77:.91):0;
+        const wx=mix(bx,other.actor.position.x,glance),wz=mix(bz,other.actor.position.z-.035,glance);
+        const dx=wx-k.actor.position.x,dz=wz-k.actor.position.z,waterYaw=clamp(Math.atan2(-dx,-dz),-1.10,1.10);
+        const yaw=clamp(waterYaw*.43+(i?.043:-.051),-.38,.38),peak=count?.012*Math.cos(t*6.28+i*.3):0;
+        // A staggered stance lets the more cautious child keep her centre lower
+        // while both soles remain on the concrete coping.
+        const crouch=(i?.050:.013)+(underway?(i?.014:.006):0)+peak-((win||tie)?.030:.004)*celebration;
+        k.chest.position.set((i?.009:-.008)+turning*.015*(underway?1:0),.694-crouch+.0022*breath,-.054-crouch*.57);
+        k.chest.rotation.set(-.12-crouch*.80+(result?.064*celebration:0),yaw,-.042*turning*(underway?1:0)+Math.sin(t*.65+i)*.011);
+        k.chest.updateMatrix();
+        k.hips.position.set(k.chest.position.x*.68,k.chest.position.y-.690,k.chest.position.z*.65+.022);
+        for(const l of k.legs){
+          l.obj.position.copy(l.top).add(k.hips.position);
+          axis.subVectors(l.obj.position,l.ankle);const distance=clamp(axis.length(),.18,l.thighLength+l.shinLength-.0001);
+          axis.normalize();bend.set(l.top.x*.83,0,-1);bend.addScaledVector(axis,-bend.dot(axis)).normalize();
+          const along=(l.shinLength*l.shinLength-l.thighLength*l.thighLength+distance*distance)/(2*distance);
+          elbow.copy(l.ankle).addScaledVector(axis,along).addScaledVector(bend,Math.sqrt(Math.max(0,l.shinLength*l.shinLength-along*along)));
+          l.shin.quaternion.setFromUnitVectors(l.shinAxis,reach.subVectors(elbow,l.ankle).normalize());
+          reach.subVectors(elbow,l.obj.position);l.obj.scale.y=reach.length()/l.thighLength;
+          l.obj.quaternion.setFromUnitVectors(down,reach.normalize());
+        }
+        const tx=k.tx,radio=tx.body;
+        k.inputs[0]=mix(k.inputs[0],underway?throttle:0,stickWeight);
+        k.inputs[1]=mix(k.inputs[1],underway?turning:0,stickWeight);
+        radio.updateMatrix();txQuat.copy(k.chest.quaternion).multiply(radio.quaternion);
+        for(let h=0;h<2;h++){
+          const sgn=h?1:-1,str=tx.sticks[h],limb=k.arms[h];
+          str.stick.rotation.set(h?0:-k.inputs[0]*.58,0,h?-k.inputs[1]*.71:0);
+          str.stick.updateMatrix();str.contact.updateMatrix();
+          seat.set(sgn*.064,.029+.0173,0).applyMatrix4(radio.matrix).applyMatrix4(k.chest.matrix);
+          // The four long fingers and the wrists stay curled around the side
+          // rubbers. Only the opposed thumb reaches out to its moving stick.
+          solveArm(k,limb,seat,null,false,1,0,txQuat);
+          capPoint.copy(str.contact.position).applyMatrix4(str.stick.matrix).applyMatrix4(radio.matrix).applyMatrix4(k.chest.matrix);
+          capLocal.copy(capPoint).sub(limb.hand.position).applyQuaternion(tempQ.copy(limb.hand.quaternion).invert());
+          capLocal.y+=.0031;bendThumb(limb,capLocal);
+        }
+        tx.needle.rotation.y=-.37+.22*Math.abs(k.inputs[0])+.009*Math.sin(t*24+i);
+        const aimY=mix(.035,1.35,glance),aimPitch=clamp(Math.atan2(aimY-k.actor.position.y-1.17,Math.max(.24,Math.hypot(dx,dz))),-.70,.18);
+        k.headYaw=mix(k.headYaw,clamp(waterYaw-yaw,-.74,.74),focus);
+        k.headPitch=mix(k.headPitch,clamp(aimPitch-k.chest.rotation.x,-.50,.42),focus);
+        k.head.rotation.set(k.headPitch,k.headYaw,.030*Math.sin(t*.86+i)+celebration*(tie?.035:win?-.065:.075)*(i?1:-1),'YXZ');
+        const blinkT=(t+(i?1.44:2.56))%(i?4.04:4.72);
+        k.face.morphTargetInfluences[0]=sm(blinkT,.009,.087)*(1-sm(blinkT,.102,.216));
+        k.face.morphTargetInfluences[1]=(underway?.22:.36)+(win||tie?.58:.18)*celebration;
+        const word=r.voice&&TideRegattaSpeech[r.voice],envelope=word?.mouth;
+        const voiceTick=Math.max(0,(r.voiceTime||0)*(envelope?.hz||0)),sample=Math.floor(voiceTick);
+        k.face.morphTargetInfluences[2]=envelope&&word.speaker===(i?'小沈遥':'小林澈')?mix(envelope.levels[sample]||0,envelope.levels[sample+1]||0,voiceTick-sample)*.01:0;
+        const du=clamp((waterYaw-yaw-k.headYaw)*.0065,-.0023,.0023),dv=clamp((aimPitch-k.chest.rotation.x-k.headPitch)*.008,-.003,.003);
+        for(const j of k.eyePoints)k.eyeUV.setXY(j,k.uv[2*j]+du,k.uv[2*j+1]+dv);k.eyeUV.needsUpdate=true;
+      }
+      previous=t;
+    }
+
     function update(g,t){
       if(disposed)return;const m=g?.archive?.memory;root.visible=!!m&&!m.done;
       if(!root.visible){previous=0;return}
@@ -418,7 +641,7 @@ const TideChildDuo=(()=>{
     }
     function dispose(){if(disposed)return;disposed=true;scene.remove(root);
       for(const resource of owned)resource.dispose();owned.clear();kids=null;}
-    return {update,dispose,heads,setView};
+    return regatta?{update:updateRegatta,dispose}:{update,dispose,heads,setView};
   }
-  return {create};
+  return {create,createRegatta(scene){return create(scene,true);}};
 })();

@@ -44,17 +44,21 @@ const TideHarbor = (() => {
     }
     return {p:sec.sites[i],name:TideMissions.names[sec.sites[i].kind]};
   }
+  function makeRenderer(canvas){
+    const renderer=new T.WebGLRenderer({canvas,antialias:true,alpha:false,powerPreference:'high-performance'});
+    renderer.outputColorSpace=T.SRGBColorSpace;
+    renderer.toneMapping=T.ACESFilmicToneMapping;
+    renderer.toneMappingExposure=1.07;
+    renderer.shadowMap.enabled=true;
+    renderer.shadowMap.type=T.PCFSoftShadowMap;
+    renderer.setScissorTest(true);
+    return renderer;
+  }
   class WorldView {
-    constructor(canvas,onPoint) {
+    constructor(canvas,onPoint,renderer=null) {
       this.onPoint=onPoint;
       this.canvas=canvas;
-      this.renderer=new T.WebGLRenderer({canvas,antialias:true,alpha:false,powerPreference:'high-performance'});
-      this.renderer.outputColorSpace=T.SRGBColorSpace;
-      this.renderer.toneMapping=T.ACESFilmicToneMapping;
-      this.renderer.toneMappingExposure=1.07;
-      this.renderer.shadowMap.enabled=true;
-      this.renderer.shadowMap.type=T.PCFSoftShadowMap;
-      this.renderer.setScissorTest(true);
+      this.renderer=renderer||makeRenderer(canvas);
       this.equipment=TideEquipment.create();
       this.actors=[TideActors.person(0),TideActors.person(1)];
       this.coats=this.actors.map(a=>{
@@ -435,5 +439,5 @@ const TideHarbor = (() => {
       node.hidden=TideTinMemory.active(g)||g.engaged[i] || dist<1.6 || (g.rig?.lightOn&&!g.rig.lit&&g.spec.driver!==i);
     }
   }
-  return {WorldView,targetFor};
+  return {WorldView,targetFor,makeRenderer};
 })();

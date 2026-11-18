@@ -1,0 +1,18 @@
+.regatta-entry{width:100%;display:flex;align-items:center;gap:20px;text-align:left;color:#f0efdc;background:#203a38;border:1px solid #455b53;padding:0 20px 0 0;margin:18px 0 0;cursor:pointer;overflow:hidden;border-radius:7px}
+.regatta-entry:hover,.regatta-entry:focus-visible{border-color:#dbbf7e;background:#274541}
+.regatta-entry img{width:172px;height:92px;object-fit:cover}.regatta-entry strong{font:700 23px/1.3 "Songti SC",serif;display:block}.regatta-entry small{display:block;color:#caD1bb;line-height:1.65}.regatta-entry b{margin-left:auto;font-size:13px;white-space:nowrap}
+.rg-layer{position:absolute;inset:0;display:grid;grid-template-columns:1fr 1fr;pointer-events:none;font-family:"PingFang SC","Microsoft YaHei",sans-serif;color:#fff7df}
+.rg-pane{--tint:#ffd58b;position:relative;min-width:0}.rg-1{--tint:#9be0d2;border-left:2px solid #1b2425}
+.rg-id,.rg-strip,.rg-marker,.rg-ready,.rg-count{position:absolute}
+.rg-id,.rg-strip,.rg-marker,.rg-ready{background:#142522df;border:1px solid #e9e7c250;border-radius:3px;box-shadow:0 2px 8px #172f362b}
+.rg-id{top:15px;left:16px;padding:5px 10px;color:var(--tint);font-size:13px;display:flex;align-items:center;gap:10px}.rg-id span{color:#f0f0d9;font-size:11px}
+.rg-strip{bottom:14px;left:16px;max-width:calc(100% - 32px);padding:8px 12px;border-left:3px solid var(--tint)}
+.rg-strip strong,.rg-strip span{display:block}.rg-strip strong{font-size:14px}.rg-strip span,.rg-read small{font-size:11px;line-height:1.6;color:#edf0df}
+.rg-read{width:66px;margin-top:6px;border-top:2px solid #76867e;position:relative}.rg-read i{height:2px;position:absolute;left:0;top:-2px;background:var(--tint)}.rg-read small{white-space:nowrap}
+.rg-ready{right:14px;top:16px;padding:6px 11px;color:#232d28;background:var(--tint);pointer-events:auto;cursor:pointer;font-size:12px;font-weight:650}.rg-ready:disabled{background:#30413c;color:#e6e8d7}
+.rg-marker{transform:translate(-50%,-100%);font-size:11px;color:#fff3bd;padding:2px 6px;white-space:nowrap}
+.rg-count{top:40%;left:50%;transform:translate(-50%,-50%);font:700 clamp(52px,8vw,104px)/1 Georgia;color:#fff3c6;text-shadow:0 3px 10px #183b38}
+.rg-panel{position:absolute;inset:0;display:grid;place-items:center;background:#10252168;pointer-events:auto;padding:10px;overflow:auto}
+.rg-card{padding:23px 27px;background:#132622f5;border:1px solid #93aa99;box-shadow:0 9px 40px #051e1f66;border-radius:4px;max-width:95%}.rg-card h2{font:700 27px/1.3 "Songti SC",serif;margin:0 0 13px;color:#f2db9b}.rg-card p{margin:6px 0;font-size:14px}.rg-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:16px}.rg-actions button{padding:7px 11px;border:1px solid #879686;background:#30453c;color:#fffbea;cursor:pointer}.rg-actions button:first-child{background:#e1c286;color:#202a23}
+.rg-layer [hidden]{display:none!important}
+@media(max-width:700px){.rg-id,.rg-strip{left:5px}.rg-id{top:5px}.rg-ready{top:40px;right:6px}.rg-strip{bottom:4px;padding:4px 6px;max-width:calc(100% - 10px)}.rg-id span{display:none}.regatta-entry{gap:10px;padding-right:9px}.regatta-entry img{width:82px;height:83px}.regatta-entry strong{font-size:18px}.regatta-entry b{font-size:11px}.rg-card{padding:13px}}

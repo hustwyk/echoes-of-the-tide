@@ -31,7 +31,7 @@ const TideHarborReflection=(()=>{
     }
     return {cut,dispose(){g.setDrawRange(range.start,range.count);}};
   }
-  function create(renderer,scene,water,omit=[]){
+  function create(renderer,scene,water,omit=[],waveMargin=.22){
     const u=water.material.uniforms,eye=new T.PerspectiveCamera();
     const pos=new T.Vector3(),dir=new T.Vector3(),top=new T.Vector3(),target=new T.Vector3();
     const plane=new T.Plane(),clip=new T.Vector4(),corner=new T.Vector4();
@@ -61,7 +61,7 @@ const TideHarborReflection=(()=>{
         eye.projectionMatrix.copy(cam.projectionMatrix);eye.position.copy(pos);eye.position.y=2*level-pos.y;
         eye.up.copy(top).reflect(up);eye.lookAt(target.copy(dir).reflect(up).add(eye.position));eye.updateMatrixWorld();
         s.matrix.multiplyMatrices(eye.projectionMatrix,eye.matrixWorldInverse);
-        plane.setFromNormalAndCoplanarPoint(up,target.set(0,level-.22,0)).applyMatrix4(eye.matrixWorldInverse);
+        plane.setFromNormalAndCoplanarPoint(up,target.set(0,level-waveMargin,0)).applyMatrix4(eye.matrixWorldInverse);
         clip.set(plane.normal.x,plane.normal.y,plane.normal.z,plane.constant);
         const e=eye.projectionMatrix.elements;
         corner.set((Math.sign(clip.x)+e[8])/e[0],(Math.sign(clip.y)+e[9])/e[5],-1,(1+e[10])/e[14]);
