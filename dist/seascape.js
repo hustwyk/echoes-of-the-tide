@@ -92,8 +92,16 @@ window.TideCoast = (() => {
     return t;
   }
 
+  // Chapter nine's survey staffs, pontoons, foam and optical readings use this same travelling swell.
+  const surveyWaves = `
+    float surveySwell(vec2 p,float t){
+      float q=(t-(p.y+92.+.16*(p.x+46.))/4.48)/5.8;
+      float a=6.28318530718*q;
+      return -(.81+.075*cos(a*.31))*cos(a)+.085*sin(2.*a)+.037*sin(p.x*.38-p.y*.27+t*.85);
+    }`;
   const waterVertex = `
-    uniform float uTime;
+    uniform float uTime,uSurvey;
+    ${surveyWaves}
     varying vec3 vSea;
     varying float vHeight;
     float swell(vec2 p,float t){
@@ -104,15 +112,16 @@ window.TideCoast = (() => {
     }
     void main(){
       vec4 world=modelMatrix*vec4(position,1.);
-      float h=swell(world.xz,uTime);
+      float h=uSurvey>.5?surveySwell(world.xz,uTime):swell(world.xz,uTime);
       world.y+=h;
-      world.x+=.18*cos(dot(world.xz,vec2(.23,.11))+uTime*1.12);
+      world.x+=(1.-uSurvey)*.18*cos(dot(world.xz,vec2(.23,.11))+uTime*1.12);
       vSea=world.xyz;vHeight=h;
       gl_Position=projectionMatrix*viewMatrix*world;
     }`;
   const waterFragment = `
     uniform sampler2D uNoise,uSky;
-    uniform float uTime,uHasSky,uSignal,uBearing,uInside;
+    uniform float uTime,uHasSky,uSignal,uBearing,uInside,uSurvey;
+    ${surveyWaves}
     uniform float uShoreLamp;uniform vec4 uTurningShip;
     uniform vec3 uSun,uFog;uniform vec4 basin,uNearOptic,uFarOptic;uniform vec2 uGhost,uRangeAxis;
     varying vec3 vSea;
@@ -134,6 +143,10 @@ window.TideCoast = (() => {
              +.088*cos(dot(p,vec2(.49,-.41))+t*1.42);
       float dz=.051*cos(dot(p,vec2(.23,.11))+t*1.12)+.099*cos(dot(p,vec2(-.17,.29))-t*.88)
              -.074*cos(dot(p,vec2(.49,-.41))+t*1.42);
+      if(uSurvey>.5){
+        dx=(surveySwell(p+vec2(.1,0.),t)-surveySwell(p-vec2(.1,0.),t))*5.;
+        dz=(surveySwell(p+vec2(0.,.1),t)-surveySwell(p-vec2(0.,.1),t))*5.;
+      }
       vec3 normal=normalize(vec3(-dx+(noiseA.r+noiseB.g-1.)*.59*fine,1.,-dz+(noiseB.r+noiseA.g-1.)*.59*fine));
       vec3 r=reflect(-eye,normal);r.y=max(r.y,.025);
       vec3 sky=mix(vec3(.30,.42,.47),texture2D(uSky,envUV(r)).rgb,uHasSky);
@@ -227,6 +240,10 @@ window.TideCoast = (() => {
       sunTarget.position.set(-33,1,-85);sun.position.set(-61,40,-111);
       Object.assign(sun.shadow.camera,{left:-19,right:19,top:19,bottom:-19,near:20,far:90});
     }
+    if(index===8){
+      sunTarget.position.set(-43,0,-96);sun.position.set(-72,38,-124);
+      Object.assign(sun.shadow.camera,{left:-19,right:19,top:21,bottom:-21,near:20,far:95});
+    }
     if(index===9){
       sunTarget.position.set(14,22,-91);sun.position.set(-17,65,-127);
       Object.assign(sun.shadow.camera,{left:-12,right:12,top:12,bottom:-12,near:25,far:91});
@@ -244,12 +261,12 @@ window.TideCoast = (() => {
       vertices.setX(i,320*Math.sign(x)*Math.pow(Math.abs(x),1.55));
       vertices.setZ(i,270*Math.sign(z)*Math.pow(Math.abs(z),1.45));
     }
-    const uniforms={uTime:{value:0},uNoise:{value:noise},uSky:{value:noise},uHasSky:{value:0},uSignal:{value:0},
+    const uniforms={uSurvey:{value:index===8?1:0},uTime:{value:0},uNoise:{value:noise},uSky:{value:noise},uHasSky:{value:0},uSignal:{value:0},
       uShoreLamp:{value:index===2?0:-1},uTurningShip:{value:new T.Vector4()},
       uNearOptic:{value:new T.Vector4(0,0,1,-1)},uFarOptic:{value:new T.Vector4()},uGhost:{value:new T.Vector2()},uRangeAxis:{value:new T.Vector2(Math.sin(TideLantern.yaw),Math.cos(TideLantern.yaw))},
       basin:{value:new T.Vector4()},uBearing:{value:0},uInside:{value:act===1?.9:0},uSun:{value:new T.Vector3(-.42,.40,-.82).normalize()},uFog:{value:fogColor}};
     const water=new T.Mesh(oceanGeo,mat(new T.ShaderMaterial({uniforms,vertexShader:waterVertex,fragmentShader:waterFragment})));
-    water.name='潮汐海面';water.position.set(0,-4,-52);group.add(water);
+    water.name='潮汐海面';water.position.set(index===8?-42:0,-4,index===8?-97:-52);group.add(water);
     readSky().then(img=>{
       if(disposed)return;
       const panorama=document.createElement('canvas');
@@ -400,11 +417,11 @@ window.TideCoast = (() => {
     for(let i=0;i<56;i++){
       const side=i%2?1:-1, r=rng(), z=9-rng()*124, x=side*(29+rng()*51);
       const drawX=x<0&&z< -77&&x> -57?x-45:x;
-      const clearPier=index===2&&Math.hypot(drawX+61,z+128)<20;
+      const clearPier=index===2&&Math.hypot(drawX+61,z+128)<20||index===8&&Math.hypot(drawX+45,z+94)<22;
       rock(clearPier?drawX-29:drawX,-5.1+rng(),z,2+r*10,2+r*r*9,2+rng()*9,i);
     }
     for(let i=0;i<11;i++){
-      rock((index===7?26:14)+(rng()-.5)*25,-3+rng()*3,-103+(rng()-.5)*14,5+rng()*8,4+rng()*3,7+rng()*6,i);
+      rock((index===7||index===8?26:14)+(rng()-.5)*25,-3+rng()*3,-103+(rng()-.5)*14,5+rng()*8,4+rng()*3,7+rng()*6,i);
     }
 
     if(index===2){
@@ -492,8 +509,8 @@ window.TideCoast = (() => {
     }
     const marks=TideLookout.marks;
     const stump=mesh(shapes.round,iron,marks.stump.x,-2.51,marks.stump.z);
-    stump.name='断桩';
-    [-.95,-1.25].forEach(h=>{const collar=mesh(shapes.round,copper,marks.stump.x,h,marks.stump.z);collar.scale.set(.91,.105,.82);collar.rotation.z=.28;});
+    stump.name='断桩';stump.visible=index!==8;
+    if(index!==8)[-.95,-1.25].forEach(h=>{const collar=mesh(shapes.round,copper,marks.stump.x,h,marks.stump.z);collar.scale.set(.91,.105,.82);collar.rotation.z=.28;});
     stump.scale.set(.76,3.1,.71);stump.rotation.z=.28;
 
     function timberPier(){
@@ -645,7 +662,7 @@ window.TideCoast = (() => {
     }
     if(act===0)timberPier();
     if(act===1)pumpHall();
-    if(act===2&&index!==7)craneBridge();
+    if(act===2&&index!==7&&index!==8)craneBridge();
     if(act===3&&index!==9)lampGallery();
 
     batches.forEach(({g,m,items})=>{
@@ -734,7 +751,7 @@ window.TideCoast = (() => {
         water.position.y=Number.isFinite(cues.water)?cues.water:-4;
         mistMaterial.uniforms.t.value=t;
         mistMaterial.uniforms.baseY.value=water.position.y;
-        marker.position.set(marks.buoy.x,water.position.y+TideLookout.swell(marks.buoy.x,marks.buoy.z,t),marks.buoy.z);
+        marker.position.set(marks.buoy.x,water.position.y+(index===8?TideSoundings.swell:TideLookout.swell)(marks.buoy.x,marks.buoy.z,t),marks.buoy.z);
         marker.rotation.set(.08*Math.sin(t*.79),.5,.095*Math.sin(t*.88));
         const angle=Number.isFinite(cues.angle)?cues.angle:Math.sin(t*.14)*.32;
         beam.rotation.y=angle;

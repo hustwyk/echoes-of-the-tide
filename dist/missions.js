@@ -43,9 +43,9 @@ const TideMissions = (() => {
       step('relay','两个人的落款',['antenna','radio'],'林澈：我签我验过的那一项。沈遥，那张通报要你自己说。')
     ],
     [
-      step('tide','在同一道浪里读尺',['gauge','gauge'],'沈遥：我看上标尺。浪谷到了就告诉你。',{lead:1}),
-      step('tide','复测另一侧水线',['gauge','gauge'],'林澈：这次我先读，你记远处的浪。',{lead:0,rough:2}),
-      step('post','从船尾找断桩',['chart','gauge'],'阿棠：我能看到双环的断桩，浪一退它就露头。',{rough:1})
+      step('soundings','甲尺 · 追上海上来浪',['gauge','gauge'],'沈遥：你带上长尺，从西边阶梯下去。我先看外海那根铜标。'),
+      step('soundings','乙尺 · 把同一道浪报回来',['gauge','gauge'],'林澈：外边还有一只尺座。这次浪先到我这边，你听我报。'),
+      step('soundings','船尾校核 · 把水深压到图上',['chart','radio'],'梁青：驾驶台这边两条槽像是一样深。阿棠，你到后面再看一眼。')
     ],
     [
       step('optic','合并双影',['wheel','lens'],'沈遥：我在外环，看得见你调出来的重影。',{v:[.31,.68]}),

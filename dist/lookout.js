@@ -18,6 +18,7 @@ const TideLookout=(()=>{
     return .46*Math.sin(x*.23+z*.11+t*1.12)+.34*Math.sin(-x*.17+z*.29-t*.88)+.18*Math.sin(x*.49-z*.41+t*1.42)+.09*Math.sin(x*.81+z*.62-t*1.64);
   }
   function vessel(g,t){
+    if(g.survey)return TideSoundings.vessel(g,t);
     if(g.relay)return TideRelay.vessel(g,t);
     if(g.signal){const p=TideSignal.ship(g,t);return [p.x,p.y,p.z];}
     const f=g.cues.rescue;
@@ -26,16 +27,16 @@ const TideLookout=(()=>{
   }
   function point(g,id){
     const t=g.time,w=g.cues.water;
-    if(id==='buoy')return [marks.buoy.x,w+swell(marks.buoy.x,marks.buoy.z,t)+2.97,marks.buoy.z];
-    if(id==='stump')return [marks.stump.x,-1.16,marks.stump.z];
+    if(id==='buoy')return [marks.buoy.x,w+(g.survey?TideSoundings.swell:swell)(marks.buoy.x,marks.buoy.z,t)+2.97,marks.buoy.z];
+    if(id==='stump')return [marks.stump.x,g.survey?-2.52:-1.16,marks.stump.z];
     const position=vessel(g,t);position[1]+=3.7;return position;
   }
   // Telescopes sit beyond the outer rail, clear of the overhead crane and tower walls.
   function camera(g){
     const w=g.watch,side=w.task.watcher;
     const e=g.world.relay?.eye;
-    const eye=e?[e.x,e.y,e.z]:g.signal?TideSignal.scope(g):[side?-21.3:-37.3,side?4.35:5.15,-89.8];
-    const base=e?Math.atan2(-20-e.x,e.z+110):g.signal?Math.atan2(-26-eye[0],eye[2]+113):Math.atan2(-32-eye[0],117+eye[2]);
+    const eye=g.survey?TideSoundings.stern(g):e?[e.x,e.y,e.z]:g.signal?TideSignal.scope(g):[side?-21.3:-37.3,side?4.35:5.15,-89.8];
+    const base=g.survey?Math.atan2(-36-eye[0],eye[2]+118):e?Math.atan2(-20-e.x,e.z+110):g.signal?Math.atan2(-26-eye[0],eye[2]+113):Math.atan2(-32-eye[0],117+eye[2]);
     const yaw=base+w.yaw,pitch=w.pitch;
     return {eye,at:[eye[0]+Math.sin(yaw)*Math.cos(pitch),eye[1]+Math.sin(pitch),eye[2]-Math.cos(yaw)*Math.cos(pitch)],yaw,pitch};
   }
@@ -51,6 +52,7 @@ const TideLookout=(()=>{
     w.seen=null;
     let best=.021;
     for(const id of Object.keys(labels)){
+      if(g.survey&&(id==='ship'||id==='stump'&&!TideSoundings.exposed(g)))continue;
       const [x,y,z]=point(g,id),dx=x-eye[0],dz=z-eye[2];
       const error=Math.hypot(Math.atan2(dx,-dz)-yaw,Math.atan2(y-eye[1],Math.hypot(dx,dz))-pitch);
       if(error<best){best=error;w.seen=id;}
@@ -62,7 +64,7 @@ const TideLookout=(()=>{
     g.set(rec,task.hints[w.step],{caption:waiting?'收到「'+labels[w.marked]+'」。按跳跃键核对记录':'观测记录 '+(w.step+1)+' / '+task.targets.length+'　请同伴找'+labels[expected]});
     if(g.commit(d,inputs)&&!waiting){
       if(w.seen){w.marked=w.seen;g.sound(540,.08);}
-      else g.alert('准星里只有海面，沿水平线继续扫视',1.7);
+      else g.alert(g.survey&&expected==='stump'?'浪沫会遮住铁箍，等波谷露桩再报。':'准星里只有海面，沿水平线继续扫视',1.7);
     }
     if(waiting&&g.commit(rec,inputs)){
       if(w.marked!==expected){g.alert('观测物与海图不符，再核对外形和位置');}
