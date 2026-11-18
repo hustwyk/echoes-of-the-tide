@@ -3,10 +3,10 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const box=vm.createContext({});
-for(const name of ['missions','traversal','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','lookout','paper','lantern','signal','archive','relay-speech','relay','soundings-speech','soundings','fog-speech','fogsignal','cooperation']){
+for(const name of ['missions','traversal','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','lookout','paper','lantern','signal','archive','relay-speech','relay','soundings-speech','soundings','fog-speech','fogsignal','pass-speech','lastpass','cooperation']){
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../dist',name+'.js'),'utf8'),box);
 }
-const {Session,near,surface,lookout,ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal})',box);
+const {Session,near,surface,lookout,ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass})',box);
 const empty=()=>({x:0,z:0,use:false,jump:false});
 function steer(g,i,target,keys){
   const p=g.players[i],dx=target.x-p.x,dz=target.z-p.z,dist=Math.hypot(dx,dz);
@@ -463,17 +463,26 @@ function control(g){
     case 'tide':out[s.lead].jump=Math.abs(g.time%5/5-.74)<.08;out[1-s.lead].jump=g.time-q.readAt<.7;break;
     case 'post':trim(0,.5);out[1].jump=true;out[0].jump=g.time-q.mark<2;break;
     case 'rhythm':{
-      const phase=(q.age+(s.irregular?.3*Math.sin(q.age*.9):0))%s.period/s.period;
-      out[0].jump=q.nextShot===0&&Math.abs(phase-.24)<.05;
-      const interval=g.index===10&&g.stage===0?.5:.72;
-      out[1].jump=q.nextShot===2||q.nextShot===1&&Math.abs(g.time-q.pulseAt-.6-q.received*interval)<.05;break;
+      const r=g.pilotHorn,axis=n=>Math.max(-1,Math.min(1,n));
+      out[0].x=axis((TideFogSignal.load(g)-r.balance)*11);
+      out[0].jump=r.mode==='ready'&&Math.abs(r.spin%1-.3)<.037&&TideFogSignal.wind(g)>.45;
+      if(r.mode==='sending'){
+        const t=TideFogSignal.camTime(r),slot=TideFogSignal.slots(r)[r.trace.source.length];
+        out[1].z=(r.down?g.time-r.opened<.215:Math.abs(t-slot)<.046)?-1:0;
+      }
+      if(['drain','aft','bridge'].includes(r.mode))out[1].use=false;
+      out[1].jump=r.mode==='ack';break;
     }
     case 'quiet':{
       const taps=q.taps||[],answer=q.answer||[];
       if(taps.length<3)out[0].jump=!taps.length||g.time-taps.at(-1)>(taps.length===1?.62:1.08);
       else out[1].jump=!answer.length||g.time-answer[0]>=taps[answer.length]-taps[0];break;
     }
-    case 'release':out[1].use=q.mode!==1;out[0].jump=q.mode===2&&g.cues.rescue===1;break;
+    case 'release':{
+      out[1].use=q.mode===0;
+      const error=TideLastPass.bearing(g)-g.lastPass.wheel;
+      out[0].x=Math.max(-1,Math.min(1,error*18));out[0].jump=g.lastPass.arrived&&Math.abs(error)<.043;break;
+    }
   }
   return out;
 }
@@ -536,12 +545,14 @@ if(require.main===module){
     TideFogSignal.restore(editor,change);assert.ok(editor.fog.locks[0]&&!editor.fog.locks[1]);
     assert.equal(editor.fog.gaps[0],r.gaps[0]);
     // Keep the old spacing on the third tooth, then send once with that assembly.
+    let finalGapReport=false;
     for(let j=0;j<2000&&r.mode!=='ack';j++){
+      if(r.voice==='last')finalGapReport=true;
       const k=control(g);
       if(r.mode==='edit'&&r.stud===1&&TideFogSignal.near(g,1)){k[1].x=0;k[1].jump=Math.abs(r.service-.69)<.03;}
       g.tick(step,k);
     }
-    assert.equal(r.mode,'ack');assert.equal(r.trace.bridge.length,2);
+    assert.equal(r.mode,'ack');assert.equal(r.trace.bridge.length,2);assert.ok(finalGapReport);
     reach(g,()=>r.mode==='edit');assert.equal(r.paper.bridge.length,2);
     reach(g,()=>g.stage===2&&r.mode==='spot'&&!r.voice);
     for(let j=0;j<180;j++){
@@ -933,6 +944,25 @@ if(require.main===module){
     final.tick(1/60,inputs);
   }
   assert.equal(held,240);assert.ok(final.complete);
+  {
+    const g=new Session(11);g.savedSpacing=[1.12,.96];reach(g,()=>g.pilotHorn?.mode==='ack');
+    assert.deepEqual(Array.from(g.pilotHorn.gaps),[1.12,.96]);
+    assert.deepEqual(Array.from(g.pilotHorn.trace.bridge),Array.from(g.pilotHorn.trace.source));
+    reach(g,()=>g.lastPass?.voice==='clear'&&g.lastPass.clock>.55);
+    const r=g.lastPass;assert.ok(TideLastPass.along(g)>8.45);
+    for(let j=0;j<48;j++){const k=control(g);k[1].use=true;g.tick(step,k);}
+    assert.equal(r.clock,0);assert.equal(g.cues.rescue,0);
+    reach(g,()=>r.cleared&&!r.turned);const saved=TideLastPass.checkpoint(g);
+    const test=new Session(11);test.stage=2;test.begin();TideLastPass.restore(test,saved);
+    for(let j=0;j<160;j++){const k=control(test);k[0].use=false;test.tick(step,k);}
+    assert.equal(test.cues.rescue,0);assert.ok(!test.lastPass.turned);
+    reach(test,()=>test.lastPass.voice==='turn'&&test.lastPass.clock>.6);assert.equal(test.cues.rescue,0);
+    reach(test,()=>test.lastPass.arrived);const landed=TideLastPass.checkpoint(test);
+    const moored=new Session(11);moored.stage=2;moored.begin();TideLastPass.restore(moored,landed);
+    for(let j=0;j<100;j++){const k=control(moored);k[0].jump=false;k[0].x=1;moored.tick(step,k);}
+    const wrong=control(moored);wrong[0].x=0;wrong[0].jump=true;moored.tick(step,wrong);
+    assert.equal(moored.state.doneAt,null);reach(moored,()=>moored.complete);
+  }
   // Holding the cooperation switches backwards together skips the private recording.
   const quiet=new Session(6);
   for(let j=0;j<60*120&&!quiet.complete;j++){

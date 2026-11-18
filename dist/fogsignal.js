@@ -23,17 +23,26 @@ const TideFogSignal=(()=>{
     return {floors,sections,style:'lens',foghouse:{rear,east,outer,wheels,rack,clutch,drive,bench,horn}};
   }
   const notch=[.26,.69];
-  function create(g){
-    return g.world.foghouse?{key:'rack',marks:[false,false],travel:.19,clutch:0,spin:.08,speed:nominal,balance:0,
+  function fresh(){
+    return {key:'rack',marks:[false,false],travel:.19,clutch:0,spin:.08,speed:nominal,balance:0,
       mode:'transport',service:.07,gaps:[.54,.54],locks:[false,false],stud:0,turn:null,down:false,
-      valve:0,pressure:1,opened:0,pulseOrigin:0,oldPull:false,trace:trace(),paper:trace(),packets:[],lastAir:[-8,-8],
+      valve:0,pressure:1,opened:0,pulseOrigin:0,oldPull:false,trace:trace(),paper:trace(),packets:[],listensAfter:[-8,-8],
       showAft:false,showBridge:false,ready:false,voice:'',clock:0,subtitle:'',line:-1,spoken:false,
-      sightYaw:-.12,sightPitch:.065,fix:0,seen:false,storm:0}:null;
+      sightYaw:-.12,sightPitch:.065,fix:0,seen:false,storm:0};
+  }
+  const create=g=>g.world.foghouse?fresh():null;
+  const instrument=g=>g.fog||g.pilotHorn;
+  const carryingLoad=g=>g.stage===2||!!g.pilotHorn;
+  function formal(g){
+    if(g.index!==11||g.stage!==1)return null;
+    const p=g.savedSpacing;
+    const gaps=Array.isArray(p)&&p.length===2&&p.every(n=>Number.isFinite(n)&&n>=.48&&n<=1.22)?p.slice():[.97,.99];
+    return {...fresh(),mode:'ready',key:'seated',spoken:true,gaps,locks:[true,true]};
   }
   function begin(g){
     const r=g.fog;if(!r)return;
     r.voice='';r.clock=0;r.line=-1;r.subtitle='';r.turn=null;r.down=false;r.oldPull=false;r.valve=0;r.ready=false;
-    r.trace=trace();r.packets=[];r.lastAir=[-8,-8];r.showAft=r.showBridge=false;
+    r.trace=trace();r.packets=[];r.listensAfter=[-8,-8];r.showAft=r.showBridge=false;
     if(g.stage){
       r.key='seated';r.marks=[true,true];r.spoken=true;r.travel=1;
       r.mode=g.stage===1?'edit':'ready';
@@ -74,9 +83,9 @@ const TideFogSignal=(()=>{
     }
   }
   function snap(g){g.events.checkpoint?.(g);}
-  function load(g){return g.stage===2?.42*Math.sin(g.time*.69+.10)+.28*Math.sin(g.time*1.12):0;}
-  function dark(g){const f=phase(g.fog.spin);return f>=.43&&f<.83;}
-  function wind(g){return clamp(1-Math.abs(g.fog.balance-load(g))/.53,0,1);}
+  function load(g){return carryingLoad(g)?.42*Math.sin(g.time*.69+.10)+.28*Math.sin(g.time*1.12):0;}
+  function dark(g){const f=phase(instrument(g).spin);return f>=.43&&f<.83;}
+  function wind(g){return clamp(1-Math.abs(instrument(g).balance-load(g))/.53,0,1);}
   function syncWheels(g){
     const r=g.fog,w=g.world.foghouse;
     for(const pad of w.wheels){
@@ -90,10 +99,10 @@ const TideFogSignal=(()=>{
     }
   }
   function step(g,dt){
-    const r=g.fog;
+    const r=instrument(g);
     if(r.mode==='transport'){syncWheels(g);return;}
     if(r.mode==='edit'){r.spin=r.service;r.storm=0;g.cues.light=.74;return;}
-    r.speed=nominal*(1+(g.stage===2?(r.balance-load(g))*.22+.045*Math.sin(g.time*1.48):0));
+    r.speed=nominal*(1+(carryingLoad(g)?(r.balance-load(g))*.22+.045*Math.sin(g.time*1.48):0));
     r.spin+=dt*r.speed;const f=phase(r.spin);
     r.storm=clamp((f-.403)/.045,0,1)*clamp((.854-f)/.05,0,1);
     g.cues.light=.95*(1-r.storm)+.018;g.cues.angle=.01*Math.sin(r.spin*TAU);
@@ -101,18 +110,19 @@ const TideFogSignal=(()=>{
   function say(r,id){r.voice=id;r.clock=0;r.line=-1;r.subtitle='';}
   function status(g,txt){g.alert(txt,2.2);}
   function ready(g){
-    const r=g.fog;r.mode='ready';r.turn=null;r.ready=false;r.down=false;r.packets=[];r.valve=0;
-    r.trace=trace();r.lastAir=[-8,-8];r.showBridge=r.showAft=false;r.pressure=1;r.oldPull=false;
+    const r=instrument(g);r.mode='ready';r.turn=null;r.ready=false;r.down=false;r.packets=[];r.valve=0;
+    r.trace=trace();r.listensAfter=[-8,-8];r.showBridge=r.showAft=false;r.pressure=1;r.oldPull=false;
   }
   function narrate(g,dt){
-    const r=g.fog;if(!r.voice)return;
+    const r=instrument(g);if(!r.voice)return;
     const c=TideFogSpeech[r.voice];r.clock+=dt;const j=c.lines.findLastIndex(l=>l[0]<=r.clock);
     if(j>=0&&r.line!==j){r.line=j;r.subtitle=c.lines[j][1];g.events.log?.(r.subtitle);}
     if(r.clock<c.duration)return;
     const id=r.voice;r.voice='';r.clock=0;r.subtitle='';r.line=-1;
     if(id==='aft'){
-      r.showBridge=true;r.mode='bridge';say(r,['one','one','two','three'][r.trace.bridge.length]);
-    }else if(id==='two'||id==='one'||id==='three'){
+      r.showBridge=true;r.mode='bridge';const second=r.trace.bridge[1]===r.trace.source[1];
+      say(r,['one','one',second?'last':'two','three'][r.trace.bridge.length]);
+    }else if(id==='two'||id==='last'||id==='one'||id==='three'){
       if(g.stage===2&&r.trace.bridge.length===3){r.mode='spot';say(r,'eyes');}
       else {r.mode='ack';snap(g);}
     }else if(id==='eyes'){r.mode='spot';snap(g);}
@@ -164,30 +174,30 @@ const TideFogSignal=(()=>{
   const slots=r=>[.24,.24+r.gaps[0],.24+r.gaps[0]+r.gaps[1]];
   function camTime(r){return r.turn==null?-8:(r.spin-(r.turn+.43))/nominal;}
   function signalPacket(g,width){
-    const r=g.fog,k=r.trace.source.length,stamp=r.pulseOrigin;
+    const r=instrument(g),k=r.trace.source.length,stamp=r.pulseOrigin;
     r.trace.source.push(stamp);
     for(const [i,delay] of [[0,.17],[1,.43]])r.packets.push({side:i,at:g.time+delay,stamp,width,emitted:r.opened});
     g.sound(310+k*55,.045);
   }
   function receive(g){
-    const r=g.fog;
+    const r=instrument(g);
     r.packets=r.packets.filter(e=>{
       if(g.time<e.at)return true;
       const decay=e.side?.802+e.width*.20:.28;
-      if(e.emitted-r.lastAir[e.side]>=decay){r.lastAir[e.side]=e.emitted;r.trace[e.side?'bridge':'aft'].push(e.stamp);}
+      if(e.emitted>=r.listensAfter[e.side]){r.listensAfter[e.side]=e.emitted+decay;r.trace[e.side?'bridge':'aft'].push(e.stamp);}
       return false;
     });
   }
   function fail(g,reason){ready(g);g.sound(148,.10);status(g,reason);}
   function work(g,input,dt){
-    const r=g.fog,f=phase(r.spin);
-    if(g.engaged[0]&&g.stage===2)r.balance=clamp(r.balance+input[0].x*dt*.73,-1,1);
+    const r=instrument(g),f=phase(r.spin);
+    if(g.engaged[0]&&carryingLoad(g))r.balance=clamp(r.balance+input[0].x*dt*.73,-1,1);
     const steady=wind(g)>.40,pull=g.engaged[1]&&input[1].z<-.44;
     const rising=pull&&!r.oldPull;r.oldPull=pull;
     const on=g.engaged[0]&&g.engaged[1];
     if(!r.spoken&&on){r.spoken=true;say(r,'drill');}
-    g.set(0,g.stage===2?'左右调飞锤，稳住转速。预灯缺口经过固定指针时按确认。':'握住调速盘，看铜色缺口。缺口经过固定指针时，按确认送出预备灯。',{
-      vis:'dial',value:f,target:.30,band:.055,caption:'凸轮 '+Math.round(f*360)+'°　·　'+(g.stage===2?'转速 '+(r.speed*60).toFixed(1)+' / 8.0 rpm':'遮光段约三秒')});
+    g.set(0,carryingLoad(g)?'左右调飞锤，稳住转速。预灯缺口经过固定指针时按确认。':'握住调速盘，看铜色缺口。缺口经过固定指针时，按确认送出预备灯。',{
+      vis:'dial',value:f,target:.30,band:.055,caption:'凸轮 '+Math.round(f*360)+'°　·　'+(carryingLoad(g)?'转速 '+(r.speed*60).toFixed(1)+' / 8.0 rpm':'遮光段约三秒')});
     const stamps=slots(r),clock=camTime(r),i=r.trace.source.length,offset=clock-(stamps[i]??9);
     const contact=Math.abs(offset)<(g.stage===0?.10:.15);
     r.ready=r.turn!==null;
@@ -217,7 +227,7 @@ const TideFogSignal=(()=>{
     }else if(offset>.20||clock>3.06){fail(g,'错过一道触点。等下一圈，已调好的齿距会保留。');}
   }
   function feedback(g,input){
-    const r=g.fog,three=r.trace.bridge.length===3;
+    const r=instrument(g),three=r.trace.bridge.length===3;
     g.set(0,'岸上三枚灯全亮。留住这一圈的刻口，等驾驶台自己复述。',{caption:'岸台　●●●　·　'+(r.showAft?'后甲板　'+r.trace.aft.length+' 响':'等船尾')});
     g.set(1,r.mode==='drain'?'松开操作键，把频道让给海雁号。':r.mode==='ack'?'听完驾驶台，握住电台并按确认登记这次复述。':'等船尾和驾驶台分别说完。',{
       caption:'岸台　3　·　后甲板　'+(r.showAft?r.trace.aft.length:'…')+'　·　驾驶台　'+(r.showBridge?r.trace.bridge.length:'…')});
@@ -227,6 +237,7 @@ const TideFogSignal=(()=>{
     if(r.mode!=='ack'||!g.commit(1,input)||!g.engaged[0])return;
     r.paper={...r.trace,source:r.trace.source.slice(),aft:r.trace.aft.slice(),bridge:r.trace.bridge.slice()};
     if(g.stage===0||three){g.advance();return;}
+    if(g.pilotHorn){ready(g);status(g,'船上漏听了一声。照原来的齿距，贴着触点中心重发。');return;}
     r.mode='edit';r.stud=0;r.service=.07;r.locks=[false,false];snap(g);say(r,'spread');
   }
   const shipYaw=-2.19;
@@ -250,7 +261,7 @@ const TideFogSignal=(()=>{
     if(!r.voice&&r.fix>=1&&g.commit(1,input)&&!r.seen){r.seen=true;say(r,'seen');snap(g);}
   }
   function interact(g,input,dt){
-    const r=g.fog;receive(g);
+    const r=instrument(g);receive(g);
     if(r.mode==='transport')transport(g,input,dt);
     else if(r.mode==='edit')edit(g,input,dt);
     else if(r.mode==='ready'||r.mode==='sending')work(g,input,dt);
@@ -289,5 +300,5 @@ const TideFogSignal=(()=>{
     const b=target(g,1);g.checkpoints=[a,b];g.players=g.checkpoints.map(TideTraversal.spawn);
     Object.assign(g.players[0],{x:a.x,y:a.y,z:a.z,ground:r.key==='seated'?w.outer:w.wheels.includes(a)?a:w.rear});
   }
-  return {layout,create,begin,step,near,target,stance,collide,interact,checkpoint,restore,load,wind,dark,slots,camTime,cabin,shipYaw,lamp};
+  return {layout,create,formal,begin,step,near,target,stance,collide,interact,checkpoint,restore,load,wind,dark,slots,camTime,cabin,shipYaw,lamp};
 })();
