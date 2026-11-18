@@ -187,8 +187,9 @@ function openLevel(n,stage=0,mark=null){
   $('act').textContent=act.name+'　/　'+String(n+1).padStart(2,'0')+' OF 12';$('level-title').textContent=level.name;
   $('elapsed').textContent='';showStatus('两名玩家 · 独立视角');
   const sternMark=mark?.berth==='stern';
-  const briefing=sternMark?'发动机已经停了，首缆仍套在岸桩上。沈遥走到艇尾，堤沿的绿绳眼还要绕过船舷，才能落在艇尾桩上。':level.story;
-  const openingLine=sternMark?(session.arrival.stern.phase==='fast'?'沈遥：“在桩上了。现在能松手了。”':session.arrival.stern.phase==='draw'?'沈遥：“勾住了。等我把它带回来。”':'沈遥：“船尾还在摆。我去够那只绿绳眼。”'):level.quote;
+  const plotBriefing=TideSurveyPlot.briefing(session);
+  const briefing=plotBriefing|| (sternMark?'发动机已经停了，首缆仍套在岸桩上。沈遥走到艇尾，堤沿的绿绳眼还要绕过船舷，才能落在艇尾桩上。':level.story);
+  const openingLine=plotBriefing?'阿棠：“我从船上往岸上看。你那把尺，往船这边画。”':sternMark?(session.arrival.stern.phase==='fast'?'沈遥：“在桩上了。现在能松手了。”':session.arrival.stern.phase==='draw'?'沈遥：“勾住了。等我把它带回来。”':'沈遥：“船尾还在摆。我去够那只绿绳眼。”'):level.quote;
   overlay.innerHTML='<div class="story"><small>行动简报</small><h3>'+level.name+'</h3><p>'+briefing+'</p><blockquote>'+openingLine+'</blockquote><div id="brief-seats"></div><button class="primary">'+(stage||mark?'从检查点继续':n===0?'登上交通艇':'进入关卡')+'　›</button></div>';
   seatPanel=TideCrewInput.panel($('brief-seats'),TideArrival.active(session)?(session.arrival.stern?'stern':session.arrival.radio):null);
   overlay.querySelector('.primary').onclick=()=>startPlaying(true);
@@ -342,7 +343,7 @@ function pause(){
   mode='paused';clearInput();sound.stopScene();window.speechSynthesis?.cancel();
   $('pause').textContent='继续';
   const arrival=TideArrival.active(session),gallery=TideGallery.active(session);
-  const hint=gallery?'西台与背风台各有一架手轮。握住操作键左右转轮，松手停车；另一人从黄边起跳。过白漆台后，两人沿梯进灯室。':arrival&&session.arrival.stern?'林澈收首缆，让沈遥把船钩送进岸边的绿绳眼。听她喊勾住便松开。沈遥握杆向后拉，等绳眼来到艇尾桩上方再松手。':arrival&&session.arrival.radio==='line'?'林澈移动缆圈，瞄准岸桩后投缆。沈遥收油回空挡，等船慢下来后按住操作键停机；林澈才拉得动缆绳。':arrival?'无线电的工作频道刻在舵座。掌舵的人按住操作键俯身，再左右擦开铜牌。船首的人听到频道后调台，按住发话键等自己说完。':'站到彩色光圈内，按住操作键使用设备。操作时可左右微调，按跳跃键确认。拖动各自的画面调整视角，双击可回正。';
+  const hint=TideSurveyPlot.briefing(session)||(gallery?'西台与背风台各有一架手轮。握住操作键左右转轮，松手停车；另一人从黄边起跳。过白漆台后，两人沿梯进灯室。':arrival&&session.arrival.stern?'林澈收首缆，让沈遥把船钩送进岸边的绿绳眼。听她喊勾住便松开。沈遥握杆向后拉，等绳眼来到艇尾桩上方再松手。':arrival&&session.arrival.radio==='line'?'林澈移动缆圈，瞄准岸桩后投缆。沈遥收油回空挡，等船慢下来后按住操作键停机；林澈才拉得动缆绳。':arrival?'无线电的工作频道刻在舵座。掌舵的人按住操作键俯身，再左右擦开铜牌。船首的人听到频道后调台，按住发话键等自己说完。':'站到彩色光圈内，按住操作键使用设备。操作时可左右微调，按跳跃键确认。拖动各自的画面调整视角，双击可回正。');
   overlay.innerHTML='<div class="story"><h3>行动暂停</h3><p>'+levels[index].name+'　/　'+(gallery?(session.gallery.phase==='file'?'灯室潮尺原数联':'绕塔检修台'):arrival?'交通艇进港':TideFenders.active(session)?'护舷井登岸':session.cable?TideCableQuay.title(session):session.spec.title)+'</p><p class="hint">'+hint+'</p><div class="pause-options"><button id="unpause">继续行动</button><button id="retry">重试此段</button><button id="quit">返回档案</button><button id="voice"></button><button id="quality"></button></div></div>';
   seatPanel=TideCrewInput.panel(overlay.querySelector('.story'),arrival?(session.arrival.stern?'stern':session.arrival.radio):null);
   addJournal(overlay.querySelector('.story'),journal);

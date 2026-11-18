@@ -42,9 +42,8 @@ const TideLookout=(()=>{
     return {eye,at:[eye[0]+Math.sin(yaw)*Math.cos(pitch),eye[1]+Math.sin(pitch),eye[2]-Math.cos(yaw)*Math.cos(pitch)],yaw,pitch};
   }
   function active(g){return !!g.watch&&!g.watch.done&&g.field.done;}
-  function interact(g,inputs,dt){
-    if(!active(g))return false;
-    const w=g.watch,d=w.task.watcher,rec=1-d,k=inputs[d],task=w.task;
+  function observe(g,inputs,dt){
+    const w=g.watch,d=w.task.watcher,k=inputs[d];
     if(g.engaged[d]){
       w.yaw=clamp(w.yaw+k.x*dt*.53,-1.35,1.35);
       w.pitch=clamp(w.pitch-k.z*dt*.34,-.54,.21);
@@ -58,6 +57,12 @@ const TideLookout=(()=>{
       const error=Math.hypot(Math.atan2(dx,-dz)-yaw,Math.atan2(y-eye[1],Math.hypot(dx,dz))-pitch);
       if(error<best){best=error;w.seen=id;}
     }
+    return {eye,yaw};
+  }
+  function interact(g,inputs,dt){
+    if(!active(g))return false;
+    const w=g.watch,task=w.task,d=task.watcher,rec=1-d;
+    const {yaw}=observe(g,inputs,dt);
     const expected=task.targets[w.step];
     const waiting=w.marked!==null;
     g.set(d,waiting?'保持视线，等同伴把观测记入记录簿':'按住操作键看镜，前后左右移动准星，按跳跃键报出目标',{
@@ -75,5 +80,5 @@ const TideLookout=(()=>{
     }
     return true;
   }
-  return {reset,point,camera,active,interact,labels,marks,vessel,swell};
+  return {reset,point,camera,active,observe,interact,labels,marks,vessel,swell};
 })();

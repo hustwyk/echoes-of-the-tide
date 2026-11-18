@@ -92,7 +92,15 @@ const TideHud=(()=>{
       const rescueHint=i?(pads[i]!=null?'RT 握柄　左摇杆左右盘车　回中抱闸':'Enter 握柄　← → 盘车　松开方向键抱闸'):
         (pads[i]!=null?'RT 抓环　左摇杆前推翻上　松开 RT 后 A 回收':'E 抓环　W 翻上　松开 E 后空格回收');
       const starterKeys=pads[i]!=null?(i?'RT 握柄　左右对针　A 解锁　前推送柄':'RT 握柄　左摇杆后拉、前推'):(i?'Enter 握柄　← → 对针　/ 解锁　↑ 送柄　↓ 退柄':'E 握柄　S 拉到底　W 推回');
-      set(v.querySelector('.control-hint'),g.signal&&g.stage===0&&close?starterKeys:g.fog?.haul?rescueHint:TideGallery.active(g)?(pads[i]!=null?'左摇杆移动 / 转轮　A 跳　RT 握柄':i?'方向键移动 / 转轮　/ 跳　Enter 握柄':'WASD 移动 / 转轮　空格 跳　E 握柄'):TideArrival.active(g)?arrivalHint:TideTinMemory.active(g)?childhood:TideTransit.active(g)&&i===1?(pads[1]!=null?'左摇杆转镜　A 报位':'方向键转镜　/ 报位'):rack?(i?'向前重听　操作中确认登记':'左右选列，前后选层　操作中确认提起 / 放回'):work?bindings:tips);
+      const plotting=g.survey&&g.stage===2&&g.engaged[i]&&!g.survey.plotter.legacy;
+      let plotKeys='';
+      if(plotting){
+        const drawing=g.survey.plotter.lines.length<2;
+        if(i)plotKeys=pads[i]!=null?'RT 观测　左摇杆转镜　A 锁读 / 回报':'Enter 观测　方向键转镜　/ 锁读或回报';
+        else if(drawing)plotKeys=pads[i]!=null?'RT 握尺　上下移脚　左右转尺　A 划线':'E 握尺　W / S 移脚　A / D 转尺　空格划线';
+        else plotKeys=pads[i]!=null?'RT 握图台　左摇杆移十字　A 压针':'E 握图台　WASD 移十字　空格压针';
+      }
+      set(v.querySelector('.control-hint'),plotting?plotKeys:g.signal&&g.stage===0&&close?starterKeys:g.fog?.haul?rescueHint:TideGallery.active(g)?(pads[i]!=null?'左摇杆移动 / 转轮　A 跳　RT 握柄':i?'方向键移动 / 转轮　/ 跳　Enter 握柄':'WASD 移动 / 转轮　空格 跳　E 握柄'):TideArrival.active(g)?arrivalHint:TideTinMemory.active(g)?childhood:TideTransit.active(g)&&i===1?(pads[1]!=null?'左摇杆转镜　A 报位':'方向键转镜　/ 报位'):rack?(i?'向前重听　操作中确认登记':'左右选列，前后选层　操作中确认提起 / 放回'):work?bindings:tips);
     }
   }
   return {build,update};
