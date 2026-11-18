@@ -22,6 +22,7 @@ const TideSignal=(()=>{
     const starter=site(-3.85,0,12.85,'飞轮起动杆','wheel');
     const pilot=site(3.70,0,12.75,'试灯离合器','breaker');
     const cutout=site(-3.65,.66,7.12,'机房合闸柄','breaker');
+    const register=site(-2.36,.66,7.12,'灯标登记簿','chart');
     const radio=site(4.32,.66,4.69,'观测窗话筒','radio');
     const test=site(-5.55,.66,6.12,'弹簧试光柄','brake');
     const chain=site(1.85,.66,6.35,'检修梯手链','winch');
@@ -32,11 +33,11 @@ const TideSignal=(()=>{
       sites:[[starter,pilot],[cutout,radio],[{...shade},{...chain}]][k],
       mid:k?gallery:apron,paths:[[],[]],returnDecks:[],danger:[],ferry:null
     }));
-    return {floors,sections,style:'dock',signal:{apron,gallery,head,bridge,starter,pilot,cutout,radio,test,chain,shade}};
+    return {floors,sections,style:'dock',signal:{apron,gallery,head,bridge,starter,pilot,cutout,radio,register,test,chain,shade}};
   }
   function create(g){
     if(!g.world.signal)return null;
-    return {...TideStarter.create(),glow:0,shutter:0,
+    return {...TideStarter.create(),register:TideLightRegister.create(),glow:0,shutter:0,
       sent:false,heard:false,speech:0,mic:'idle',replyAt:0,turn:0,drift:0,arrest:0,
       angle:-.63,velocity:0,walked:false,onHead:false,pinned:false,closed:false,
       early:-3,voice:'',clock:0,testStroke:0,tripReady:true,tripTime:5,flag:0,strokesTest:0,
@@ -54,6 +55,7 @@ const TideSignal=(()=>{
   }
   function begin(g){
     const r=g.signal;if(!r)return;
+    if(g.stage===1)g.section.sites[0]=g.world.signal.register;
     if(g.stage>=1){r.linked=true;r.shift=1;r.coupling='latched';r.rpm=Math.max(.53,r.rpm);r.drivenRPM=r.rpm;}
     if(g.stage===2){
       r.sent=true;r.heard=true;r.flag=0;r.shutter=1;r.glow=1;r.mic='idle';r.speech=0;
@@ -65,6 +67,9 @@ const TideSignal=(()=>{
     const r=g.signal;
     if(g.stage===0)TideStarter.step(g,dt);
     else if(r.voice){r.clock+=dt;if(r.clock>=TideTransitSpeech[r.voice].duration){r.voice='';r.clock=0;}}
+    if(g.stage===1&&r.register.matchPending&&!r.voice){
+      r.register.matchPending=false;TideTransit.speak(g,'bookMatch');
+    }
     r.spin+=r.rpm*dt*10.7;
     if(g.stage>0&&r.linked){
       const load=g.stage===1&&r.shutter>0?.055:0;
@@ -167,6 +172,7 @@ const TideSignal=(()=>{
     const r=g.signal;
     if(g.stage===0&&r?.linked)return {starter:'latched'};
     if(TideTransit.active(g))return {transit:true,turn:r.turn,drift:r.drift};
+    if(g.stage===1&&r)return TideLightRegister.checkpoint(g);
     return r?.pinned?{pinned:true,closed:r.closed,turn:r.turn,drift:r.drift}:null;
   }
   function restore(g,m){
@@ -177,8 +183,9 @@ const TideSignal=(()=>{
       g.players=[w.starter,w.pilot].map(site=>({...TideTraversal.spawn(w.apron),x:site.x,y:site.y,z:site.z,yaw}));
       g.checkpoints=[w.apron,w.apron];return;
     }
+    if(g.stage===1&&m?.lightBook){TideLightRegister.restore(g,m);return;}
     if(g.stage===1&&m?.transit===true){
-      g.watch.done=true;g.field.done=true;g.signal.rpm=g.signal.trim=.66;
+      g.section.sites[0]=g.world.signal.cutout;g.watch.done=true;g.field.done=true;g.signal.rpm=g.signal.trim=.66;
       g.players=[g.world.signal.cutout,g.world.signal.radio].map(s=>({...TideTraversal.spawn(s),x:s.x,z:s.z}));
       g.checkpoints=[g.world.signal.gallery,g.world.signal.gallery];
       TideTransit.enter(g,false);
@@ -211,11 +218,17 @@ const TideSignal=(()=>{
     const s=g.world.signal.radio,uv=local(s),eye=point(uv.x,s.y+1.58,uv.z-.69);
     return [eye.x,eye.y,eye.z];
   }
-  function shot(g,side){
+  function shot(g,side,aspect=1){
     const r=g.signal,site=g.section.sites[side],u=local(site),cam=(x,y,z,tx,ty,tz,fov)=>{
       const a=point(x,y,z),b=point(tx,ty,tz);return {eye:[a.x,a.y,a.z],at:[b.x,b.y,b.z],fov};
     };
-    if(g.stage===1&&TideLookout.active(g))return null;
+    if(g.stage===1&&TideLookout.active(g)){
+      if(!side&&g.engaged[0]){
+        const fov=2*Math.atan(Math.max(.90,1.13/aspect)/(2*1.04))*180/Math.PI;
+        return cam(-2.72,2.48,6.96,-2.36,1.65,6.66,fov);
+      }
+      return null;
+    }
     if(TideTransit.active(g)){
       if(side===1)return TideTransit.camera(g);
       if(g.engaged[0])return cam(-7.60,2.95,9.00,-3.28,1.98,3.00,56);

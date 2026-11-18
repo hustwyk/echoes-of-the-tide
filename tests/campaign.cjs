@@ -3,12 +3,12 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const box=vm.createContext({});
-for(const name of ['missions','traversal','floating','warp-speech','warping','fender-speech','fenders','plate-speech','arrival-speech','stern-line','arrival','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','lookout','cistern-speech','cistern','glass-speech','chartroom','paper','lantern','gallery-speech','gallery','shift-speech','starter','transit-speech','transit','signal','tin-lines','tin-memory','archive','relay-speech','relay','soundings-speech','survey-plot','soundings','fog-speech','haul-speech','fog-recovery','fogsignal','pass-speech','lastpass','swing-speech','swing','cooperation']){
+for(const name of ['missions','traversal','floating','warp-speech','warping','fender-speech','fenders','plate-speech','arrival-speech','stern-line','arrival','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','buoy-motion','light-register','lookout','cistern-speech','cistern','glass-speech','chartroom','paper','lantern','gallery-speech','gallery','shift-speech','starter','transit-speech','transit','signal','tin-lines','tin-memory','archive','relay-speech','relay','soundings-speech','survey-plot','soundings','fog-speech','haul-speech','fog-recovery','fogsignal','pass-speech','lastpass','swing-speech','swing','cooperation']){
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../dist',name+'.js'),'utf8'),box);
 }
 const {Session,near,surface,lookout,ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideSwing,TideCistern,TideGlass,TidePaper}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideSwing,TideCistern,TideGlass,TidePaper})',box);
 const {TideFenders,TideWarping,TideFloating,TideArrival,TideSternLine}=vm.runInContext('({TideFenders,TideWarping,TideFloating,TideArrival,TideSternLine})',box);
-const {TideTransit,TideSurveyPlot}=vm.runInContext('({TideTransit,TideSurveyPlot})',box);
+const {TideTransit,TideSurveyPlot,TideLightRegister,TideBuoyMotion}=vm.runInContext('({TideTransit,TideSurveyPlot,TideLightRegister,TideBuoyMotion})',box);
 const {TideTinMemory}=vm.runInContext('({TideTinMemory})',box);
 const {TideGallery}=vm.runInContext('({TideGallery})',box);
 const empty=()=>({x:0,z:0,use:false,jump:false});
@@ -68,7 +68,18 @@ function signalInputs(g,out){
     }else if(near(p,s))out[i].use=true;
     else steer(g,i,s,out[i]);
   }
-  if(lookout.active(g)){if(out.every(k=>k.use))aimScope(g,out);return out;}
+  if(lookout.active(g)){
+    if(!out.every(k=>k.use))return out;
+    if(TideLightRegister.active(g)){
+      const b=r.register,cam=lookout.camera(g),p=TideBuoyMotion.plate(g,cam.eye);
+      const [dx,dy,dz]=p.map((v,i)=>v-cam.eye[i]);
+      out[1].x=axis((Math.atan2(dx,-dz)-cam.yaw)*42);
+      out[1].z=-axis((Math.atan2(dy,Math.hypot(dx,dz))-cam.pitch)*42);
+      out[1].jump=b.readable&&!b.reported;out[0].x=Math.sign(1-b.page);
+      out[0].jump=b.reported&&Math.abs(b.leaf-1)<.060;
+    }else aimScope(g,out);
+    return out;
+  }
   if(TideTransit.active(g)){
     const delta=TideTransit.delta(TideTransit.camera(g),TideTransit.sources(g).shore);
     out[1].x=axis(-delta.x*32);out[1].z=axis(-delta.y*32);
@@ -235,7 +246,18 @@ function relayInputs(g,out){
   if(s===w.haul&&out[1].use)out[1].x=p.ground===w.car||r.boarded?1:-1;
   if(out[1].use&&(s.kind==='file'||s===w.desk&&!r.loaded))out[1].jump=true;
   if(!r.top)return out;
-  if(lookout.active(g)){if(out.every(k=>k.use))aimScope(g,out);return out;}
+  if(lookout.active(g)){
+    if(!out.every(k=>k.use))return out;
+    if(TideLightRegister.active(g)){
+      const b=r.register,cam=lookout.camera(g),p=TideBuoyMotion.plate(g,cam.eye);
+      const [dx,dy,dz]=p.map((v,i)=>v-cam.eye[i]);
+      out[1].x=axis((Math.atan2(dx,-dz)-cam.yaw)*42);
+      out[1].z=-axis((Math.atan2(dy,Math.hypot(dx,dz))-cam.pitch)*42);
+      out[1].jump=b.readable&&!b.reported;out[0].x=Math.sign(1-b.page);
+      out[0].jump=b.reported&&Math.abs(b.leaf-1)<.060;
+    }else aimScope(g,out);
+    return out;
+  }
   const b=TideRelay.bearing(g),wind=TideRelay.winds(g);
   if(out[0].use){out[0].x=axis((b.yaw-wind.yaw-r.yaw)*18);out[0].z=-axis((b.pitch-wind.pitch-r.pitch)*21);}
   if(g.stage===0){out[0].jump=r.loaded&&r.lock>=1&&!r.voice;}
@@ -1279,6 +1301,38 @@ if(require.main===module){
   for(let n=0;n<360;n++)idleCrank.tick(step,[{...empty(),use:true},control(idleCrank)[1]]);
   assert.ok(!twoWheels.linked&&twoWheels.rpm<.5&&twoWheels.drivenSpin>0);
   reach(idleCrank,()=>twoWheels.linked);
+  {
+    const level=()=>{const g=new Session(2);g.stage=1;g.begin();return g;};
+    const g=level(),book=g.signal.register;
+    function hold(g,{left=false,right=false,turn=0,zoom=0}={}){
+      const k=control(g);
+      if(k[0].use)k[0].x=turn;
+      k[0].jump=left;k[1].jump=right;k[1].magnify=zoom;g.tick(step,k);
+    }
+    for(let n=0;n<500&&!g.engaged.every(Boolean);n++)hold(g);
+    assert.ok(g.engaged.every(Boolean));assert.equal(book.page,0);
+    hold(g,{left:true});assert.ok(!book.reported&&!g.watch.step);
+    const cam=lookout.camera(g),[x,y,z]=TideBuoyMotion.lamp(g).map((v,i)=>v-cam.eye[i]);
+    g.watch.yaw+=Math.atan2(x,-z)-cam.yaw;g.watch.pitch=Math.atan2(y,Math.hypot(x,z));
+    g.tick(step,[{...empty(),use:true},{...empty(),use:true,jump:true}]);
+    assert.equal(g.watch.seen,'buoy');assert.ok(!book.readable&&!book.reported);
+    for(let n=0;n<200;n++)hold(g,{zoom:1});
+    assert.ok(g.watch.magnification>3.49&&book.readable&&!book.reported);
+    hold(g,{right:true});assert.ok(book.reported);assert.equal(g.signal.voice,'bookCall');
+    const report=TideSignal.checkpoint(g);assert.equal(report.step,0);
+    const saved=level();TideSignal.restore(saved,report);assert.ok(saved.signal.register.reported);
+    hold(saved);hold(saved,{left:true});assert.equal(saved.watch.step,0);
+    assert.match(saved.signal.register.feedback[0],/不符/);assert.ok(saved.signal.register.reported);
+    hold(g,{turn:1,left:true});assert.equal(g.watch.step,0);assert.equal(book.cue,'leafTurn');
+    for(let n=0;n<20;n++)hold(g);
+    hold(g,{left:true});assert.equal(g.watch.step,1);assert.equal(book.cue,'pencilTick');
+    assert.ok(book.matchPending&&book.signedAt>0);
+    for(let n=0;n<200&&g.signal.voice==='bookCall';n++)hold(g);
+    assert.equal(g.signal.voice,'bookMatch');
+    const signed=level();TideSignal.restore(signed,TideSignal.checkpoint(g));assert.equal(signed.watch.step,1);
+    assert.equal(signed.signal.register.page,1);assert.notEqual(signed.signal.register.signedAt,null);
+    reach(signed,()=>signed.watch.done);assert.equal(signed.section.sites[0],signed.world.signal.cutout);
+  }
   const station=new Session(2),range=station.signal,w=station.world.signal;
   reach(station,()=>station.near.every(Boolean));
   for(let n=0;n<300;n++)station.tick(step,[{...empty(),use:true,z:1},{...empty(),use:true,jump:true}]);

@@ -15,11 +15,8 @@ const TideTransit=(()=>{
     if(announce){speak(g,'readback');g.events.checkpoint?.(g);}
   }
   function sources(g){
-    const t=g.time,shore=TideSignal.point(0,4.305,-.82),p=TideLookout.point(g,'buoy');
-    // Same XYZ Euler tilt as the marker mesh, including the float's lateral displacement.
-    const a=.08*Math.sin(t*.79),b=.095*Math.sin(t*.88),h=2.99;
-    const x=-h*Math.sin(b)*Math.cos(.5),y=h*Math.cos(b),z=h*Math.sin(b)*Math.sin(.5);
-    return {shore:[shore.x,shore.y,shore.z],buoy:[p[0]+x,p[1]-2.97+y*Math.cos(a)-z*Math.sin(a),p[2]+y*Math.sin(a)+z*Math.cos(a)]};
+    const shore=TideSignal.point(0,4.305,-.82);
+    return {shore:[shore.x,shore.y,shore.z],buoy:TideBuoyMotion.lamp(g)};
   }
   function camera(g){
     const r=g.signal,t=g.time,s=TideSignal.ship(g,t);

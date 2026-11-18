@@ -6,7 +6,7 @@ window.TideTransitOptics = (() => {
     const marker = scene.getObjectByName('旧绿标');
     if (!g.signal || !marker) return { update() {}, dispose() {} };
 
-    // The rear lamp's PointLight and the glass cylinder in the buoy are the physical datums.
+    // The rear lamp's PointLight and the lens centre in the floating lantern are the physical datums.
     const rear = TideSignal.point(0, 4.265, -.82);
     const shore = new T.Vector3(rear.x, rear.y, rear.z);
     const buoy = new T.Vector3();
@@ -58,7 +58,7 @@ window.TideTransitOptics = (() => {
     lens.userData.noSeaReflection=true;
     scene.add(lens);
     function update(g) {
-      marker.localToWorld(buoy.set(0,2.99,0));
+      marker.localToWorld(buoy.set(0,TideBuoyMotion.lampHeight,0));
       uniforms.rearPower.value=T.MathUtils.clamp(g.cues.rangeGreen||0,0,1);
       uniforms.density.value=scene.fog?.density || 0;
     }

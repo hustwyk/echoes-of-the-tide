@@ -552,26 +552,10 @@ window.TideCoast = (() => {
     beam.rotation.y=Math.PI*.86;
 
     const marker=new T.Group();marker.name='旧绿标';group.add(marker);
-    const greenMetal=standard(0x346452,.48,.58,paint);
-    function buoyRing(y,diameter,height,m){
-      const obj=mesh(shapes.round,m,0,y,0,marker);
-      obj.scale.set(diameter,height,diameter);
-    }
-    buoyRing(.06,2.18,.65,black);
-    buoyRing(.49,1.76,.31,greenMetal);
-    buoyRing(1.6,.24,2.25,iron);
-    buoyRing(2.67,.88,.22,greenMetal);
-    buoyRing(2.99,.49,.48,cool);
-    const buoyCap=mesh(shapes.roof,greenMetal,0,3.45,0,marker);
-    buoyCap.scale.set(.88,.48,.88);
-    for(let i=0;i<4;i++){
-      const a=i*TAU/4;
-      const lo=new T.Vector3(.71*Math.sin(a),.58,.71*Math.cos(a));
-      const hi=new T.Vector3(.27*Math.sin(a),2.65,.27*Math.cos(a));
-      const strut=mesh(shapes.slim,greenMetal,0,0,0,marker);
-      strut.position.copy(lo).lerp(hi,.5);strut.scale.set(.084,hi.distanceTo(lo),.084);
-      strut.quaternion.setFromUnitVectors(yAxis,hi.sub(lo).normalize());
-    }
+    const buoyBody=TideBuoyBody.create(marker),buoyLantern=TideBuoyLantern.create(marker);
+    const buoyFoam=TideBuoyFoam.create(group,water);
+    const buoySwell=index===8?TideSoundings.swell:TideLookout.swell;
+    const seaHeight=(x,z,time)=>water.position.y+buoySwell(x,z,time);
     const marks=TideLookout.marks;
     if(index===11){
       const pile=new T.Group();pile.position.set(marks.stump.x,0,marks.stump.z);group.add(pile);
@@ -799,8 +783,9 @@ window.TideCoast = (() => {
         const strength=T.MathUtils.clamp(cues.light||0,0,1);
         water.position.y=Number.isFinite(cues.water)?cues.water:-4;
         surf?.update(t,water.position.y);
-        marker.position.set(marks.buoy.x,water.position.y+(index===8?TideSoundings.swell:TideLookout.swell)(marks.buoy.x,marks.buoy.z,t),marks.buoy.z);
-        marker.rotation.set(.08*Math.sin(t*.79),.5,.095*Math.sin(t*.88));
+        const float=TideBuoyMotion.pose(index,t,water.position.y);
+        marker.position.set(float.x,float.y,float.z);marker.rotation.set(float.rx,float.ry,float.rz);
+        buoyFoam.update(float,seaHeight,t);
         const angle=Number.isFinite(cues.angle)?cues.angle:Math.sin(t*.14)*.32;
         beam.rotation.y=angle;
         beamMat.uniforms.uPower.value=strength;
@@ -825,7 +810,7 @@ window.TideCoast = (() => {
       dispose(){
         if(disposed)return;
         disposed=true;
-        surf?.dispose();scene.remove(group);
+        buoyFoam.dispose();buoyLantern.dispose();buoyBody.dispose();surf?.dispose();scene.remove(group);
         if(scene.background===sky || scene.background===fogColor){
           scene.background=previous.background;
           scene.backgroundIntensity=previous.intensity;
