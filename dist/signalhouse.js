@@ -5,14 +5,15 @@ const TideSignalHouse=(()=>{
     const owned=new Set(),own=a=>(owned.add(a),a),root=new T.Group(),origin=TideSignal.point(0,0,0);
     root.position.set(origin.x,0,origin.z);root.rotation.y=TideSignal.yaw;scene.add(root);
     const paint=TideSteel.material(0,own,true),plate=TideSteel.material(1,own);
-    const concrete=own(TideConcrete.material(0xc1bba9,-3.6));
+    const concrete=own(TideConcrete.material(0xadad9d,-3.6));
+    const paving=own(TideConcrete.material(0xd1d3cb,-3.6));
+    const apron=TideRainApron.create(scene,paving,own);
     const metal=(c,m=.62,r=.39)=>own(new T.MeshStandardMaterial({color:c,metalness:m,roughness:r}));
-    const iron=metal(0x343d3d),bronze=metal(0xb6874f,.76,.33),copper=metal(0x925539,.77,.31);
-    const black=metal(0x181e20,.25,.64),white=metal(0xdccda6,.15,.52),red=metal(0x9d4734);
+    const iron=metal(0x343d3d),bronze=metal(0xb6874f,.76,.33);
+    const black=metal(0x181e20,.25,.64),white=metal(0xdccda6,.15,.52);
     const green=metal(0x426756),yellow=metal(0xcfaa5c,.52,.47);
     const glass=metal(0x20573e,.26,.24);glass.emissive.setHex(0x3cffa1);
-    const pilot=metal(0x996f38,.13,.20);pilot.emissive.setHex(0xffb765);
-    const tx=own(new T.BoxGeometry(1,1,1)),cy=own(new T.CylinderGeometry(.5,.5,1,32)),ring=own(new T.TorusGeometry(1,.095,10,64)),rim=own(new T.TorusGeometry(1,.016,8,64)),bolt=own(new T.CylinderGeometry(.5,.5,1,6));
+    const tx=own(new T.BoxGeometry(1,1,1)),cy=own(new T.CylinderGeometry(.5,.5,1,32)),ring=own(new T.TorusGeometry(1,.095,10,64)),rim=own(new T.TorusGeometry(1,.016,8,64));
     const all=new Map(),dummy=new T.Object3D(),v=new T.Vector3(),up=new T.Vector3(0,1,0);
     function group(parent,x,y,z){
       const n=new T.Group();n.position.set(x,y,z);parent.add(n);return n;
@@ -51,7 +52,7 @@ const TideSignalHouse=(()=>{
       const p=TideSignal.local(floor),cols=Math.ceil(floor.w/2.15),rows=Math.ceil(floor.d/1.55);
       box(root,concrete,p.x,floor.y-.40,p.z,floor.w,.65,floor.d);
       for(let a=0;a<cols;a++)for(let j=0;j<rows;j++){
-        box(root,floor===w.head?plate:concrete,p.x+floor.w*((a+.5)/cols-.5),floor.y-.065,p.z+floor.d*((j+.5)/rows-.5),floor.w/cols-.022,.13,floor.d/rows-.018);
+        box(root,floor===w.head?plate:paving,p.x+floor.w*((a+.5)/cols-.5),floor.y-.065,p.z+floor.d*((j+.5)/rows-.5),floor.w/cols-.022,.13,floor.d/rows-.018);
       }
       if(floor.d>3||floor===w.head)for(const sx of [-1,1])for(const sz of [-1,1]){
         const x=p.x+sx*(floor.w*.5-.40),z=p.z+sz*(floor.d*.5-.48);
@@ -70,60 +71,13 @@ const TideSignalHouse=(()=>{
     rails(-6.53,17.78,-6.53,10,0);rails(6.53,17.78,6.53,10,0);
     rails(-6.53,8.5,-6.53,5.65,.66);rails(-6.45,5.6,-1.10,5.6,.66);
     rails(6.42,8.55,6.42,2.80,.66);rails(2.05,2.70,6.40,2.70,.66);
-    // The flywheel, armature and copper field windings turn on one shaft.
-    const fly=group(root,-3.82,1.25,11.73),gen=group(root,-3.82,.06,11.37);
-    box(gen,paint,0,.16,0,2.86,.32,1.64);box(gen,iron,0,.36,-.22,2.22,.18,1.12);
-    for(const x of [-1.11,1.08])for(const z of [-.57,.55])stamp(gen,bolt,bronze,x,.345,z,.13,.09,.13);
-    cyl(gen,green,0,1.18,-.28,1.23,.93,1.23,Math.PI/2);
-    for(let j=0;j<20;j++)cyl(gen,j%4===0?iron:copper,0,1.18,-.89+j*.050,1.30,.033,1.30,Math.PI/2);
-    for(const x of [-.87,.87]){box(gen,paint,x,.77,-.09,.35,.86,1.06);box(gen,bronze,x,1.23,-.10,.38,.115,.81);}
-    hoop(fly,iron,0,0,0,.96);stamp(fly,rim,bronze,0,0,.082,.96,.96,.96);
-    cyl(fly,paint,0,0,.03,.31,.31,.31,Math.PI/2);
-    for(let j=0;j<8;j++){const a=j*TAU/8;bar(fly,green,[.10*Math.cos(a-.22),.10*Math.sin(a-.22),.005],[.94*Math.cos(a),.94*Math.sin(a),.005],.064);}
-    // The ratchet turns the main shaft. A smaller pulley drives the oil pump.
-    const pump=group(root,-5.11,.80,11.75),deltaX=pump.position.x-fly.position.x,deltaY=pump.position.y-fly.position.y;
-    const separation=Math.hypot(deltaX,deltaY),ratio=(.60-.26)/separation;
-    const beltNormal=Math.atan2(deltaY,deltaX),beltAngle=Math.acos(ratio);
-    for(const sign of [-1,1]){
-      const a=beltNormal+sign*beltAngle,nx=Math.cos(a),ny=Math.sin(a);
-      bar(gen,black,[.60*nx,1.19+.60*ny,.24],[deltaX+.26*nx,1.19+deltaY+.26*ny,.24],.041);
-    }
-    hoop(fly,black,0,0,-.12,.60);hoop(pump,black,0,0,-.14,.26);
-    cyl(pump,copper,0,0,-.16,.42,.22,.42,Math.PI/2);
-    for(let j=0;j<12;j++){
-      const a=j*TAU/12;stamp(fly,bolt,bronze,.211*Math.sin(a),.211*Math.cos(a),.111,.051,.031,.051,Math.PI/2);
-    }
-    cyl(fly,paint,0,0,.065,.53,.078,.53,Math.PI/2);
-    cyl(fly,bronze,0,0,.17,.154,.104,.154,Math.PI/2);
-    for(let j=0;j<7;j++)box(gen,green,-.59+j*.195,1.40,-.35,.069,.79,.83);
-    bar(gen,copper,[-1.15,.47,.09],[-1.15,1.10,.09],.036);
-    bar(gen,copper,[-1.15,1.10,.09],[-.80,1.10,.09],.036);
-    cyl(gen,bronze,-1.15,1.19,.09,.16,.13,.16);
-    const handle=group(root,-3.85,.51,12.28);
-    bar(handle,red,[0,0,0],[0,.58,.24],.037);bar(handle,black,[-.29,.58,.24],[.29,.58,.24],.04);
+    const benches=[TideStarterBench.create(root,own),TideClutchBench.create(root,own)];
     const pegs=(parent,a,b)=>[group(parent,...a),group(parent,...b)];
-    const crankHands=pegs(handle,[-.18,.58,.24],[.18,.58,.24]);
-    label(gen,-.81,.59,.62,.64,.20,'北岬機械工場');
-    for(let j=0;j<5;j++)for(const x of [-1,1]){
-      box(gen,iron,x*.89,.63+j*.095,.472,.28,.032,.055);
-    }
     const install=(s,type,i)=>{
       const pos=TideSignal.local(s),dev=equipment.device(type,i);
       dev.position.set(pos.x,s.y,pos.z-.65);root.add(dev);return dev;
     };
-    const clutch=install(w.pilot,'breaker',1),cutout=install(w.cutout,'breaker',0),radio=install(w.radio,'radio',1);
-    const dial=group(root,3.67,1.33,12.10);
-    cyl(dial,bronze,0,0,0,.73,.10,.73,Math.PI/2);cyl(dial,white,0,0,.063,.65,.038,.65,Math.PI/2);
-    for(let j=0;j<=26;j++){
-      const a=-1.98+j/26*3.96,x=Math.sin(a)*.270,y=Math.cos(a)*.270;
-      box(dial,j>=13&&j<=21?green:black,x,y,.087,.011,j%2?.031:.058,.008,0,0,-a);
-    }
-    const tach=group(dial,0,0,.10),needle=group(dial,0,0,.117);
-    box(tach,black,0,.134,0,.018,.267,.010);box(needle,red,0,.097,0,.021,.207,.009);
-    cyl(dial,bronze,0,0,.14,.056,.019,.056,Math.PI/2);
-    label(dial,0,-.17,.092,.31,.084,'飛輪　RPM','#d7c9ac','#2f3834');
-    cyl(dial,iron,.54,-.085,.04,.18,.09,.18,Math.PI/2);cyl(dial,pilot,.54,-.085,.099,.135,.035,.135,Math.PI/2);
-    box(root,paint,3.68,.63,11.75,2.24,1.23,.44);label(root,3.72,.95,11.988,1.54,.30,'機　房　／　試　燈');
+    const cutout=install(w.cutout,'breaker',0),radio=install(w.radio,'radio',1);
     // Porcelain insulators and rain loops take the restored feed to the seaward light.
     for(const x of [-5.75,-5.0])for(const z of [11.62,7.28]){
       cyl(root,iron,x,1.12,z,.09,2.23,.09);
@@ -202,20 +156,29 @@ const TideSignalHouse=(()=>{
       mesh.receiveShadow=true;mesh.castShadow=true;parent.add(mesh);
     }
     const handVectors=[0,1].map(()=>[new T.Vector3(),new T.Vector3()]);
+    function shot(g,i,aspect){
+      const q=benches[i].shot(aspect),world=a=>{const p=TideSignal.point(...a);return [p.x,p.y,p.z];};
+      if(i&&g.signal.linked){
+        const weight=T.MathUtils.smoothstep(g.time-g.signal.foley.seat,.28,1.03);
+        const at=[3.70,1.30,12.34],padding=Math.max(1,.77/Math.max(.38,aspect));
+        const eye=[at[0]+1.46*padding,at[1]+.37*padding,at[2]+.73*padding];
+        for(let k=0;k<3;k++){q.eye[k]=T.MathUtils.lerp(q.eye[k],eye[k],weight);q.at[k]=T.MathUtils.lerp(q.at[k],at[k],weight);}
+        q.fov=T.MathUtils.lerp(q.fov,47,weight);
+      }
+      return {...q,eye:world(q.eye),at:world(q.at)};
+    }
     function hands(g,i){
       let nodes;
-      if(g.stage===0&&i===0)nodes=crankHands;
+      if(g.stage===0)return benches[i].hands();
       if(g.stage===2&&i===0)nodes=shadeHands;
       if(g.stage===2&&i===1&&!g.signal.pinned)nodes=chainHands;
       if(nodes)return nodes.map((n,j)=>n.getWorldPosition(handVectors[i][j]));
-      return equipment.grips(g.stage===0?clutch:i?radio:cutout);
+      return equipment.grips(i?radio:cutout);
     }
     function update(g){
       const r=g.signal;
-      fly.rotation.z=-r.spin;pump.rotation.z=-r.spin*.60/.26;handle.rotation.x=-.30+r.stroke*.82;
-      equipment.drive(clutch,r.trim,g.time);equipment.drive(cutout,r.shutter,g.time);equipment.drive(radio,r.mic==='sending'?1:0,g.time);
-      tach.rotation.z=1.98-r.rpm*3.96;needle.rotation.z=1.98-r.trim*3.96;
-      pilot.emissiveIntensity=r.linked?2.8:Math.max(0,r.rpm-.25)*.38;
+      for(const bench of benches)bench.update(r,g.time);
+      equipment.drive(cutout,r.shutter,g.time);equipment.drive(radio,r.mic==='sending'?1:0,g.time);
       const lens=g.cues.rangeGreen||0;
       glass.emissiveIntensity=.025+lens*4.1;glowMaterial.opacity=lens*.86;lampLight.intensity=lens*4;
       slats.forEach((v,j)=>v.rotation.y=j*TAU/12+r.shutter*1.52);
@@ -224,7 +187,7 @@ const TideSignalHouse=(()=>{
       wire.scale.set(.032,d.length(),.032);wire.position.copy(a).lerp(b,.5);wire.quaternion.setFromUnitVectors(up,d.normalize());
     }
     update(g);
-    return {hands,update,dispose(){root.removeFromParent();root.traverse(n=>{if(n.isInstancedMesh)n.dispose();});for(const a of owned)a.dispose();}};
+    return {hands,shot,update,apron,dispose(){apron.dispose();for(const bench of benches)bench.dispose();root.removeFromParent();root.traverse(n=>{if(n.isInstancedMesh)n.dispose();});for(const a of owned)a.dispose();}};
   }
   return {create};
 })();

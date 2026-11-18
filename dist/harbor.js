@@ -307,7 +307,7 @@ const TideHarbor = (() => {
         const pose=acting||this.presented(g,i,alpha);
         obj.position.set(pose.x,pose.y,pose.z);obj.rotation.y=pose.yaw;
         const goal=targetFor(g,i).p;this.halos[i].position.set(goal.x,goal.y+.065,goal.z);
-        this.halos[i].visible=g.fog?.haul||TideGallery.active(g)?false:TideFenders.active(g)?!g.near[i]&&!(i===1&&g.fenders.seen[1]&&!g.fenders.top[1]):(!g.glass&&!g.cistern)||!g.near[i];if(g.cable?.warp.clipped&&g.near[i])this.halos[i].visible=false;this.halos[i].scale.setScalar(1+.075*Math.sin(t*3+i));
+        this.halos[i].visible=g.fog?.haul||TideGallery.active(g)?false:TideFenders.active(g)?!g.near[i]&&!(i===1&&g.fenders.seen[1]&&!g.fenders.top[1]):(!g.glass&&!g.cistern)||!g.near[i];if(g.cable?.warp.clipped&&g.near[i])this.halos[i].visible=false;if(g.signal&&g.stage===0&&g.near[i])this.halos[i].visible=false;this.halos[i].scale.setScalar(1+.075*Math.sin(t*3+i));
         const drivingValve=g.spec.mode==='raft'&&i===g.spec.driver;
         const v=g.pilotHorn?(i?g.pilotHorn.valve:g.pilotHorn.spin%1):g.lastPass&&!i?(g.lastPass.wheel+1.62)/1.19:drivingValve ? .5+.45*g.rig.flow : g.spec.type==='ride'?g.state.ferry:g.state.dials[i];
         this.equipment.drive(g.section.devices[i],v,t);
@@ -324,17 +324,20 @@ const TideHarbor = (() => {
         const relayHands=transfer&&!acting?this.swingYard.hands(g,i):g.cistern?(acting?this.cisternRoom.filmHands(g,i,this.cinema.time):this.cisternRoom.hands(g,i)):g.glass&&!acting?this.glassRoom.hands(g,i):g.fog&&!acting?this.fogHouse.hands(g,i):g.survey&&!acting?this.tideStation.hands(g,i):g.relay&&!acting?this.relayStation.hands(g,i):null;
         const berth=TideFenders.active(g)&&!acting;
         const grips=TideGallery.active(g)?(g.gallery.phase==='file'?this.gallerySlip.grips(g,i):this.galleryGear.grips(g,i)):TideArrival.active(g)?this.arrivalRig.grips(i):berth?(g.fenders.grip[i]?this.fenderYard.hands(g.fenders.grip[i],p):null):g.glass&&!acting?(relayHands||(using&&g.glass.phase==='desk'?this.paperGrips(g,i):null)):transfer||g.cistern||g.fog||g.survey||g.relay?relayHands:(carryingTester?this.cableYard.testerHands(g):carryingLead?this.cableYard.leadHands(g):using&&g.cable?this.cableYard.hands(g,i):hanging?this.belayGrips(p,g.rig.belay.anchor):carry?this.archiveStudio.carryGrips(g,i):!using?null:g.landfall?this.floodRoom.hands(TideLandfall.targets(g)[i].kind):g.archive?(g.archive.location[i]==='desks'?this.archiveStudio.desks[i].hands():this.archiveStudio.shelfGrips(g,i)):g.signal?(this.transitRig.hands(g,i)||this.signalhouse.hands(g,i)):g.optic?this.lanternroom.hands(g,i):movingGrip?this.bridgework.hands(g.section,i):paper?this.paperGrips(g,i):this.equipment.grips(device));
+        const starterLine=g.signal&&g.stage===0&&TideShiftSpeech[g.signal.voice];
         const haulLine=g.fog&&TideHaulSpeech[g.fog.voice];
         const workSpeed=g.optic?.mount&&!g.optic.mount.done&&using?g.optic.mount.speed||0:p.speed;
         TideActors.animate(obj, {speed:acting?0:workSpeed,vx:p.vx,vz:p.vz,vy:p.vy,yaw:pose.yaw,launch:p.launch,landing:p.landing,
           groundFloor:ready&&!acting?p.ground:null,groundWorld:g.world,
           slopeX:p.ground?.axes?.nx||0,slopeZ:p.ground?.axes?.nz||0,
           swing:transfer&&g.swing.occupied&&i===g.swing.rider?{angle:g.swing.angle,omega:g.swing.omega,phase:'ride',effort:g.swing.effort}:null,
-          wall:berth&&i?g.fenders.wall:null,pointAt:!acting&&ready?this.pointing.pointAt(i,g.time):null,grounded:p.grounded,climbing:!!g.gallery?.arrests[i]||(berth&&!i&&g.fenders.onLadder)||(!i&&!!g.relay?.climb)||!!g.swing?.climb[i],operating:TideArrival.active(g)?!!grips:!!relayHands||using||carryingTester||carryingLead||carry||hanging,grips,helmSeat:i&&TideArrival.active(g)?this.arrivalRig.seat():null,talking:haulLine?haulLine.speaker===(i?'沈遥':'林澈')&&(haulLine.mouth?.levels[Math.floor(g.fog.clock*20)]||0)>10:TideGallery.active(g)?!!(g.gallery.voice&&TideGallerySpeech[g.gallery.voice].speaker===(i?'沈遥':'林澈')&&(TideGallerySpeech[g.gallery.voice].mouth?.levels[Math.floor(g.gallery.clock*20)]||0)>10):TideArrival.active(g)&&g.arrival.voice&&(TideArrival.speech(g.arrival.voice).speaker===(i?'沈遥':'林澈'))&&
+          wall:berth&&i?g.fenders.wall:null,pointAt:!acting&&ready?this.pointing.pointAt(i,g.time):null,grounded:p.grounded,climbing:!!g.gallery?.arrests[i]||(berth&&!i&&g.fenders.onLadder)||(!i&&!!g.relay?.climb)||!!g.swing?.climb[i],operating:TideArrival.active(g)?!!grips:!!relayHands||using||carryingTester||carryingLead||carry||hanging,grips,helmSeat:i&&TideArrival.active(g)?this.arrivalRig.seat():null,talking:starterLine?starterLine.speaker===(i?'沈遥':'林澈')&&(starterLine.mouth.levels[Math.floor(g.signal.clock*starterLine.mouth.hz)]||0)>10:haulLine?haulLine.speaker===(i?'沈遥':'林澈')&&(haulLine.mouth?.levels[Math.floor(g.fog.clock*20)]||0)>10:TideGallery.active(g)?!!(g.gallery.voice&&TideGallerySpeech[g.gallery.voice].speaker===(i?'沈遥':'林澈')&&(TideGallerySpeech[g.gallery.voice].mouth?.levels[Math.floor(g.gallery.clock*20)]||0)>10):TideArrival.active(g)&&g.arrival.voice&&(TideArrival.speech(g.arrival.voice).speaker===(i?'沈遥':'林澈'))&&
             (TideArrival.speech(g.arrival.voice).mouth?.levels[Math.floor(g.arrival.voiceAt*20)]||0)>12,...acting},dt,t);
+        if(g.stage===0&&g.signal&&!acting)TideStarterPose.apply(obj,g,i,dt,t,grips);
         if(i&&g.arrival&&!acting&&this.arrivalRig)TidePlatePose.apply(obj,g,dt,t,this.arrivalRig.plate);
         if(!i&&g.fog&&!acting)TideHaulPose.apply(obj,g,dt,t,this.fogHouse.haul);
       }
+      this.signalhouse?.apron.update(g,this.actors);
       this.contactSurf?.update(g,t);this.footlight.update();
       this.dockside?.update(g,dt);this.fieldProps?.update(g,dt);this.cinema.update(g,dt);
       this.sightlines.update();
@@ -370,7 +373,7 @@ const TideHarbor = (() => {
         }
         const paperView=ready&&g.paper&&(!g.glass||g.glass.phase==='desk')&&g.field.done&&g.engaged[i];
         const lanternShot=ready&&g.optic&&!TideGallery.active(g)?TideLantern.shot(g,i):null;
-        const signalShot=ready&&g.signal?TideSignal.shot(g,i):null;
+        const signalShot=ready&&g.signal?(g.stage===0&&g.engaged[i]?this.signalhouse.shot(g,i,vw/height):TideSignal.shot(g,i)):null;
         const floodShot=ready&&g.landfall?this.floodRoom.shot(g,i):null;
         const belay=g.rig?.belay;
         const ledge=belay?g.section.rig.ledge:null;

@@ -3,7 +3,7 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const box=vm.createContext({});
-for(const name of ['missions','traversal','floating','warp-speech','warping','fender-speech','fenders','plate-speech','arrival-speech','arrival','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','lookout','cistern-speech','cistern','glass-speech','chartroom','paper','lantern','gallery-speech','gallery','transit-speech','transit','signal','tin-lines','tin-memory','archive','relay-speech','relay','soundings-speech','soundings','fog-speech','haul-speech','fog-recovery','fogsignal','pass-speech','lastpass','swing-speech','swing','cooperation']){
+for(const name of ['missions','traversal','floating','warp-speech','warping','fender-speech','fenders','plate-speech','arrival-speech','arrival','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','lookout','cistern-speech','cistern','glass-speech','chartroom','paper','lantern','gallery-speech','gallery','shift-speech','starter','transit-speech','transit','signal','tin-lines','tin-memory','archive','relay-speech','relay','soundings-speech','soundings','fog-speech','haul-speech','fog-recovery','fogsignal','pass-speech','lastpass','swing-speech','swing','cooperation']){
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../dist',name+'.js'),'utf8'),box);
 }
 const {Session,near,surface,lookout,ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideSwing,TideCistern,TideGlass,TidePaper}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideSwing,TideCistern,TideGlass,TidePaper})',box);
@@ -77,8 +77,11 @@ function signalInputs(g,out){
     return out;
   }
   if(g.stage===0){
-    if(out[0].use)out[0].z=r.rpm<.66?(r.armed?1:-1):0;
-    if(out[1].use){out[1].x=axis((r.rpm-r.trim)*8);out[1].jump=r.rpm>.55&&Math.abs(r.trim-r.rpm)<.09;}
+    if(out[0].use)out[0].z=r.rpm<.65?(r.armed?1:-1):0;
+    if(out[1].use){
+      out[1].x=axis((r.rpm-r.trim)*8);out[1].jump=r.coupling==='open'&&r.rpm>.55&&Math.abs(r.trim-r.rpm)<.09;
+      if(r.coupling==='feed')out[1].z=r.shift<.52||r.drivenRPM>.48&&Math.abs(r.rpm-r.drivenRPM)<.12?-1:0;
+    }
   }else{
     if(g.stage===1&&out[0].use){out[0].x=axis((.68-r.trim)*9);out[0].jump=r.shutter===0&&r.rpm>.59&&r.rpm<.75;}
     if(g.stage===2&&!r.pinned){
@@ -1170,6 +1173,36 @@ if(require.main===module){
   restoredKeys.tick(step,press(1,true));
   assert.ok(!restoredKeys.archive.keys.held&&!restoredKeys.complete&&!restoredKeys.archive.keys.accepted);
   reach(restoredKeys,()=>restoredKeys.complete);assert.ok(restoredKeys.archive.keys.accepted);
+  // A matched pointer releases the gate. Inertia, plate pressure and a second player's
+  // work decide whether the generator actually joins the input shaft.
+  const engine=new Session(2),starter=engine.signal;
+  reach(engine,()=>starter.coupling==='feed');
+  const strokesAtRelease=starter.strokes;
+  for(let n=0;n<90;n++){const k=control(engine);k[1].z=0;engine.tick(step,k);}
+  assert.equal(starter.shift,0);assert.equal(starter.drivenRPM,0);assert.equal(starter.linked,false);
+  for(let n=0;n<120&&starter.coupling==='feed';n++){
+    const k=control(engine);k[1].z=-1;engine.tick(step,k);
+  }
+  assert.equal(starter.coupling,'return');assert.equal(starter.slips,1);assert.ok(starter.foley.scrape>0);
+  for(let n=0;n<60;n++){const k=control(engine);k[1].z=-1;engine.tick(step,k);}
+  assert.equal(starter.shift,0);assert.equal(starter.coupling,'return');
+  assert.ok(starter.drivenRPM>0);assert.equal(engine.setbacks,0);
+  reach(engine,()=>starter.coupling==='feed'&&starter.shift>.38);
+  for(let n=0;n<34;n++)engine.tick(step,[control(engine)[0],empty()]);
+  assert.equal(starter.coupling,'open');assert.equal(starter.shift,0);
+  reach(engine,()=>starter.linked);
+  assert.ok(starter.strokes>strokesAtRelease&&starter.drivenRPM>=.46&&starter.foley.seat>starter.foley.scrape);
+  const rejoined=new Session(2);TideSignal.restore(rejoined,TideSignal.checkpoint(engine));
+  assert.ok(rejoined.signal.linked&&rejoined.signal.shift===1&&!rejoined.signal.shutter);
+  assert.equal(rejoined.signal.foley.seat,-10);
+  reach(rejoined,()=>rejoined.stage===1);
+  reach(engine,()=>engine.stage===1);
+  assert.equal(engine.signal.shutter,0);
+  const idleCrank=new Session(2),twoWheels=idleCrank.signal;
+  reach(idleCrank,()=>twoWheels.coupling==='feed');
+  for(let n=0;n<360;n++)idleCrank.tick(step,[{...empty(),use:true},control(idleCrank)[1]]);
+  assert.ok(!twoWheels.linked&&twoWheels.rpm<.5&&twoWheels.drivenSpin>0);
+  reach(idleCrank,()=>twoWheels.linked);
   const station=new Session(2),range=station.signal,w=station.world.signal;
   reach(station,()=>station.near.every(Boolean));
   for(let n=0;n<300;n++)station.tick(step,[{...empty(),use:true,z:1},{...empty(),use:true,jump:true}]);
