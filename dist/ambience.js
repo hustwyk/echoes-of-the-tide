@@ -292,7 +292,7 @@ window.TideAudioScene = (() => {
       const gust = clamp(.47 + .25 * Math.sin(t * .37 + index) + .18 * Math.sin(t * .171 + 1.8) + .09 * Math.sin(t * .83));
       const tide = type === 'tide' ? (1 + Math.cos(t * 2 * Math.PI / 5 - 1.5)) / 2 : .5 + .5 * Math.sin(t * .83 + .75 * Math.sin(t * .29));
       const both = g.engaged[0] || g.engaged[1], tuning = type === 'radio' || type === 'tape';
-      const pumpLoad = g.spec.mode==='raft' ? .23+.70*Math.abs(g.rig?.flow||0) : cellar ? .51 : type==='power'&&both ? .72 : 0;
+      const pumpLoad = g.cistern ? .13+.67*Math.abs(g.cistern.flow)+.15*g.cistern.bypass : g.spec.mode==='raft' ? .23+.70*Math.abs(g.rig?.flow||0) : cellar ? .51 : type==='power'&&both ? .72 : 0;
       const blade = .77 + .23 * Math.sin(t * (7.7 + pumpLoad));
       const whistle = high ? Math.pow(gust,2.2) * (secluded ? .13 : 1) : 0;
       const layers = run.layers;
@@ -338,7 +338,10 @@ window.TideAudioScene = (() => {
       }
     }
     function snapshot(g) {
-      return {game:g, section:g.state, stamp:g.optic?.stamp??0, guide:g.optic?.mount?.gate??0, notch:g.section.span?.notch, impact:g.section.span?.impact, cableBay:0,
+      return {game:g, section:g.state,
+        well:g.cistern?{caught:g.cistern.caught,stowed:g.cistern.cupKept,stroke:Math.floor(g.cistern.stroke*2),ports:g.cistern.ports,
+          blocked:g.cistern.blocked,moored:g.cistern.moored,basket:g.cistern.tape,hoist:Math.floor(g.cistern.hoist*8)}:null,
+        stamp:g.optic?.stamp??0, guide:g.optic?.mount?.gate??0, notch:g.section.span?.notch, impact:g.section.span?.impact, cableBay:0,
         walkers:g.players.map(p => ({ground:p.grounded, fall:0, distance:0, heel:false})),
         dials:g.state.dials.slice(), traveled:[0,0], engaged:[false,false], ratchetAt:[0,0],
         ferry:g.state.ferry, latch:g.state.latch, received:g.state.received, yes:g.state.yes[0],
@@ -386,6 +389,18 @@ window.TideAudioScene = (() => {
     }
     function changes(g, now) {
       const q = g.state, spec = g.spec, type = spec.type;
+      if(g.cistern){
+        const s=g.cistern,last=previous.well,stroke=Math.floor(s.stroke*2),link=Math.floor(s.hoist*8);
+        if(s.caught&&!last.caught){ring(now,1114,.25,.085,.54);ring(now+.026,1725,.13,.045,.50);}
+        if(s.cupKept&&!last.stowed){ring(now,878,.33,.13,.56);ring(now+.054,1291,.20,.073,.54);}
+        if(stroke!==last.stroke)brush(now,'pink','bandpass',520,1.6,.014,.19,.12,.40,.32,160);
+        if(s.blocked&&!last.blocked){click(now,.35,.76);ring(now+.02,228,.26,.11,.36);}
+        if(s.moored&&!last.moored){click(now,.40,1.02);ring(now+.06,578,.25,.10,.45);}
+        if(s.ports>last.ports)brush(now,'white','bandpass',1580,.87,.012,.69,.31,-.53,.63,480);
+        if(s.tape!==last.basket&&s.tape==='basket'){click(now,.14,.82);ring(now+.037,336,.19,.13,.15);}
+        if(link!==last.hoist)wheel(now,.42,.56);
+        Object.assign(last,{caught:s.caught,stowed:s.cupKept,stroke,ports:s.ports,blocked:s.blocked,moored:s.moored,basket:s.tape,hoist:link});
+      }
       const optic=g.optic;
       if(optic){
         if(optic.stamp>previous.stamp){

@@ -86,6 +86,7 @@ const TideTraversal = (() => {
   }
   function surfaceHeight(d,x,z){
     const a=d.axes,dx=x-d.x,dz=z-d.z;
+    if(d.cutout&&dx>d.cutout.x0+.04&&dx<d.cutout.x1+.04&&dz>d.cutout.z0+.04&&dz<d.cutout.z1-.04)return -Infinity;
     if(!a)return Math.abs(dx)<=d.w*.5+.08&&Math.abs(dz)<=d.d*.5+.08?d.y:-Infinity;
     const det=a.ux*a.vz-a.uz*a.vx;
     const u=(dx*a.vz-dz*a.vx)/det,v=(a.ux*dz-a.uz*dx)/det;

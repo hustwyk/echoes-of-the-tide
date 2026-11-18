@@ -18,9 +18,9 @@ const TideMissions = (() => {
       step('blackout','遮光与叫停',['brake','radio'],'沈遥：她真往那边转了！我提梯，你上去遮灯。')
     ],
     [
-      step('ride','降下浮架',['pump','breaker'],'林澈：浮架在高处，先把水排下去。',{driver:0,mode:'raft',length:16,rise:-1.55}),
-      step('ride','反注水越窗',['pump','brake'],'沈遥：导索锁住了。让水把我送上窗台。',{driver:0,mode:'raft',length:18,rise:2.3}),
-      step('ride','旁通管与柜顶',['tape','pump'],'沈遥：旁通管交给我。你去拿柜顶的带子。',{driver:1,mode:'raft',length:16,rise:-1.2})
+      step('cistern','取杯与下水',['pump','rake'],'沈遥：泵在响。格栅上的杯子一动不动，得先把它捞起来。'),
+      step('cistern','低管与高窗',['pump','line'],'沈遥：我在架头。先给我留一人高的净空。'),
+      step('cistern','旁通井与封存盒',['cabinet','bypass'],'林澈：上头是旁通阀，我下去看井壁的刻线。')
     ],
     [
       step('tape','童年的错带',['tape','radio'],'磁带里的沈遥：猜一猜，这是什么声音？'),

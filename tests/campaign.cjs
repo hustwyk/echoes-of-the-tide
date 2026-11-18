@@ -3,10 +3,10 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const box=vm.createContext({});
-for(const name of ['missions','traversal','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','lookout','glass-speech','chartroom','paper','lantern','signal','archive','relay-speech','relay','soundings-speech','soundings','fog-speech','fogsignal','pass-speech','lastpass','cooperation']){
+for(const name of ['missions','traversal','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','lookout','cistern-speech','cistern','glass-speech','chartroom','paper','lantern','signal','archive','relay-speech','relay','soundings-speech','soundings','fog-speech','fogsignal','pass-speech','lastpass','cooperation']){
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../dist',name+'.js'),'utf8'),box);
 }
-const {Session,near,surface,lookout,ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideGlass,TidePaper}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideGlass,TidePaper})',box);
+const {Session,near,surface,lookout,ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideCistern,TideGlass,TidePaper}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideCistern,TideGlass,TidePaper})',box);
 const empty=()=>({x:0,z:0,use:false,jump:false});
 function steer(g,i,target,keys){
   const p=g.players[i],dx=target.x-p.x,dz=target.z-p.z,dist=Math.hypot(dx,dz);
@@ -367,8 +367,45 @@ function glassInputs(g,out){
   }
   return out;
 }
+function cisternInputs(g,out){
+  const s=g.cistern,w=g.world.cistern,axis=n=>Math.max(-1,Math.min(1,n));
+  for(let i=0;i<2;i++){
+    const k=out[i],p=g.players[i],t=TideCistern.target(g,i);
+    if(TideCistern.near(g,i)){k.use=true;continue;}
+    if(i&&g.stage===0&&s.phase==='board'&&p.ground!==w.raft&&s.water>1.00){steer(g,1,w.embark,k);continue;}
+    if(!i&&g.stage===2&&s.phase==='drain'){
+      if(s.ports===2)continue;
+      if(s.ports===0&&s.well>.99||s.ports===1&&s.well>.55)continue;
+    }
+    if(!i&&g.stage===2&&p.z>w.bottom.z+1.78&&t.z<w.stairs[2].z-.45){steer(g,i,{x:w.stairs[2].x,y:w.bottom.y,z:w.bottom.z},k);continue;}
+    if(i&&g.stage===1&&s.moored&&![w.gallery,w.lip].includes(p.ground)){
+      steer(g,1,w.top,k);continue;
+    }
+    steer(g,i,t,k);
+  }
+  if(s.phase==='grate'){
+    if(out[0].use)out[0].z=1;
+    if(out[1].use){out[1].x=axis((s.cupX-s.hookX)*9);out[1].z=axis((s.cupZ-s.hookZ)*9);out[1].jump=!s.caught&&s.pressure<.24&&Math.hypot(s.hookX-s.cupX,s.hookZ-s.cupZ)<.16;}
+  }else if(s.phase==='inspect'){
+    if(out[0].use)out[0].x=axis((.82-s.water)*5-.28*s.flow);
+    if(out[1].use){out[1].x=1;out[1].jump=s.cupTurn>.92;}
+  }else if(g.stage<2){
+    if(out[0].use)out[0].x=axis(((g.stage===0?.82:s.passed?2.50:.66)-s.water)*5-.28*s.flow);
+    if(out[1].use){out[1].z=g.stage?-1:0;out[1].x=g.stage?axis(((s.passed?2.32:1.97)-s.raftX)*14):0;out[1].jump=g.stage?s.raftZ<-4.06&&Math.abs(s.deckY-2.85)<.13:Math.abs(s.deckY-1.18)<.16;}
+  }else if(s.phase==='drain'){
+    if(out[1].use)out[1].x=axis((TideCistern.stops[s.ports].open-s.bypass)*10);
+    if(out[0].use)out[0].z=-1;
+  }else if(s.phase==='cabinet'){
+    if(out[0].use){out[0].z=1;out[0].jump=s.lid>.94;}
+  }else{
+    if(out[0].use)out[0].jump=s.tape==='carried'&&s.hoist<.03;
+    if(out[1].use){out[1].z=s.tape==='carried'?1:-1;out[1].jump=s.tape==='basket'&&s.hoist>.98;}
+  }
+  return out;
+}
 function control(g){
   const out=[empty(),empty()],sec=g.section,s=g.spec,q=g.state;
+  if(g.cistern)return cisternInputs(g,out);
   if(g.glass)return glassInputs(g,out);
   if(g.fog)return fogInputs(g,out);
   if(g.survey)return surveyInputs(g,out);
@@ -866,21 +903,40 @@ if(require.main===module){
   }
   verifyBreakwater();
 
-  const pump=new Session(3);
-  reach(pump,()=>pump.rig.guider);
-  const startLevel=pump.rig.water;
-  for(let j=0;j<300;j++){
-    const inputs=control(pump);inputs[pump.spec.driver].x=1;
-    pump.tick(step,inputs);
+  {
+    const g=new Session(3),w=g.world.cistern,s=g.cistern;
+    reach(g,()=>g.engaged.every(Boolean));
+    for(let j=0;j<75;j++){const k=control(g);k[0].z=0;k[1].jump=true;g.tick(step,k);}
+    assert.ok(!s.caught&&s.pressure>.8);
+    reach(g,()=>s.catchLift>.24);
+    const lift=s.catchLift;
+    for(let j=0;j<30;j++)g.tick(step,[empty(),{...empty(),use:true}]);assert.equal(s.catchLift,lift);
+    reach(g,()=>s.cupKept);
+    const saved=TideCistern.checkpoint(g),reload=new Session(3);TideCistern.restore(reload,saved);assert.equal(reload.cistern.phase,'inspect');
+    reach(reload,()=>reload.cistern.phase==='board');assert.equal(reload.cistern.cupTurn,1);
+    reach(g,()=>g.stage===1&&g.engaged.every(Boolean));
+    for(let j=0;j<310;j++){
+      const k=control(g);k[0].x=1;k[1].x=Math.max(-1,Math.min(1,(1.97-s.raftX)*14));
+      g.tick(step,k);
+    }
+    assert.ok(s.blocked&&!s.passed&&s.raftZ>.84&&s.deckY>1.5&&!s.offTrack);
+    for(let j=0;j<290;j++){
+      const k=control(g);k[0].x=Math.max(-1,Math.min(1,(.68-s.water)*6));k[1].x=1;
+      g.tick(step,k);
+    }
+    assert.ok(s.blocked&&!s.passed&&s.deckY<1.14&&s.offTrack);
+    const sea=g.cues.water;
+    reach(g,()=>s.passed);assert.equal(g.cues.water,sea);
+    const crossing=TideCistern.checkpoint(g),back=new Session(3);back.stage=1;back.begin();TideCistern.restore(back,crossing);
+    assert.equal(back.players[1].ground,back.world.cistern.raft);assert.equal(back.cistern.raftZ,crossing.raftZ);
+    reach(g,()=>g.stage===2&&s.ports===1);
+    assert.equal(g.checkpoints[0],w.stairs[0]);
+    reach(g,()=>s.tape==='basket'&&s.hoist>.13);
+    const held=s.hoist;
+    for(let j=0;j<40;j++)g.tick(step,[empty(),{...empty(),use:true,z:-1}]);assert.equal(s.hoist,held);
+    const cargo=TideCistern.checkpoint(g),last=new Session(3);last.stage=2;last.begin();TideCistern.restore(last,cargo);
+    assert.equal(last.cistern.tape,'basket');reach(last,()=>last.complete);assert.equal(last.cistern.tape,'received');
   }
-  const keeper=pump.players[pump.spec.driver],valve=pump.section.sites[pump.spec.driver];
-  assert.ok(Math.abs(keeper.x-(valve.x+.22))<.05&&Math.abs(keeper.z-(valve.z-.512))<.05);
-  assert.ok(keeper.grounded,'The pump operator needs a solid footing throughout a valve change.');
-  assert.ok(pump.rig.water>startLevel+.70);
-  assert.ok(!pump.rig.opened&&pump.state.ferry<=.50);
-  const sea=pump.cues.water;
-  reach(pump,()=>pump.stage===1);
-  assert.equal(pump.cues.water,sea);
 
   const bridge=new Session(6),upper=bridge.section.span;
   reach(bridge,()=>bridge.engaged.every(Boolean));
@@ -1058,5 +1114,5 @@ if(require.main===module){
     quiet.tick(1/60,inputs);
   }
   assert.ok(quiet.complete&&quiet.skipTin);
-  console.log('Verified rotating inspection shoes, foghorn valve duration, separate ship receivers, a failed cam repair, visual reacquisition, matching travelling troughs, a lost tide window, real staff readings, submerged stump, shallow-channel rejection, stern readback, mast climb, transfer car, wrong file, lost negative, individual signatures, both roles, short–long keying, cable drop and preserved saddle, unlit crane window, shore return loop, ferry readback, swinging belay, floodgate collision and pin, emergency radio reception, basket mark, hydraulic sill, two drawbridge catches, folding staff, shared cable car, lantern shutters, optical carriage and saved guide positions, tape transport, wrong splices, cabinet keys, paper registration, final radio release and optional recording.');
+  console.log('Verified rotating inspection shoes, foghorn valve duration, separate ship receivers, a failed cam repair, visual reacquisition, matching travelling troughs, a lost tide window, real staff readings, submerged stump, shallow-channel rejection, stern readback, mast climb, transfer car, wrong file, lost negative, individual signatures, both roles, short–long keying, cable drop and preserved saddle, unlit crane window, shore return loop, ferry readback, swinging belay, floodgate collision and pin, emergency radio reception, basket mark, the pump relief, enamel cup, lateral and vertical raft clearance, stair cocks and two-person tape hoist, two drawbridge catches, folding staff, shared cable car, lantern shutters, optical carriage and saved guide positions, tape transport, wrong splices, cabinet keys, paper registration, final radio release and optional recording.');
 }
