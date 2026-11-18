@@ -12,17 +12,27 @@ const TideLookout=(()=>{
     const task=watch[g.index+'/'+g.stage];
     g.watch=task?{task,done:false,step:0,yaw:0,pitch:-.13,seen:null,marked:null,settle:0}:null;
   }
+  const marks={buoy:{x:-42,z:-120},stump:{x:-30,z:-116},ship:{x:-17,z:-110}};
+  // Matches the four displacement waves in the ocean vertex shader.
+  function swell(x,z,t){
+    return .46*Math.sin(x*.23+z*.11+t*1.12)+.34*Math.sin(-x*.17+z*.29-t*.88)+.18*Math.sin(x*.49-z*.41+t*1.42)+.09*Math.sin(x*.81+z*.62-t*1.64);
+  }
+  function vessel(g,t){
+    const f=g.cues.rescue;
+    const x=marks.ship.x-16*f+Math.sin(t*.055)*1.8,z=marks.ship.z-12*f;
+    return [x,g.cues.water+.5*(swell(x-3,z,t)+swell(x+3,z,t)),z];
+  }
   function point(g,id){
     const t=g.time,w=g.cues.water;
-    if(id==='buoy')return [-9.8,w+.27*Math.sin(t*1.1)+.21*Math.sin(t*.72)+2.97,-79];
-    if(id==='stump')return [-6.7,-1.16,-72];
-    return [12+Math.sin(t*.055)*1.8,w+3.7,-59];
+    if(id==='buoy')return [marks.buoy.x,w+swell(marks.buoy.x,marks.buoy.z,t)+2.97,marks.buoy.z];
+    if(id==='stump')return [marks.stump.x,-1.16,marks.stump.z];
+    const position=vessel(g,t);position[1]+=3.7;return position;
   }
   // Telescopes sit beyond the outer rail, clear of the overhead crane and tower walls.
   function camera(g){
     const w=g.watch,side=w.task.watcher;
-    const eye=[side?20.3:-19.3,side?4.35:5.15,-41.8];
-    const base=Math.atan2(-3-eye[0],70+eye[2]);
+    const eye=[side?-21.3:-37.3,side?4.35:5.15,-89.8];
+    const base=Math.atan2(-32-eye[0],117+eye[2]);
     const yaw=base+w.yaw,pitch=w.pitch;
     return {eye,at:[eye[0]+Math.sin(yaw)*Math.cos(pitch),eye[1]+Math.sin(pitch),eye[2]-Math.cos(yaw)*Math.cos(pitch)],yaw,pitch};
   }
@@ -36,7 +46,7 @@ const TideLookout=(()=>{
     }
     const {eye,yaw,pitch}=camera(g);
     w.seen=null;
-    let best=.054;
+    let best=.021;
     for(const id of Object.keys(labels)){
       const [x,y,z]=point(g,id),dx=x-eye[0],dz=z-eye[2];
       const error=Math.hypot(Math.atan2(dx,-dz)-yaw,Math.atan2(y-eye[1],Math.hypot(dx,dz))-pitch);
@@ -59,5 +69,5 @@ const TideLookout=(()=>{
     }
     return true;
   }
-  return {reset,point,camera,active,interact,labels};
+  return {reset,point,camera,active,interact,labels,marks,vessel,swell};
 })();

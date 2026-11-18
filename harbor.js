@@ -95,7 +95,7 @@ const TideHarbor = (() => {
         }
         this.halos.push(add(ring));
       }
-      this.ship.position.set(14,-4,-61);add(this.ship);
+      this.ship.position.fromArray(TideLookout.vessel(g,g.time));add(this.ship);
       this.dockside=TideDockside.create(this.scene,g);
       this.fieldProps=TideFieldProps.create(this.scene,g);
       this.cinema=TideCinema.create(this.scene,g,{ship:this.ship,actors:this.actors,cameras:this.cameras,marker:this.coast.marker});
@@ -130,7 +130,7 @@ const TideHarbor = (() => {
         this.w=width;this.h=height;this.dpr=dpr;e.setPixelRatio(dpr);e.setSize(width,height,false);
       }
       this.coast.update(t,g.cues);
-      this.ship.position.set(12+g.cues.rescue*16+Math.sin(t*.055)*1.8,g.cues.water+.21*Math.sin(t*.95),-59-g.cues.rescue*12);
+      this.ship.position.fromArray(TideLookout.vessel(g,t));
       this.ship.rotation.set(.028*Math.sin(t*.78),1.12+g.cues.rescue*.7,.034*Math.sin(t*.91));
       for(const [d,obj] of this.floors){
         obj.visible=d.active;

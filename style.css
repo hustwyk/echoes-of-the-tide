@@ -22,3 +22,4 @@ dialog{width:min(590px,calc(100% - 22px));max-height:94vh;color:var(--text);back
 .logbook{padding-top:12px;margin-top:12px;border-top:1px solid #445354;font-size:13px;color:#bdccc5}
 .logbook summary{cursor:pointer;color:#dfc29c}
 #game .field-tools button:disabled{opacity:.4;cursor:default}
+#info-content a{color:#e5c29c;text-underline-offset:3px}
