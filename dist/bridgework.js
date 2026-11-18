@@ -146,7 +146,15 @@ const TideBridgework=(()=>{
       for(const k of [-1,1])box(base,p.x+k*2.66,p.y+.32,p.z,.27,7.11,.32);
       box(base,p.x,p.y+3.87,p.z,5.66,.31,.34);
     }
+    const pocketBench=TidePocketBench.create(car);
     const cabinHands=[-.8,.8].map(x=>grips(car,x*.64,.93,-.64));
+    cabinHands[0][1].position.set(-.512,.924,-.638);
+    cabinHands[1][0].position.set(.512,.924,-.640);
+    function pocketShot(i){
+      const eye=i?V(.235,1.53,.10):V(-.24,1.55,.09);
+      const at=i?V(.260,.91,-.799):V(-.258,.91,-.795);
+      return {eye:car.localToWorld(eye).toArray(),at:car.localToWorld(at).toArray(),fov:53};
+    }
     const staff=group(actors[0].userData.rig.bones.chest,'折叠潮尺');
     staff.position.set(-.25,-.22,.19);
     for(let i=0;i<18;i++){
@@ -167,6 +175,7 @@ const TideBridgework=(()=>{
     }
     const tip=V(0,0,0),axis=V(0,0,0);
     function update(){
+      pocketBench.update(g,g.time);
       for(const {b,index,sight,lamp} of sights){
         sight.visible=b.notch===index;
         lamp.material.color.setHex(b.aligned?0x91ffc8:g.time-b.impact<.65?0xff613e:0xffb54c);
@@ -180,8 +189,8 @@ const TideBridgework=(()=>{
         m.position.copy(a).lerp(tip,.5);m.scale.set(.041,axis.length(),.041);m.quaternion.setFromUnitVectors(up,axis.normalize());
       }
     }
-    function dispose(){staff.removeFromParent();base.removeFromParent();for(const r of shared)r.dispose();}
-    update();return {update,hands,dispose};
+    function dispose(){pocketBench.dispose();staff.removeFromParent();base.removeFromParent();for(const r of shared)r.dispose();}
+    update();return {update,hands,pocketShot,dispose};
   }
   return {create};
 })();

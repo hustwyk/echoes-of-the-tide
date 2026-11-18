@@ -23,7 +23,7 @@ window.TideCinema = (() => {
     if(idx===4)shelf.position.set(0,.85,-3.42);
     if(idx===5){const o=TideGlass.origin;shelf.position.set(o.x+2.32,o.y+.99,o.z-4.99);}
     let clock=0, duration=0, playing=false, disposed=false;
-    let cupboard, cup, tape, tin, screw, sheet, packet, green, marker;
+    let cupboard, cup, tape, sheet, packet, green, marker;
     let tender, cable, workroom, paperStrip, hand, newLabel, voiceCoils;
     let sternSet;
     let renderedText='';
@@ -168,14 +168,7 @@ window.TideCinema = (() => {
       art.rotation.x=-.52;
       return m;
     }
-    function makeScrew(p) {
-      const m=group(p);
-      rod(m,[-.031,0,0],[.037,0,0],.009,metal);
-      for(let i=0;i<8;i++)ring(m,-.026+i*.007,0,0,.009,.0018,rail).rotation.y=Math.PI/2;
-      const head=disc(m,.040,0,0,.019,.012,metal);head.rotation.z=Math.PI/2;
-      box(m,.047,.001,0,.0015,.004,.027,rubber);return m;
-    }
-    if([4,5,6].includes(idx)){
+    if(idx===4 || idx===5){
       makeDesk(shelf,1.52,1.03);
       if(idx===4){
         tape=cassette(shelf,'灯机房 / 电台');tape.position.set(.05,.077,.02);tape.scale.setScalar(1.55);
@@ -202,9 +195,6 @@ window.TideCinema = (() => {
         sheet=group(shelf,0,.009,0);
         label(sheet,.055,.045,.12,.79,.45,printed('灯机回转正常','六天前　/　设备交接联　　签收　林澈','#bebca6','#394d4b'));
         packet=group(shelf);label(packet,-.40,.067,.20,.17,.18,printed('06','档　案','#81887a','#293a39'));
-      }else if(idx===6){
-        tin=biscuitTin(shelf);tin.position.set(-.16,.024,.04);
-        screw=makeScrew(tin);tape=cassette(shelf,'十秒钟北岬');tape.position.set(.34,.022,-.01);
 
       }
     }
@@ -447,15 +437,9 @@ window.TideCinema = (() => {
           marker.position.y=g.cues.water+.14*Math.sin(t*.8);marker.rotation.z=.055*Math.sin(t*1.2);
           green.material.emissiveIntensity=.7+2.8*Math.pow(Math.max(0,Math.sin(t*2.5)),6);
         }
-      }else if(idx===4 || idx===6){
-        if(hub.tram){const d=hub.tram.deck;shelf.position.set(d.x,d.y+.85,d.z-.88);}
-        const spin=g.archive?((g.archive.review||0)+(playing?clock:0))*2.7:(playing?1:Math.max(.16,g.state.dials[0]||0))*(t*2.7);
+      }else if(idx===4){
+        const spin=((g.archive.review||0)+(playing?clock:0))*2.7;
         tape.userData.spools.forEach(r=>r.rotation.y=spin);
-        if(screw){
-          const roll=.12*Math.sin(t*2.8)*Math.cos(t*.24);
-          screw.position.set(roll,.055,.025+.04*Math.cos(t*1.4));
-          screw.rotation.set(t*3.4,Math.sin(t*.81)*.6,Math.PI*.04);
-        }
       }else if(idx===5){
         const lift=playing?smooth((clock-.9)/3.4):0;
         sheet.position.set(-.46*lift,.009+Math.sin(lift*Math.PI)*.13,-.15*lift);

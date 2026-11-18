@@ -11,6 +11,7 @@ const TideReceiverAudio=(()=>{
     });
     return loads[name];
   }
+  const loadTin=()=>loadData('TideTinVoices','assets/tin-voices.js');
   const loadTransit=()=>loadData('TideTransitMedia','assets/transit-media.js');
   const loadWarp=()=>loadData('TideWarpMedia','assets/warp-media.js');
   const loadQuay=()=>loadData('TideQuayAudio','assets/cablequay-audio.js');
@@ -36,9 +37,10 @@ const TideReceiverAudio=(()=>{
         const berth=key.startsWith('dock/');
         const warp=key.startsWith('haul/');
         const transit=key.startsWith('test/');
-        const stock=transit?await loadTransit():warp?await loadWarp():berth?await loadFender():swing?await loadSwing():well?await loadCistern():room?await loadGlass():final?await loadPass():horn?await loadFog():survey?await loadSoundings():mast?await loadRelay():(key==='receiver'||key==='hoist')?TideBreakwaterAudio:await loadQuay();
+        const tin=key.startsWith('spol/');
+        const stock=tin?await loadTin():transit?await loadTransit():warp?await loadWarp():berth?await loadFender():swing?await loadSwing():well?await loadCistern():room?await loadGlass():final?await loadPass():horn?await loadFog():survey?await loadSoundings():mast?await loadRelay():(key==='receiver'||key==='hoist')?TideBreakwaterAudio:await loadQuay();
         if(!stock)return;
-        const bytes=Uint8Array.from(atob(stock[mast||survey||horn||final||room||well||swing||berth||warp||transit?key.slice(5):key]),v=>v.charCodeAt(0));
+        const bytes=Uint8Array.from(atob(stock[mast||survey||horn||final||room||well||swing||berth||warp||transit||tin?key.slice(5):key]),v=>v.charCodeAt(0));
         buffers[key]=await ctx.decodeAudioData(bytes.buffer);
       }finally{pending.delete(key);}
     }
@@ -83,7 +85,8 @@ const TideReceiverAudio=(()=>{
     function update(g){
       const horn=g.pilotHorn||g.fog;
       const berth=g.stage===0&&g.fenders;
-      if(g.signal||berth||g.swing||g.cistern||g.glass||g.lastPass||horn||g.relay||g.survey){
+      const memory=g.archive?.memory;
+      if(memory||g.signal||berth||g.swing||g.cistern||g.glass||g.lastPass||horn||g.relay||g.survey){
         if(g.swing){
           if(swingSource!==g.swing){swingSource=g.swing;swingSerial=g.swing.cueSerial||0;}
           for(const id of ['strain','clasp','tin']){const key='sway/'+id;if(!buffers[key]&&!pending.has(key))decode(key).catch(()=>{});}
@@ -96,9 +99,9 @@ const TideReceiverAudio=(()=>{
           if(!r.down&&air)air=end(air);
           if(air){air.filter.frequency.setTargetAtTime(840+r.valve*1480,ctx.currentTime,.023);air.gain.gain.setTargetAtTime(.19+.47*r.pressure,ctx.currentTime,.023);}
         }
-        const table=g.signal?TideTransitSpeech:berth?TideFenderSpeech:g.swing?TideSwingSpeech:g.cistern?TideCisternSpeech:g.glass?TideGlassSpeech:g.lastPass?TidePassSpeech:horn?TideFogSpeech:g.survey?TideSoundingsSpeech:TideRelaySpeech,prefix=g.signal?'test/':berth?'dock/':g.swing?'sway/':g.cistern?'well/':g.glass?'room/':g.lastPass?'pass/':horn?'horn/':g.survey?'tide/':'mast/';
+        const table=memory?TideTinLines:g.signal?TideTransitSpeech:berth?TideFenderSpeech:g.swing?TideSwingSpeech:g.cistern?TideCisternSpeech:g.glass?TideGlassSpeech:g.lastPass?TidePassSpeech:horn?TideFogSpeech:g.survey?TideSoundingsSpeech:TideRelaySpeech,prefix=memory?'spol/':g.signal?'test/':berth?'dock/':g.swing?'sway/':g.cistern?'well/':g.glass?'room/':g.lastPass?'pass/':horn?'horn/':g.survey?'tide/':'mast/';
         for(const id of Object.keys(table)){const key=prefix+id;if(!pending.has(key)&&!buffers[key])decode(key).catch(()=>{});}
-        const r=g.signal||berth||g.swing||g.cistern||g.glass||g.lastPass||horn||g.survey||g.relay,key=r.voice&&(g.swing||!r.occupied)?prefix+r.voice:'';
+        const r=memory||g.signal||berth||g.swing||g.cistern||g.glass||g.lastPass||horn||g.survey||g.relay,key=r.voice&&(g.swing||!r.occupied)?prefix+r.voice:'';
         if(key!==storyKey||story&&Math.abs(ctx.currentTime-story.start-r.clock)>.50){story=end(story);storyKey=key;}
         if(key&&!story)story=play(key,1.06,r.clock);
         return;
@@ -126,5 +129,5 @@ const TideReceiverAudio=(()=>{
     }
     return {update,stop};
   }
-  return {create,loadTransit,loadQuay,loadRelay,loadSoundings,loadFog,loadPass,loadGlass,loadCistern,loadSwing,loadFender};
+  return {create,loadTin,loadTransit,loadQuay,loadRelay,loadSoundings,loadFog,loadPass,loadGlass,loadCistern,loadSwing,loadFender};
 })();

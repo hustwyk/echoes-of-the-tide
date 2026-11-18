@@ -3,12 +3,13 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const box=vm.createContext({});
-for(const name of ['missions','traversal','floating','warp-speech','warping','fender-speech','fenders','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','lookout','cistern-speech','cistern','glass-speech','chartroom','paper','lantern','transit-speech','transit','signal','archive','relay-speech','relay','soundings-speech','soundings','fog-speech','fogsignal','pass-speech','lastpass','swing-speech','swing','cooperation']){
+for(const name of ['missions','traversal','floating','warp-speech','warping','fender-speech','fenders','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','lookout','cistern-speech','cistern','glass-speech','chartroom','paper','lantern','transit-speech','transit','signal','tin-lines','tin-memory','archive','relay-speech','relay','soundings-speech','soundings','fog-speech','fogsignal','pass-speech','lastpass','swing-speech','swing','cooperation']){
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../dist',name+'.js'),'utf8'),box);
 }
 const {Session,near,surface,lookout,ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideSwing,TideCistern,TideGlass,TidePaper}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideSwing,TideCistern,TideGlass,TidePaper})',box);
 const {TideFenders,TideWarping,TideFloating}=vm.runInContext('({TideFenders,TideWarping,TideFloating})',box);
 const {TideTransit}=vm.runInContext('({TideTransit})',box);
+const {TideTinMemory}=vm.runInContext('({TideTinMemory})',box);
 const empty=()=>({x:0,z:0,use:false,jump:false});
 function steer(g,i,target,keys){
   const p=g.players[i],dx=target.x-p.x,dz=target.z-p.z,dist=Math.hypot(dx,dz);
@@ -93,6 +94,18 @@ function signalInputs(g,out){
   return out;
 }
 function archiveInputs(g,out){
+  if(TideTinMemory.active(g)){
+    const m=g.archive.memory,sender=m.dir===1?0:1;
+    const axis=n=>Math.max(-1,Math.min(1,n));
+    if(m.phase==='playback'||m.phase==='home')return out;
+    const give=out[sender],catcher=out[1-sender];
+    give.use=true;catcher.use=true;
+    give.z=-.46;give.jump=m.phase==='ready'&&m.age>.4;
+    const flight=m.phase==='air'?Math.max(0,(m.vy+Math.sqrt(Math.max(0,m.vy*m.vy+19.62*(m.y-.713))))/9.81):.134;
+    const endX=m.x+m.vx*flight,endZ=m.phase==='air'?m.z+m.vz*flight:.28+Math.max(.49,m.vz)*flight;
+    catcher.x=axis((endX-m.catchX)*24);catcher.z=axis((endZ-m.catchZ)*24);
+    return out;
+  }
   const a=g.archive,roll=TideArchive.rolls[g.stage],sample=TideArchive.samples(g);
   const pin=roll.pins[Math.min(a.count,roll.pins.length-1)],lead=g.stage===2?1:0;
   for(let i=0;i<2;i++){
@@ -889,6 +902,31 @@ if(require.main===module){
   reach(recorder,()=>recorder.archive.count===1);
   const grease=TideArchive.checkpoint(recorder),savedTape=new Session(4);TideArchive.restore(savedTape,grease);
   assert.equal(savedTape.archive.count,1);
+  reach(savedTape,()=>TideTinMemory.active(savedTape));
+  const table=savedTape.archive.memory;
+  // The same release reaches the bare worktop when the catcher leaves the tin down.
+  const old=t=>[t,empty()];
+  for(let j=0;j<420&&table.phase!=='miss';j++)
+    savedTape.tick(step,old({...empty(),use:true,z:-.63,jump:table.phase==='ready'}));
+  assert.equal(table.phase,'miss');assert.equal(table.takes.length,0);
+  assert.ok(table.events.some(e=>e.type==='wood')&&!table.events.some(e=>e.type==='tin'));
+  reach(savedTape,()=>table.count===1);
+  const originalTake=JSON.parse(JSON.stringify(table.takes[0]));
+  const memoryMark=TideArchive.checkpoint(savedTape),childCopy=new Session(4);
+  TideArchive.restore(childCopy,memoryMark);
+  assert.equal(childCopy.archive.memory.dir,-1);
+  assert.deepEqual(JSON.parse(JSON.stringify(childCopy.archive.memory.takes[0])),originalTake);
+  // First sender cannot release the second screw from the opposite child's hand.
+  for(let j=0;j<100;j++)childCopy.tick(step,old({...empty(),use:true,jump:true}));
+  assert.equal(childCopy.archive.memory.attempts,0);
+  reach(childCopy,()=>childCopy.archive.memory.phase==='playback');
+  const copy=childCopy.archive.memory;
+  for(let j=0;j<470;j++)childCopy.tick(step,[{...empty(),use:true},empty()]);
+  assert.ok(copy.replay<0&&!copy.events.some(e=>e.replay));
+  reach(childCopy,()=>copy.cursor===copy.heard.length&&copy.replay>0);
+  assert.deepEqual(Array.from(copy.events.filter(e=>e.replay),e=>[e.type,e.gain,e.pan]),
+    Array.from(copy.heard,([,id,gain,pan])=>[id,gain,pan]));
+  assert.equal(copy.events.filter(e=>e.replay&&e.type==='tin').length,2);
   reach(savedTape,()=>savedTape.stage===1&&savedTape.archive.fetched.some(Boolean));
   const packed=TideArchive.checkpoint(savedTape),shelfCopy=new Session(4);
   shelfCopy.stage=1;shelfCopy.begin();TideArchive.restore(shelfCopy,packed);
@@ -1357,6 +1395,21 @@ if(require.main===module){
     assert.equal(moored.state.doneAt,null);reach(moored,()=>moored.complete);
   }
   // Holding the cooperation switches backwards together skips the private recording.
+  const carried=new Session(6);
+  carried.pocketTape=TideTinMemory.readTakes(JSON.parse(JSON.stringify(copy.takes)));
+  assert.deepEqual(JSON.parse(JSON.stringify(carried.pocketTape)),JSON.parse(JSON.stringify(copy.takes)));
+  assert.equal(TideTinMemory.readTakes([[[-1,'tin',.4,0]]]).length,0);
+  for(let j=0;j<60*150&&!carried.state.pocket;j++){
+    const k=control(carried);
+    if(carried.swing.phase==='quiet'&&k.every(v=>v.use))for(const v of k){v.z=-1;v.jump=false;}
+    carried.tick(step,k);
+  }
+  const savedPlayer=carried.state.pocket;assert.ok(savedPlayer,'Two riders can play their own archive copy');
+  const pressPlay=[{...empty(),use:true,z:-1},{...empty(),use:true,z:-1}];
+  for(let j=0;j<1600&&carried.state.pocket;j++)carried.tick(step,pressPlay);
+  assert.deepEqual(Array.from(savedPlayer.events,e=>[e.type,e.gain,e.pan]),Array.from(copy.heard,([,id,gain,pan])=>[id,gain,pan]));
+  assert.ok(!carried.state.pocket&&!carried.section.tram.heard);
+  reach(carried,()=>carried.complete);
   const quiet=new Session(6);
   for(let j=0;j<60*120&&!quiet.complete;j++){
     const inputs=control(quiet);
