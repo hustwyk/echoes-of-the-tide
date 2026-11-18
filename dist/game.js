@@ -148,7 +148,7 @@ function openLevel(n,stage=0,mark=null){
     if(n===6)TideReceiverAudio.loadSwing();
     if(n===3)TideReceiverAudio.loadCistern();
     if(n===5)TideReceiverAudio.loadGlass();
-    if(n===10)TideReceiverAudio.loadFog();
+    if(n===10){TideReceiverAudio.loadFog();TideReceiverAudio.loadHaul();}
     if(n===11)TideReceiverAudio.loadPass();
     if(n===9&&!stage&&(!mark||mark.gallery))TideReceiverAudio.loadGallery();
     if(n===8)TideReceiverAudio.loadSoundings();
@@ -441,7 +441,7 @@ function frame(now){
   if(sound.enabled){sound.scene?.update(session,dt);sound.tape?.update(session);sound.receiver?.update(session);}
   if(!redraw||now-redraw>55){
     TideHud.update(session,padSlots);
-    showStatus((TideGallery.active(session)&&(session.gallery.subtitle||(session.noticeUntil>session.time&&session.notice.startsWith('安全索')?session.notice:session.gallery.phase==='file'?'灯室　／　潮尺原数联':'塔外廊　／　绕塔检修台')))||(TideArrival.active(session)&&(session.arrival.caption||'北岬交通艇　／　进港靠泊'))||(session.stage===0&&session.fenders?.subtitle)||(session.archive?.memory?.voice&&TideTinLines[session.archive.memory.voice].line)||(session.signal?.voice&&TideTransitSpeech[session.signal.voice].line)||session.swing?.subtitle||session.cistern?.subtitle||session.glass?.subtitle||(!session.lastPass?.occupied&&session.lastPass?.subtitle)||session.pilotHorn?.subtitle||session.fog?.subtitle||session.survey?.subtitle||session.relay?.subtitle||session.cable?.subtitle||session.cable?.warp.subtitle||(session.noticeUntil>session.time?session.notice.replace(/\n/g,'　'):(TideFenders.active(session)?'护舷井登岸':session.cable?TideCableQuay.title(session):session.landfall?'防潮门值班间':session.spec.title)+'　·　靠近角色颜色的目标'));
+    showStatus((TideGallery.active(session)&&(session.gallery.subtitle||(session.noticeUntil>session.time&&session.notice.startsWith('安全索')?session.notice:session.gallery.phase==='file'?'灯室　／　潮尺原数联':'塔外廊　／　绕塔检修台')))||(TideArrival.active(session)&&(session.arrival.caption||'北岬交通艇　／　进港靠泊'))||(session.stage===0&&session.fenders?.subtitle)||(session.archive?.memory?.voice&&TideTinLines[session.archive.memory.voice].line)||(session.signal?.voice&&TideTransitSpeech[session.signal.voice].line)||session.swing?.subtitle||session.cistern?.subtitle||session.glass?.subtitle||(!session.lastPass?.occupied&&session.lastPass?.subtitle)||session.pilotHorn?.subtitle||session.fog?.subtitle||(session.fog?.haul?'雾号所　／　轮坑接应':'')||session.survey?.subtitle||session.relay?.subtitle||session.cable?.subtitle||session.cable?.warp.subtitle||(session.noticeUntil>session.time?session.notice.replace(/\n/g,'　'):(TideFenders.active(session)?'护舷井登岸':session.cable?TideCableQuay.title(session):session.landfall?'防潮门值班间':session.spec.title)+'　·　靠近角色颜色的目标'));
     $('elapsed').textContent=timeLabel(session.time)+'　/　'+(session.stage+1)+' of 3';
     redraw=now;
   }

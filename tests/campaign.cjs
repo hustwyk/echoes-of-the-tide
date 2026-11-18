@@ -3,7 +3,7 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const box=vm.createContext({});
-for(const name of ['missions','traversal','floating','warp-speech','warping','fender-speech','fenders','arrival-speech','arrival','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','lookout','cistern-speech','cistern','glass-speech','chartroom','paper','lantern','gallery-speech','gallery','transit-speech','transit','signal','tin-lines','tin-memory','archive','relay-speech','relay','soundings-speech','soundings','fog-speech','fogsignal','pass-speech','lastpass','swing-speech','swing','cooperation']){
+for(const name of ['missions','traversal','floating','warp-speech','warping','fender-speech','fenders','arrival-speech','arrival','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','lookout','cistern-speech','cistern','glass-speech','chartroom','paper','lantern','gallery-speech','gallery','transit-speech','transit','signal','tin-lines','tin-memory','archive','relay-speech','relay','soundings-speech','soundings','fog-speech','haul-speech','fog-recovery','fogsignal','pass-speech','lastpass','swing-speech','swing','cooperation']){
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../dist',name+'.js'),'utf8'),box);
 }
 const {Session,near,surface,lookout,ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideSwing,TideCistern,TideGlass,TidePaper}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideSwing,TideCistern,TideGlass,TidePaper})',box);
@@ -930,7 +930,31 @@ if(require.main===module){
     const back=new Session(10);TideFogSignal.restore(back,travelSave);
     assert.equal(back.players[0].ground,back.world.foghouse.wheels[0]);
     for(let j=0;j<240&&!g.setbacks;j++)g.tick(step,[{...empty(),x:-1},empty()]);
-    assert.equal(g.setbacks,1);assert.equal(g.players[0].ground,w.wheels[0]);
+    assert.equal(g.setbacks,1);assert.equal(r.haul.phase,'catch');assert.equal(g.players[0].ground,null);
+    const midFall=TideFogSignal.checkpoint(g),fromPit=new Session(10);
+    TideFogSignal.restore(fromPit,midFall);
+    assert.equal(fromPit.fog.haul,null);assert.equal(fromPit.players[0].ground,fromPit.world.foghouse.wheels[0]);
+    const phases=new Set();
+    for(let n=0;n<600&&r.haul;n++){phases.add(r.haul.phase);g.tick(step,[empty(),empty()]);}
+    assert.ok(phases.has('wait')&&phases.has('rewind'));assert.equal(r.haul,null);
+    assert.equal(g.players[0].ground,w.wheels[0]);assert.deepEqual(Array.from(r.marks),[true,false]);
+    // Walk past the next wheel with the verified key. Neither person alone can hoist the rider.
+    for(let n=0;n<130&&!r.haul;n++)g.tick(step,[{...empty(),z:-1},{...empty(),use:true}]);
+    assert.equal(r.haul.wheel,1);assert.equal(g.setbacks,2);
+    const h=r.haul,brake=((Math.PI-h.bearing)/(Math.PI*2)+1)%1;
+    for(let n=0;n<160;n++)g.tick(step,[{...empty(),use:true,z:-1},empty()]);
+    assert.equal(h.phase,'wait');
+    for(let n=0;n<260&&(h.gap>.08||h.braked<.14);n++)
+      g.tick(step,[empty(),{...empty(),use:true,x:Math.max(-1,Math.min(1,(brake-r.travel)*12))}]);
+    assert.ok(h.gap<.10&&h.braked>=.14);
+    for(let n=0;n<35;n++)g.tick(step,[{...empty(),use:true,z:-1},empty()]);
+    assert.equal(h.phase,'wait');
+    for(let n=0;n<40;n++)g.tick(step,[{...empty(),use:true},{...empty(),use:true}]);
+    assert.equal(h.phase,'climb');assert.equal(h.pull,0);
+    const locked=r.travel;
+    for(let n=0;n<90&&r.haul;n++)g.tick(step,[{...empty(),use:true,z:-1},{...empty(),x:1,use:true}]);
+    assert.equal(r.travel,locked);assert.equal(r.haul,null);assert.equal(g.players[0].ground,w.wheels[1]);
+    assert.equal(r.voice,'aboard');assert.deepEqual(Array.from(r.marks),[true,false]);
     reach(g,()=>r.mode==='sending'&&r.down);
     g.tick(step,[{...empty(),use:true},{...empty(),use:true}]);
     assert.equal(r.mode,'ready');assert.equal(r.trace.source.length,0);

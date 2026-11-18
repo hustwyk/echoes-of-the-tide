@@ -109,6 +109,7 @@ const TideCoop = (() => {
       const prevStaff=section.span?.lower?TideDrawbridge.coordinates(section.span,this.players[1-this.spec.driver]):null;
       for(let side=0;side<2;side++){
         const p=this.players[side],oldZ=p.z,oldX=p.x;
+        if(!side&&this.fog?.haul)continue;
         if(transfer&&TideSwing.attached(this,side,inputs[side],dt))continue;
         if(this.relay&&!side&&TideRelay.climb(this,inputs[0],dt))continue;
         if(this.rig?.belay&&side!==this.spec.driver)continue;
@@ -132,6 +133,7 @@ const TideCoop = (() => {
         if(this.rig&&side!==this.spec.driver)TideRigging.catchLine(this);
         if(this.cistern&&TideCistern.submerged(this,p)){this.resetPerson(side,'救生索把你拉回上一处露水平台');}
         else if(this.fog&&!p.grounded&&p.vy<0&&p.y<this.world.foghouse.rear.y-1.65){
+          if(!side&&TideFogRecovery.arrest(this))continue;
           this.resetPerson(side,'轮坑救生索接住了你');
           const c=this.checkpoints[side];
           if(this.world.foghouse.wheels.includes(c))Object.assign(p,{x:c.x,y:c.y,z:c.z,ground:c,grounded:true});

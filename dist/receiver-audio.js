@@ -19,6 +19,7 @@ const TideReceiverAudio=(()=>{
   const loadQuay=()=>loadData('TideQuayAudio','assets/cablequay-audio.js');
   const loadRelay=()=>loadData('TideRelayMedia','assets/relay-media.js');
   const loadSoundings=()=>loadData('TideSoundingsMedia','assets/soundings-media.js');
+  const loadHaul=()=>loadData('TideHaulMedia','assets/haul-media.js');
   const loadFog=()=>loadData('TideFogMedia','assets/fog-signal-media.js');
   const loadPass=()=>loadData('TidePassMedia','assets/final-pass-media.js');
   const loadCistern=()=>loadData('TideCisternMedia','assets/cistern-media.js');
@@ -28,6 +29,7 @@ const TideReceiverAudio=(()=>{
   function create(ctx,output){
     const buffers={},pending=new Set();
     let air=null,echo=null,swingSource=null,swingSerial=0,swingFoley=null;
+    let haulSource=null,haulSerial=0,haulFoley=null;
     let arrivalSource=null,arrivalSerial=0,arrivalFoley=null;
     let preview=null,call=null,ratchet=null,previousStroke=0;
     let story=null,storyKey='',lastKey=false,relay=null;
@@ -42,9 +44,10 @@ const TideReceiverAudio=(()=>{
         const transit=key.startsWith('test/');
         const tin=key.startsWith('spol/');
         const approach=key.startsWith('boat/'),gallery=key.startsWith('ring/');
-        const stock=gallery?await loadGallery():approach?await loadArrival():tin?await loadTin():transit?await loadTransit():warp?await loadWarp():berth?await loadFender():swing?await loadSwing():well?await loadCistern():room?await loadGlass():final?await loadPass():horn?await loadFog():survey?await loadSoundings():mast?await loadRelay():(key==='receiver'||key==='hoist')?TideBreakwaterAudio:await loadQuay();
+        const snag=key.startsWith('snag/');
+        const stock=snag?await loadHaul():gallery?await loadGallery():approach?await loadArrival():tin?await loadTin():transit?await loadTransit():warp?await loadWarp():berth?await loadFender():swing?await loadSwing():well?await loadCistern():room?await loadGlass():final?await loadPass():horn?await loadFog():survey?await loadSoundings():mast?await loadRelay():(key==='receiver'||key==='hoist')?TideBreakwaterAudio:await loadQuay();
         if(!stock)return;
-        const bytes=Uint8Array.from(atob(stock[mast||survey||horn||final||room||well||swing||berth||warp||transit||tin||approach||gallery?key.slice(5):key]),v=>v.charCodeAt(0));
+        const bytes=Uint8Array.from(atob(stock[snag||mast||survey||horn||final||room||well||swing||berth||warp||transit||tin||approach||gallery?key.slice(5):key]),v=>v.charCodeAt(0));
         buffers[key]=await ctx.decodeAudioData(bytes.buffer);
       }finally{pending.delete(key);}
     }
@@ -73,7 +76,7 @@ const TideReceiverAudio=(()=>{
       if(clip){clip.gain.gain.setTargetAtTime(.0001,ctx.currentTime,.012);try{clip.source.stop(ctx.currentTime+.045);}catch{}}
       return null;
     }
-    function stop(){arrivalFoley=end(arrivalFoley);swingFoley=end(swingFoley);air=end(air);if(echo){for(const node of Object.values(echo))node.disconnect();echo=null;}preview=end(preview);call=end(call);ratchet=end(ratchet);previousStroke=0;story=end(story);storyKey='';relay=end(relay);lastKey=false;}
+    function stop(){haulFoley=end(haulFoley);arrivalFoley=end(arrivalFoley);swingFoley=end(swingFoley);air=end(air);if(echo){for(const node of Object.values(echo))node.disconnect();echo=null;}preview=end(preview);call=end(call);ratchet=end(ratchet);previousStroke=0;story=end(story);storyKey='';relay=end(relay);lastKey=false;}
     function quay(g){
       const a=g.cable,button=a.down||a.returnDown;
       if(button&&!lastKey){relay=end(relay);relay=play('relay',.72);}
@@ -110,6 +113,15 @@ const TideReceiverAudio=(()=>{
         return;
       }
       const horn=g.pilotHorn||g.fog;
+      const rescue=g.fog?.mode==='transport';
+      if(rescue){
+        if(haulSource!==horn){haulSource=horn;haulSerial=0;}
+        for(const id of Object.keys(TideHaulSpeech)){const key='snag/'+id;if(!pending.has(key)&&!buffers[key])decode(key).catch(()=>{});}
+        if(horn.haulCue&&haulSerial!==horn.haulSerial){
+          const key='snag/'+horn.haulCue,age=Math.max(0,g.time-horn.haulCueAt);
+          if(buffers[key]){haulSerial=horn.haulSerial;haulFoley=end(haulFoley);haulFoley=play(key,.76,age);}
+        }
+      }
       const berth=g.stage===0&&g.fenders;
       const memory=g.archive?.memory;
       if(memory||g.signal||berth||g.swing||g.cistern||g.glass||g.lastPass||horn||g.relay||g.survey){
@@ -125,7 +137,7 @@ const TideReceiverAudio=(()=>{
           if(!r.down&&air)air=end(air);
           if(air){air.filter.frequency.setTargetAtTime(840+r.valve*1480,ctx.currentTime,.023);air.gain.gain.setTargetAtTime(.19+.47*r.pressure,ctx.currentTime,.023);}
         }
-        const table=memory?TideTinLines:g.signal?TideTransitSpeech:berth?TideFenderSpeech:g.swing?TideSwingSpeech:g.cistern?TideCisternSpeech:g.glass?TideGlassSpeech:g.lastPass?TidePassSpeech:horn?TideFogSpeech:g.survey?TideSoundingsSpeech:TideRelaySpeech,prefix=memory?'spol/':g.signal?'test/':berth?'dock/':g.swing?'sway/':g.cistern?'well/':g.glass?'room/':g.lastPass?'pass/':horn?'horn/':g.survey?'tide/':'mast/';
+        const table=memory?TideTinLines:g.signal?TideTransitSpeech:berth?TideFenderSpeech:g.swing?TideSwingSpeech:g.cistern?TideCisternSpeech:g.glass?TideGlassSpeech:g.lastPass?TidePassSpeech:rescue&&TideHaulSpeech[horn.voice]?TideHaulSpeech:horn?TideFogSpeech:g.survey?TideSoundingsSpeech:TideRelaySpeech,prefix=memory?'spol/':g.signal?'test/':berth?'dock/':g.swing?'sway/':g.cistern?'well/':g.glass?'room/':g.lastPass?'pass/':rescue&&TideHaulSpeech[horn.voice]?'snag/':horn?'horn/':g.survey?'tide/':'mast/';
         for(const id of Object.keys(table)){const key=prefix+id;if(!pending.has(key)&&!buffers[key])decode(key).catch(()=>{});}
         const r=memory||g.signal||berth||g.swing||g.cistern||g.glass||g.lastPass||horn||g.survey||g.relay,key=r.voice&&(g.swing||!r.occupied)?prefix+r.voice:'';
         if(key!==storyKey||story&&Math.abs(ctx.currentTime-story.start-r.clock)>.50){story=end(story);storyKey=key;}
@@ -155,5 +167,5 @@ const TideReceiverAudio=(()=>{
     }
     return {update,stop};
   }
-  return {create,loadGallery,loadArrival,loadTin,loadTransit,loadQuay,loadRelay,loadSoundings,loadFog,loadPass,loadGlass,loadCistern,loadSwing,loadFender};
+  return {create,loadGallery,loadArrival,loadTin,loadTransit,loadQuay,loadRelay,loadSoundings,loadFog,loadHaul,loadPass,loadGlass,loadCistern,loadSwing,loadFender};
 })();

@@ -5,9 +5,9 @@ const TideFoghouse=(()=>{
   function create(scene,g){
     const w=g.world.foghouse,root=new T.Group(),owned=new Set(),own=o=>(owned.add(o),o);
     const base=V(w.rear.x,w.rear.y,w.rear.z-4.80);root.position.copy(base);scene.add(root);
-    const env=TideFoghouseEnv.create(root),gear=TideFoghouseGear.create(root);
+    const env=TideFoghouseEnv.create(root),gear=TideFoghouseGear.create(root),haul=TideFogHaul.create(root,g);
     const box=own(new T.BoxGeometry(1,1,1)),shaft=own(new T.CylinderGeometry(1,1,1,32)),nut=own(new T.CylinderGeometry(1,1,1,6));
-    const steel=TideSteel.material(0,own,true);
+    const steel=TideSteel.material(0,own,true);steel.color.setHex(0x87877c);
     const metal=(color,roughness,metalness)=>own(new T.MeshStandardMaterial({color,roughness,metalness}));
     const bronze=metal(0xab884a,.48,.73),black=metal(0x353936,.58,.73),paint=metal(0xb19b50,.71,.52),silver=metal(0x9aada6,.42,.78);
     const pieces=new Map(),dummy=new T.Object3D();
@@ -92,7 +92,7 @@ const TideFoghouse=(()=>{
     function update(g){
       const r=g.fog,p=g.players[0],editing=r.mode==='edit',phase=r.spin%1;
       w.wheels.forEach((pad,i)=>rotors[i].rotation.y=pad.angle);
-      env.update(g.time,r.storm);
+      env.update(g.time,r.storm);haul.update(g);
       const stamp=TideFogSignal.slots(r)[r.trace.source.length];
       gear.update({...r,keyState:r.key,carrier:[p.x-base.x,p.y-base.y,p.z-base.z,p.yaw],phase,editing,
         trace:editing?r.paper:r.trace,localCount:r.trace.source.length,aftCount:r.trace.aft.length,bridgeCount:r.trace.bridge.length,
@@ -108,6 +108,7 @@ const TideFoghouse=(()=>{
     }
     function hands(g,i){
       const r=g.fog,s=TideFogSignal.target(g,i);
+      if(!i&&r.haul)return null;
       if(g.engaged[i]){
         if(s.kind==='shoe'){
           const jaw=gripNodes[s.index];jaw.updateWorldMatrix(true,false);
@@ -119,12 +120,39 @@ const TideFoghouse=(()=>{
     }
     const world=a=>[base.x+a[0],base.y+a[1],base.z+a[2]];
     const view=(a,b,fov,handsOnly=false)=>({eye:world(a),at:world(b),fov,handsOnly});
-    function shot(g,i){
+    let lastCatch=null,checked=-1,sideAngle=1.05;
+    const lens=V(0,0,0),focus=V(0,0,0),ray=V(0,0,0);
+    function rescueView(g,sight,h,p,ring){
+      function eye(a){
+        return lens.set(p.x+2.27*Math.sin(h.bearing+a),p.y+1.70,p.z+2.27*Math.cos(h.bearing+a));
+      }
+      // Check the face, gloves and knees against the actual grating and quay edges.
+      if(lastCatch!==h||g.time-checked>.26){
+        let best=-Infinity;const previous=sideAngle;
+        for(const a of [1.05,-1.05,.56,-.56,0,1.53,-1.53]){
+          const e=eye(a);let score=.15*(1-Math.abs(1.05-a)/4);
+          if(a===previous&&h===lastCatch)score+=.32;
+          for(const [height,weight] of [[1.48,1.1],[1.08,1],[.55,.72]]){
+            focus.set(p.x,p.y+height,p.z);ray.subVectors(e,focus);const distance=ray.length();ray.divideScalar(distance);
+            if(!sight?.hit(focus,ray,distance,.22))score+=weight;
+          }
+          if(score>best){best=score;sideAngle=a;}
+        }
+        lastCatch=h;checked=g.time;
+      }
+      return {eye:eye(sideAngle).toArray(),at:[p.x+(ring.x-p.x)*.13,p.y+1.07,p.z+(ring.z-p.z)*.13],fov:62};
+    }
+    function shot(g,i,sight){
       const r=g.fog,p=g.players[i],s=TideFogSignal.target(g,i);
+      if(r.haul&&(!i||g.engaged[i])){
+        const h=r.haul,pad=w.wheels[h.wheel],mate=g.players[0],ring=TideFogRecovery.rung(pad);
+        if(i)return {eye:world([3.21,3.65,7.12]),at:[(mate.x+w.clutch.x)*.45+base.x*.1,base.y-.23,(mate.z+w.clutch.z)*.45+base.z*.1],fov:59};
+        return rescueView(g,sight,h,mate,ring);
+      }
       if(i&&(r.mode==='bridge'||r.mode==='spot'&&g.engaged[i]))return {...TideFogSignal.cabin(g),handsOnly:true};
       if(i&&r.mode==='aft')return view([2.46,3.25,-13.67],[5.47,1.66,-7.89],55);
       if(!i&&r.key==='carry'&&!g.engaged[0]){
-        return {eye:[p.x+.96,p.y+3.6,p.z+3.90],at:[p.x,p.y+.1,p.z-1.35],fov:61};
+        return {eye:[p.x-.78,p.y+3.25,p.z+3.60],at:[p.x,p.y+.1,p.z-1.35],fov:61};
       }
       if(!g.engaged[i])return null;
       if(s.kind==='drive')return view([-3.91,1.63,-5.55],[-3.47,1.25,-7.07],48,true);
@@ -134,7 +162,7 @@ const TideFoghouse=(()=>{
       if(s.kind==='shoe')return {eye:[p.x+.98,p.y+2.13,p.z+1.65],at:[p.x,p.y+.63,p.z-.22],fov:56};
       return null;
     }
-    return {update,hands,shot,dispose(){env.dispose();gear.dispose();for(const obj of [beacon,veil,frame,root])obj.removeFromParent();owned.forEach(o=>o.dispose());}};
+    return {update,hands,shot,haul,dispose(){haul.dispose();env.dispose();gear.dispose();for(const obj of [beacon,veil,frame,root])obj.removeFromParent();owned.forEach(o=>o.dispose());}};
   }
   return {create};
 })();
