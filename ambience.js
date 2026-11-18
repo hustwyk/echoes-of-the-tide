@@ -338,7 +338,7 @@ window.TideAudioScene = (() => {
       }
     }
     function snapshot(g) {
-      return {game:g, section:g.state, notch:g.section.span?.notch, impact:g.section.span?.impact, cableBay:0,
+      return {game:g, section:g.state, stamp:g.optic?.stamp??0, guide:g.optic?.mount?.gate??0, notch:g.section.span?.notch, impact:g.section.span?.impact, cableBay:0,
         walkers:g.players.map(p => ({ground:p.grounded, fall:0, distance:0, heel:false})),
         dials:g.state.dials.slice(), traveled:[0,0], engaged:[false,false], ratchetAt:[0,0],
         ferry:g.state.ferry, latch:g.state.latch, received:g.state.received, yes:g.state.yes[0],
@@ -386,6 +386,15 @@ window.TideAudioScene = (() => {
     }
     function changes(g, now) {
       const q = g.state, spec = g.spec, type = spec.type;
+      const optic=g.optic;
+      if(optic){
+        if(optic.stamp>previous.stamp){
+          const pan=panFor(optic.observer);
+          ring(now,811,.28,.20,pan);ring(now+.18,811,.37,.18,pan);
+        }
+        if(optic.mount&&optic.mount.gate>previous.guide)wheel(now,.10,.84);
+        previous.stamp=optic.stamp;previous.guide=optic.mount?.gate??0;
+      }
       const b=g.section.span,c=g.section.tram;
       if(b){
         const pan=panFor(1-spec.driver);

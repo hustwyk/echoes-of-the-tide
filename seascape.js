@@ -113,7 +113,7 @@ window.TideCoast = (() => {
   const waterFragment = `
     uniform sampler2D uNoise,uSky;
     uniform float uTime,uHasSky,uSignal,uBearing,uInside;
-    uniform vec3 uSun,uFog;uniform vec4 basin;
+    uniform vec3 uSun,uFog;uniform vec4 basin,uNearOptic,uFarOptic;uniform vec2 uGhost,uRangeAxis;
     varying vec3 vSea;
     varying float vHeight;
     const float PI=3.14159265;
@@ -149,7 +149,21 @@ window.TideCoast = (() => {
       lit=mix(lit,vec3(.49,.55,.53),foam*.55);
       float ledX=14.+(p.y+85.)*tan(clamp(uBearing,-.7,.7));
       float streak=exp(-abs(p.x-ledX)*.38)*(noiseB.r*.8+.1);
-      lit+=vec3(.68,.43,.15)*streak*uSignal*.45;
+      if(uNearOptic.w<0.)lit+=vec3(.68,.43,.15)*streak*uSignal*.45;
+      else{
+        vec2 fromLamp=p-vec2(14.,-91.);
+        float depth=-dot(fromLamp,uRangeAxis),u=dot(fromLamp,vec2(uRangeAxis.y,-uRangeAxis.x));
+        float slice=clamp((depth-36.)/19.,0.,1.);
+        vec4 img=mix(uNearOptic,uFarOptic,slice);
+        float rangeFade=smoothstep(28.,34.,depth)*(1.-smoothstep(58.,65.,depth));
+        float caustic=(.52+.68*noiseB.r+.25*max(0.,normal.y-.80))*(1.+.24*vHeight);
+        // The same varying ray envelope that strikes the water also illuminates its crests.
+        u+=.11*vHeight+.15*(noiseA.r-.5)+.13*normal.x;
+        caustic*=.28+1.34*smoothstep(-.33,.34,normal.z+.35*normal.x+.54*(noiseB.r-.5));
+        float mainSpot=exp(-pow((u-img.x)/img.z,2.));
+        float ghost=exp(-pow((u-img.y)/max(.28,img.z*.68),2.))*mix(uGhost.x,uGhost.y,slice);
+        lit+=rangeFade*caustic*(vec3(2.8,2.46,1.72)*mainSpot*img.w+vec3(1.86,1.15,.38)*ghost);
+      }
       lit=mix(lit,lit*vec3(.26,.39,.40)+vec3(.004,.009,.010),uInside);
       lit=mix(lit,uFog,smoothstep(90.,290.,dist)*.74);
       gl_FragColor=vec4(lit,1.);
@@ -188,6 +202,10 @@ window.TideCoast = (() => {
     sun.position.set(-31,46,-67);sun.castShadow=true;
     sun.shadow.mapSize.set(2048,2048);
     Object.assign(sun.shadow.camera,{left:-52,right:52,top:58,bottom:-58,near:.5,far:155});
+    if(index===9){
+      sunTarget.position.set(14,22,-91);sun.position.set(-17,65,-127);
+      Object.assign(sun.shadow.camera,{left:-12,right:12,top:12,bottom:-12,near:25,far:91});
+    }
     sun.shadow.camera.updateProjectionMatrix();
     sun.shadow.normalBias=.045;sun.shadow.bias=-.00016;
     const rim=new T.DirectionalLight(act===1?0xffb87c:0xafddff,act===1?1.05:.68);
@@ -202,6 +220,7 @@ window.TideCoast = (() => {
       vertices.setZ(i,270*Math.sign(z)*Math.pow(Math.abs(z),1.45));
     }
     const uniforms={uTime:{value:0},uNoise:{value:noise},uSky:{value:noise},uHasSky:{value:0},uSignal:{value:0},
+      uNearOptic:{value:new T.Vector4(0,0,1,-1)},uFarOptic:{value:new T.Vector4()},uGhost:{value:new T.Vector2()},uRangeAxis:{value:new T.Vector2(Math.sin(TideLantern.yaw),Math.cos(TideLantern.yaw))},
       basin:{value:new T.Vector4()},uBearing:{value:0},uInside:{value:act===1?.9:0},uSun:{value:new T.Vector3(-.42,.40,-.82).normalize()},uFog:{value:fogColor}};
     const water=new T.Mesh(oceanGeo,mat(new T.ShaderMaterial({uniforms,vertexShader:waterVertex,fragmentShader:waterFragment})));
     water.name='潮汐海面';water.position.set(0,-4,-52);group.add(water);
@@ -378,6 +397,10 @@ window.TideCoast = (() => {
         }
       }
       const top=towerBase+17.6;
+      if(index===9){
+        addInstance(geom(new T.CylinderGeometry(4.8,2.24,2.3,32)),masonry,x,top-1.17,z,1,1,1);
+        return new T.Vector3(x,TideLantern.height+2.50,z);
+      }
       cylinder(black,x,top,z,5.7,.5);ring(iron,x,top+.99,z,5.46);ring(black,x,top+.46,z,5.46);
       for(let i=0;i<18;i++){
         const a=TAU*i/18;
@@ -591,7 +614,7 @@ window.TideCoast = (() => {
     if(act===0)timberPier();
     if(act===1)pumpHall();
     if(act===2)craneBridge();
-    if(act===3)lampGallery();
+    if(act===3&&index!==9)lampGallery();
 
     batches.forEach(({g,m,items})=>{
       const instances=new T.InstancedMesh(g,m,items.length);
@@ -681,7 +704,13 @@ window.TideCoast = (() => {
         beam.rotation.y=angle;
         beamMat.uniforms.uPower.value=strength;
         lamp.visible=strength>.018;
-        beam.visible=strength>.025;
+        beam.visible=strength>.025&&!cues.rays;
+        if(cues.rays){
+          const [a,b]=cues.rays;
+          uniforms.uNearOptic.value.set(a.x,a.twin,a.width,a.power);
+          uniforms.uFarOptic.value.set(b.x,b.twin,b.width,b.power);
+          uniforms.uGhost.value.set(a.ghost,b.ghost);lamp.visible=false;
+        }
         uniforms.uSignal.value=strength;uniforms.uBearing.value=angle;
         rotors.forEach((obj,i)=>obj.rotation.x=t*(i%2?.27:-.25)*(1+strength*2));
         optics.forEach((obj,i)=>{obj.rotation.y=(i%2?-.70:.70)+.12*Math.sin(t*.15+i)+angle*.22;});

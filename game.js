@@ -5,7 +5,7 @@ const journal=[];
 try {
   progress=Math.max(0,Math.min(levels.length,Math.floor(Number(localStorage.getItem('tide-progress'))||0)));
   const save=JSON.parse(localStorage.getItem('tide-3d-checkpoint'));
-  if(save && Number.isInteger(save.index) && save.index===progress && save.stage>0 && save.stage<TideMissions.chapters[save.index]?.length)resume=save;
+  if(save && Number.isInteger(save.index) && save.index===progress && Number.isInteger(save.stage) && (save.stage>0||save.stage===0&&save.index===9&&save.lantern?.far===true) && save.stage<TideMissions.chapters[save.index]?.length)resume=save;
 } catch {}
 const sound=new HarborSound();
 let wantsAudio=true;try{wantsAudio=localStorage.getItem('tide-audio')!=='off';}catch{}
@@ -48,8 +48,10 @@ function campaign() {
 }
 
 function savePoint(g){
-  if(g.index!==progress || !g.stage)return;
-  resume={index:g.index,stage:g.stage};
+  if(g.index!==progress)return;
+  const mark=TideLantern.checkpoint(g);
+  if(!g.stage&&!mark)return;
+  resume={index:g.index,stage:g.stage,...(mark?{lantern:mark}:{})};
   try{localStorage.setItem('tide-3d-checkpoint',JSON.stringify(resume));}catch{}
 }
 function clearInput(){
@@ -84,7 +86,7 @@ function onStage(g){
   savePoint(g);note(g.spec.radio);g.notice=g.spec.radio;g.noticeUntil=g.time+6;
   if(mode==='playing')say(g.spec.radio);
 }
-function openLevel(n,stage=0){
+function openLevel(n,stage=0,mark=null){
   if(info.open)info.close();
   if(!game.open)game.showModal();
   sound.scene?.stop();window.speechSynthesis?.cancel();$('film').hidden=true;$('pause').disabled=true;
@@ -95,7 +97,7 @@ function openLevel(n,stage=0){
   try{
     view??=new TideHarbor.WorldView(canvas);
     session=new TideCoop.Session(n,{
-      stage:onStage,alert:line=>{
+      stage:onStage,checkpoint:savePoint,alert:line=>{
         if(/^(林澈|沈遥|阿棠|梁青|海雁复述|值班员|测潮员|哐啷)/.test(line)){
           note(line);if(voice)say(line);
         }
@@ -109,6 +111,7 @@ function openLevel(n,stage=0){
         deck.active=true;if(deck.hinge!==undefined){deck.unlocked=true;deck.hinge=1;}
       }
     }
+    if(mark){TideLantern.restore(session,mark);savePoint(session);}
     view.load(session);
   }catch(err){
     console.error(err);mode='error';
@@ -118,7 +121,7 @@ function openLevel(n,stage=0){
   const level=levels[n],act=acts[Math.floor(n/3)];mode='story';
   $('act').textContent=act.name+'　/　'+String(n+1).padStart(2,'0')+' OF 12';$('level-title').textContent=level.name;
   $('elapsed').textContent='';showStatus('两名玩家 · 独立视角');
-  overlay.innerHTML='<div class="story"><small>行动简报</small><h3>'+level.name+'</h3><p>'+level.story+'</p><blockquote>'+level.quote+'</blockquote><p class="hint">林澈　WASD 移动 · 空格跳跃 · E 操作<br>沈遥　方向键移动 · / 跳跃 · Enter 操作</p><button class="primary">'+(stage?'从检查点继续':'进入关卡')+'　›</button></div>';
+  overlay.innerHTML='<div class="story"><small>行动简报</small><h3>'+level.name+'</h3><p>'+level.story+'</p><blockquote>'+level.quote+'</blockquote><p class="hint">林澈　WASD 移动 · 空格跳跃 · E 操作<br>沈遥　方向键移动 · / 跳跃 · Enter 操作</p><button class="primary">'+(stage||mark?'从检查点继续':'进入关卡')+'　›</button></div>';
   overlay.querySelector('button').onclick=()=>startPlaying(true);
   overlay.querySelector('button').focus();view.draw(session,0,false);
 }
@@ -264,7 +267,7 @@ function frame(now){
 }
 requestAnimationFrame(frame);
 
-$('start').onclick=()=>openLevel(progress===12?0:progress,resume?.index===progress?resume.stage:0);
+$('start').onclick=()=>openLevel(progress===12?0:progress,resume?.index===progress?resume.stage:0,resume?.index===progress?resume.lantern:null);
 $('skip').onclick=()=>{if(mode==='cinema'){view.cinema.skip();showDebrief(session);}};
 $('pause').onclick=pause;$('sound').onclick=$('field-audio').onclick=toggleAudio;
 $('expand').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else if(game.requestFullscreen)await game.requestFullscreen();}catch{showStatus('当前窗口已使用可用的最大画面');}};
