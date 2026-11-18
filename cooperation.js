@@ -31,6 +31,7 @@ const TideCoop = (() => {
   class Session {
     constructor(index,events={}) {
       this.index=index;this.world=index===3?TideCistern.layout():index===5?TideGlass.layout():index===10?TideFogSignal.layout():index===8?TideSoundings.layout():index===7?TideRelay.layout():index===1?TideCableQuay.layout():index===2?TideSignal.layout():index===4?TideArchive.layout():index===9?TideLantern.layout():TideTraversal.build(index);this.events=events;
+      if(index===9)TideGallery.build(this.world);
       if(index===0){TideLandfall.build(this.world);TideFenders.build(this.world);}
       TideRigging.build(this.world);TideDrawbridge.build(this.world);if(index===6)TideSwing.build(this.world);if(!this.world.cistern&&!this.world.glass&&!this.world.foghouse&&!this.world.soundings&&!this.world.relay&&!this.world.cableQuay&&!this.world.lantern&&!this.world.signal&&!this.world.archive)TideFieldWork.build(this.world,index);
       this.time=0;this.stage=0;this.setbacks=0;this.complete=false;this.notice='';this.noticeUntil=0;
@@ -80,6 +81,7 @@ const TideCoop = (() => {
     tick(dt,inputs,yaws=[0,0]) {
       if(this.complete)return;
       this.time+=dt;
+      if(TideGallery.active(this)){TideGallery.step(this,inputs,yaws,dt);return;}
       if(TideArrival.active(this)){TideArrival.step(this,inputs,dt);return;}
       if(this.world.fenders)TideFloating.step(this.world.fenders.floatPose,this.players,this.cues.water,this.time,dt);TideFenders.narrate(this,dt);if(this.swing)TideSwing.narrate(this,dt);if(this.cistern)TideCistern.narrate(this,dt);if(this.glass)TideGlass.narrate(this,dt);
       const q=this.state, section=this.section;
