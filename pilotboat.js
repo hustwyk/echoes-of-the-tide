@@ -4,10 +4,13 @@
   'use strict';
   const T=window.THREE, TAU=2*Math.PI;
   function create(scene,w) {
-    const [aft,fore]=w.boats, cz=aft.z, centre=(aft.y+fore.y)*.5;
+    function atRest(floor){
+      const p=floor.rest||floor;return {x:p.x,y:p.y,z:p.z,w:floor.w,d:floor.d};
+    }
+    const [aft,fore]=w.boats.map(atRest), cz=aft.z, centre=(aft.y+fore.y)*.5;
     const a=aft.x-aft.w/2, splitA=aft.x+aft.w/2, splitF=fore.x-fore.w/2, f=fore.x+fore.w/2;
     const beam=Math.max(aft.d,fore.d)*.5, stern=a-1.33, stem=f+1.87, length=stem-stern;
-    const root=new T.Group();root.name='北岬 06 · 系泊交通艇';scene.add(root);
+    const root=new T.Group(),quay=new T.Group();root.name='北岬 06 · 系泊交通艇';quay.name='北岬 06 · 岸侧系泊';scene.add(root,quay);
     const resources=new Set(),owned=x=>(resources.add(x),x);
     const v=(x,y,z)=>new T.Vector3(x,y,z), unit=v(0,1,0), white='#ffffff';
     const M=new T.Matrix4(), Q=new T.Quaternion(), E=new T.Euler(), H=new T.Matrix3(), X=v(0,0,0), N=v(0,0,0), C=new T.Color();
@@ -103,7 +106,8 @@
     });
     const sign=metallic(.50,.23,{map:plateMap});
     // The boat uses a single draw for each surface type, including all the fastenings and cord.
-    const buckets=new Map(), templates=new Map();
+    const hullBuckets=new Map(),shoreBuckets=new Map(),templates=new Map();
+    let buckets=hullBuckets;
     const base=(key,make)=>{let g=templates.get(key);if(!g){g=make();templates.set(key,g);}return g;};
     const cube=base('box',()=>new T.BoxGeometry()), ball=base('ball',()=>new T.SphereGeometry(1,14,8));
     function bucket(mat){if(!buckets.has(mat))buckets.set(mat,{pos:[],norm:[],uv:[],col:[],idx:[]});return buckets.get(mat);}
@@ -219,7 +223,7 @@
       }
     }
     timber(aft);timber(fore);
-    const cross=w.boatLink||{x:-1,y:-2.67,z:cz,w:1.02,d:2.20};
+    const cross=w.boatLink?atRest(w.boatLink):{x:-1,y:-2.67,z:cz,w:1.02,d:2.20};
     flat(enamel,'#455b57',cross.x-cross.w*.5,cross.x+cross.w*.5,cross.y,cross.z-cross.d*.5,cross.z+cross.d*.5);
     for(const side of [-1,1]){
       const z=cz+side*(beam-.28);
@@ -286,20 +290,60 @@
       sphere(hardware,brass,...loc(.263,.035,.098),.015,.015,.009);
     }
     for(const [x,s,ang] of [[a+.4,1,.19],[splitA+.04,1,-.11],[f-.23,1,.13],[a+.32,-1,.10],[splitF-.05,-1,-.26],[f+.41,-1,.22]])fender(x,s,ang);
+    // The two standing parts bend between a fairlead on the launch and a
+    // permanently bedded shore cleat. Only short eyes and hitches are rigid.
+    const springs=[];
+    const pitch=.17,mooringRadius=.025;
+    function arcLength(horizontal,rise,dip){
+      if(dip<.00001)return Math.hypot(horizontal,rise);
+      const h=Math.max(.00001,horizontal),bend=4*dip;
+      const primitive=q=>(q*Math.hypot(h,q)+h*h*Math.asinh(q/h))*.5;
+      return (primitive(rise+bend)-primitive(rise-bend))/(2*bend);
+    }
     function warp(x,site,farSide){
       if(!site)return;
-      const z=cz-profile(x).r+.18,y=sheer(x)+.13;
-      const end=[site.x+farSide*(site.w*.5-.105),site.y+.145,site.z+(farSide<0?.54:-.22)];
-      cleat(end[0],site.y,end[2],.90);
-      const points=[[x+.12,y,z],[x-.10,y+.02,z],[x-.19,y-.046,z-.20],
-        [(x+end[0])*.5,(y+end[1])*.5-.38,(z+end[2])*.5],end];
-      const curve=line(cord,'#918b6b',points,.026,26,9);
-      // Contrasting fibres spiral around the core, following its slack rather than a straight chord.
-      const frames=curve.computeFrenetFrames(54),pts=[];
-      for(let i=0;i<=54;i++){const p=curve.getPointAt(i/54),a=i*1.82;p.addScaledVector(frames.normals[i],.021*Math.cos(a)).addScaledVector(frames.binormals[i],.021*Math.sin(a));pts.push(p.toArray());}
-      line(cord,'#b3a783',pts,.0065,72,5);
+      const d=atRest(site),z=cz-profile(x).r+.18,y=sheer(x)+.13;
+      const end=v(d.x+farSide*(d.w*.5-.105),d.y+.145,d.z+(farSide<0?.54:-.22));
+      const boatEye=v(x-.19,y-.046,z-.20);
+      // A crossing turn takes the load round the horns before the rope passes
+      // the polished gunwale. The shore eye stays around its own, bolted cleat.
+      line(cord,'#a39673',[[x+.19,y+.017,z-.008],[x+.132,y+.037,z+.045],[x+.036,y+.015,z+.048],
+        [x-.14,y+.012,z-.035],[x-.17,y+.057,z+.007],[x-.111,y+.043,z+.045],
+        [x+.085,y+.010,z-.046],[x+.146,y+.028,z+.007],[x+.077,y+.047,z+.043],
+        [x-.100,y+.020,z],boatEye.toArray()],.024,34,8);
+      box(enamel,gun,x-.18,y-.117,z-.157,.28,.028,.114);
+      for(const s of [-1,1]){
+        line(hardware,galv,[[x-.18+s*.095,y-.104,z-.15],[x-.18+s*.092,y-.035,z-.158],
+          [x-.18+s*.064,y-.009,z-.170]],.012,7,7);
+      }
+      buckets=shoreBuckets;
+      cleat(end.x,d.y,end.z,.90);
+      line(cord,'#ada181',[end.toArray(),[end.x+.086,d.y+.102,end.z+.049],
+        [end.x+.158,d.y+.101,end.z+.032],[end.x+.173,d.y+.111,end.z-.024],
+        [end.x+.093,d.y+.088,end.z-.047],[end.x-.104,d.y+.102,end.z+.048],
+        [end.x-.158,d.y+.103,end.z+.027],[end.x-.137,d.y+.112,end.z-.028],
+        [end.x-.045,d.y+.096,end.z-.043],[end.x+.024,d.y+.122,end.z-.005]],.020,29,7);
+      buckets=hullBuckets;
+      const h=Math.hypot(end.x-boatEye.x,end.z-boatEye.z);
+      const length=arcLength(h,end.y-boatEye.y,.38);
+      springs.push({boatEye,end,length,segments:Math.max(12,Math.min(36,Math.round(length/pitch)))});
     }
     warp(a-.52,w.lower,-1);warp(f+.63,w.shelf,1);
+
+    // One repeat of a laid line. Instances let a surface marker on a moving
+    // rope follow the strand, just as a marker on the deck follows its hull.
+    const braidBuckets=new Map();
+    buckets=braidBuckets;
+    rod(cord,'#8d876a',[0,0,0],[0,pitch,0],mooringRadius*.91,9);
+    for(let ply=0;ply<3;ply++){
+      const points=[];
+      for(let j=0;j<=14;j++){
+        const t=j/14,angle=TAU*(t+ply/3);
+        points.push([.0187*Math.cos(angle),pitch*t,.0187*Math.sin(angle)]);
+      }
+      line(cord,['#b4a981','#9b9370','#78765d'][ply],points,.0078,12,5);
+    }
+    buckets=hullBuckets;
     // Coiled heaving line, bent steel eyes and bow fairlead, outside the players' landing area.
     const bx=f+.65,by=sheer(bx)+.047;
     const coil=[];for(let j=0;j<=115;j++){const t=j/115,r=.083+.215*t,an=t*TAU*5.0;coil.push([bx+r*Math.cos(an),by+.014+.002*Math.sin(an*3),cz+.44+r*.79*Math.sin(an)]);}
@@ -378,20 +422,90 @@
       sphere(hardware,galv,stern-.039,yy+.008,z,.021,.062,.102);
       for(let j=0;j<4;j++)box(rubber,black,stern-.058,yy-.032+j*.022,z,.012,.009,.145);
     }
-    let triangles=0;
-    for(const [mat,b] of buckets){
+    function geometry(b){
       const g=owned(new T.BufferGeometry());
       for(const [key,values,n] of [['position',b.pos,3],['normal',b.norm,3],['uv',b.uv,2],['color',b.col,3]])
         g.setAttribute(key,new T.Float32BufferAttribute(values,n));
-      g.setIndex(b.idx);g.computeBoundingSphere();
-      const m=new T.Mesh(g,mat);m.name=mat===wood?'交通艇橡木舱面':mat===hullMaterial?'交通艇折角船壳':'交通艇舾装';
-      m.castShadow=mat!==pane&&mat!==lamps&&mat!==cord;m.receiveShadow=mat!==pane&&mat!==lamps;
-      root.add(m);triangles+=b.idx.length/3;
+      g.setIndex(b.idx);g.computeBoundingSphere();g.computeBoundingBox();return g;
     }
-    for(const g of templates.values())g.dispose();templates.clear();buckets.clear();
-    root.userData.stats={draws:root.children.length,triangles,wood:scanned?'shared pier scan':'generated grain'};
-    let disposed=false;
-    return {dispose(){if(disposed)return;disposed=true;scene.remove(root);for(const r of resources)r.dispose();resources.clear();root.clear();}};
+    let triangles=0;
+    for(const [set,owner] of [[hullBuckets,root],[shoreBuckets,quay]]){
+      for(const [mat,b] of set){
+        const m=new T.Mesh(geometry(b),mat);
+        m.name=owner===quay?'码头固定系缆羊角':mat===wood?'交通艇橡木舱面':mat===hullMaterial?'交通艇折角船壳':'交通艇舾装';
+        m.castShadow=mat!==pane&&mat!==lamps&&mat!==cord;m.receiveShadow=mat!==pane&&mat!==lamps;
+        owner.add(m);triangles+=b.idx.length/3;
+      }
+      set.clear();
+    }
+    const segments=springs.reduce((n,s)=>n+s.segments,0),braid=braidBuckets.get(cord);
+    let moorings=null;
+    if(segments){
+      moorings=new T.InstancedMesh(geometry(braid),cord,segments);
+      moorings.name='北岬 06 · 活动系缆';
+      moorings.instanceMatrix.setUsage(T.DynamicDrawUsage);moorings.receiveShadow=true;
+      moorings.boundingBox=new T.Box3();moorings.boundingSphere=new T.Sphere();
+      quay.add(moorings);triangles+=segments*braid.idx.length/3;
+    }
+    braidBuckets.clear();
+    for(const g of templates.values())g.dispose();templates.clear();
+    root.userData.stats={draws:root.children.length+quay.children.length,triangles,wood:scanned?'shared pier scan':'generated grain'};
+    const grip=v(0,0,0),chord=v(0,0,0),first=v(0,0,0),last=v(0,0,0);
+    const side=v(0,0,0),along=v(0,0,0),back=v(0,0,0),frame=new T.Matrix4();
+    function bend(spring,start){
+      const h=Math.hypot(spring.end.x-start.x,spring.end.z-start.z),dy=spring.end.y-start.y;
+      if(Math.hypot(h,dy)>=spring.length)return .012;
+      let lo=.012,hi=Math.max(.40,spring.length*.54);
+      for(let k=0;k<12;k++){
+        const mid=(lo+hi)*.5;
+        if(arcLength(h,dy,mid)<spring.length)lo=mid;else hi=mid;
+      }
+      return (lo+hi)*.5;
+    }
+    function updateLines(){
+      if(!moorings)return;
+      const bounds=moorings.boundingBox;bounds.makeEmpty();
+      let index=0;
+      for(const spring of springs){
+        // The hull vertices and the two shore fittings share the scene's local
+        // coordinate system; the hull matrix is their exact relative transform.
+        grip.copy(spring.boatEye).applyMatrix4(root.matrix);
+        const dip=bend(spring,grip);
+        first.copy(grip);chord.subVectors(spring.end,grip);
+        side.set(-chord.z,0,chord.x);
+        if(side.lengthSq()<.000001)side.set(1,0,0);else side.normalize();
+        bounds.expandByPoint(first);
+        for(let j=1;j<=spring.segments;j++){
+          const t=j/spring.segments;
+          last.copy(grip).addScaledVector(chord,t);last.y-=4*t*(1-t)*dip;
+          along.subVectors(last,first);const span=along.length();along.divideScalar(span||1);
+          back.crossVectors(side,along).normalize();
+          frame.makeBasis(side,along.multiplyScalar(span/pitch),back);frame.setPosition(first);
+          moorings.setMatrixAt(index++,frame);bounds.expandByPoint(last);first.copy(last);
+        }
+      }
+      bounds.expandByScalar(mooringRadius+.006);bounds.getBoundingSphere(moorings.boundingSphere);
+      moorings.instanceMatrix.needsUpdate=true;
+    }
+    let disposed=false,ready=false;
+    const previous=new T.Matrix4();
+    function update(pose=w.floatPose){
+      if(disposed)return;
+      if(pose){
+        root.rotation.set(pose.pitch,pose.yaw,pose.roll,'YXZ');
+        root.position.set(-pose.anchorX,-pose.anchorY,-pose.anchorZ).applyQuaternion(root.quaternion);
+        root.position.x+=pose.x;root.position.y+=pose.y;root.position.z+=pose.z;
+      }else{root.rotation.set(0,0,0,'YXZ');root.position.set(0,0,0);}
+      root.updateMatrix();
+      if(ready&&previous.equals(root.matrix))return;
+      previous.copy(root.matrix);ready=true;updateLines();
+      root.updateWorldMatrix(true,true);quay.updateWorldMatrix(true,true);
+    }
+    update();
+    return {update,dispose(){
+      if(disposed)return;disposed=true;scene.remove(root,quay);moorings?.dispose();
+      for(const r of resources)r.dispose();resources.clear();root.clear();quay.clear();
+    }};
   }
   window.TidePilotBoat={create};
 })();

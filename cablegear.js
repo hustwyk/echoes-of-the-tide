@@ -227,7 +227,7 @@ const TideCableQuayGear=(()=>{
     texPlane(drum.g,.096,.552,.204,.270,.074,mark('手 轮 放 线','D-2  /  PAY OUT'));
     pair('drum',0,drum.g,[-.245,.880,.271],wheel.g,[.154,.086,.303]);
     // The wire rides the top of the glazed roller at local Y=.95, entering from the open eastern cheek.
-    const saddles=[],saddlePos=[[-4.0,.04,-12.55],[-3.55,.41,-17.85]];
+    const saddles=[],saddlePos=w.saddles.map(s=>[s.x,s.y,s.z-.55]);
     saddlePos.forEach(([x,y,z],i)=>{
       const s=batch(root,x,y,z,'Open porcelain cable saddle '+(i+1));
       block(s,[0,.034,-.026],.374,.066,.329,p.deep);
