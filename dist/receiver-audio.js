@@ -11,6 +11,7 @@ const TideReceiverAudio=(()=>{
     });
     return loads[name];
   }
+  const loadArrival=()=>loadData('TideArrivalMedia','assets/arrival-media.js');
   const loadTin=()=>loadData('TideTinVoices','assets/tin-voices.js');
   const loadTransit=()=>loadData('TideTransitMedia','assets/transit-media.js');
   const loadWarp=()=>loadData('TideWarpMedia','assets/warp-media.js');
@@ -26,6 +27,7 @@ const TideReceiverAudio=(()=>{
   function create(ctx,output){
     const buffers={},pending=new Set();
     let air=null,echo=null,swingSource=null,swingSerial=0,swingFoley=null;
+    let arrivalSource=null,arrivalSerial=0,arrivalFoley=null;
     let preview=null,call=null,ratchet=null,previousStroke=0;
     let story=null,storyKey='',lastKey=false,relay=null;
     async function decode(key){
@@ -38,9 +40,10 @@ const TideReceiverAudio=(()=>{
         const warp=key.startsWith('haul/');
         const transit=key.startsWith('test/');
         const tin=key.startsWith('spol/');
-        const stock=tin?await loadTin():transit?await loadTransit():warp?await loadWarp():berth?await loadFender():swing?await loadSwing():well?await loadCistern():room?await loadGlass():final?await loadPass():horn?await loadFog():survey?await loadSoundings():mast?await loadRelay():(key==='receiver'||key==='hoist')?TideBreakwaterAudio:await loadQuay();
+        const approach=key.startsWith('boat/');
+        const stock=approach?await loadArrival():tin?await loadTin():transit?await loadTransit():warp?await loadWarp():berth?await loadFender():swing?await loadSwing():well?await loadCistern():room?await loadGlass():final?await loadPass():horn?await loadFog():survey?await loadSoundings():mast?await loadRelay():(key==='receiver'||key==='hoist')?TideBreakwaterAudio:await loadQuay();
         if(!stock)return;
-        const bytes=Uint8Array.from(atob(stock[mast||survey||horn||final||room||well||swing||berth||warp||transit||tin?key.slice(5):key]),v=>v.charCodeAt(0));
+        const bytes=Uint8Array.from(atob(stock[mast||survey||horn||final||room||well||swing||berth||warp||transit||tin||approach?key.slice(5):key]),v=>v.charCodeAt(0));
         buffers[key]=await ctx.decodeAudioData(bytes.buffer);
       }finally{pending.delete(key);}
     }
@@ -69,7 +72,7 @@ const TideReceiverAudio=(()=>{
       if(clip){clip.gain.gain.setTargetAtTime(.0001,ctx.currentTime,.012);try{clip.source.stop(ctx.currentTime+.045);}catch{}}
       return null;
     }
-    function stop(){swingFoley=end(swingFoley);air=end(air);if(echo){for(const node of Object.values(echo))node.disconnect();echo=null;}preview=end(preview);call=end(call);ratchet=end(ratchet);previousStroke=0;story=end(story);storyKey='';relay=end(relay);lastKey=false;}
+    function stop(){arrivalFoley=end(arrivalFoley);swingFoley=end(swingFoley);air=end(air);if(echo){for(const node of Object.values(echo))node.disconnect();echo=null;}preview=end(preview);call=end(call);ratchet=end(ratchet);previousStroke=0;story=end(story);storyKey='';relay=end(relay);lastKey=false;}
     function quay(g){
       const a=g.cable,button=a.down||a.returnDown;
       if(button&&!lastKey){relay=end(relay);relay=play('relay',.72);}
@@ -83,6 +86,18 @@ const TideReceiverAudio=(()=>{
       if(key&&!story)story=play(key,1.10,t);
     }
     function update(g){
+      if(TideArrival.active(g)){
+        const s=g.arrival;
+        if(arrivalSource!==s){arrivalSource=s;arrivalSerial=s.serial;}
+        for(const id of ['captain','heard','button','call','dark','pttDown','pttUp','dial','hull']){
+          const key='boat/'+id;if(!buffers[key]&&!pending.has(key))decode(key).catch(()=>{});
+        }
+        if(s.serial!==arrivalSerial){arrivalSerial=s.serial;arrivalFoley=end(arrivalFoley);arrivalFoley=play('boat/'+s.cue,.71);}
+        const key=s.voice?'boat/'+s.voice:'';
+        if(storyKey!==key||story&&Math.abs(ctx.currentTime-story.start-s.voiceAt)>.48){story=end(story);storyKey=key;}
+        if(key&&!story)story=play(key,1.12,s.voiceAt);
+        return;
+      }
       const horn=g.pilotHorn||g.fog;
       const berth=g.stage===0&&g.fenders;
       const memory=g.archive?.memory;
@@ -129,5 +144,5 @@ const TideReceiverAudio=(()=>{
     }
     return {update,stop};
   }
-  return {create,loadTin,loadTransit,loadQuay,loadRelay,loadSoundings,loadFog,loadPass,loadGlass,loadCistern,loadSwing,loadFender};
+  return {create,loadArrival,loadTin,loadTransit,loadQuay,loadRelay,loadSoundings,loadFog,loadPass,loadGlass,loadCistern,loadSwing,loadFender};
 })();

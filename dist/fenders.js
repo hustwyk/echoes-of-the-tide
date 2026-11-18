@@ -19,8 +19,9 @@ const TideFenders = (() => {
     const landing=slab(-2.13,top,8.22,1.90,1.38);
     const steps=slab(-2.38,.34,7.05,2.86,1.22);
     slab(-2.38,.05,6.04,2.86,.94);
-    const floatPose=TideFloating.make([...boats,boatLink],-.48,-2.67,16.85,3.78,1.39,1.34);
-    world.fenders={floatPose,boats,boatLink,lower,shelf,well,ledge,sill,landing,steps};
+    const aftWalk=slab(-5.42,-2.61,16.85,1.36,2.92,'dock');
+    const floatPose=TideFloating.make([...boats,boatLink,aftWalk],-.48,-2.67,16.85,3.78,1.39,1.34);
+    world.fenders={floatPose,boats,boatLink,aftWalk,lower,shelf,well,ledge,sill,landing,steps};
   }
   function create(g){
     if(!g.world.fenders)return null;
@@ -151,11 +152,14 @@ const TideFenders = (() => {
     }
   }
   function checkpoint(g){
-    if(!g.fenders||g.stage!==0||!['done','exit','upper'].includes(g.fenders.phase))return null;
+    if(!g.fenders||g.stage!==0)return null;
+    if(!['done','exit','upper'].includes(g.fenders.phase))return g.fenders.moored?{berth:'moored'}:null;
     return {berth:g.fenders.phase};
   }
   function restore(g,mark){
-    if(!g.fenders||g.stage!==0||!['done','exit','upper'].includes(mark?.berth))return;
+    if(!g.fenders||g.stage!==0)return;
+    if(mark?.berth==='moored'){g.fenders.moored=true;return;}
+    if(!['done','exit','upper'].includes(mark?.berth))return;
     const s=g.fenders,w=g.world.fenders;s.phase=mark.berth;s.top[1]=true;s.seen.fill(true);s.setting=1;s.voice='';s.heardPawl=mark.berth!=='upper';s.clock=0;s.line=-1;s.queue=[];s.subtitle='';s.warned=true;geometry(s);
     s.ladder=s.phase==='upper'?0:1;s.top[0]=s.phase==='done';
     g.checkpoints=s.phase==='done'?g.section.starts.slice():[w.lower,w.ledge];g.players=g.checkpoints.map(spawn);

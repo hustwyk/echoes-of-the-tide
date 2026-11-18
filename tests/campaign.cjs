@@ -3,11 +3,11 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const box=vm.createContext({});
-for(const name of ['missions','traversal','floating','warp-speech','warping','fender-speech','fenders','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','lookout','cistern-speech','cistern','glass-speech','chartroom','paper','lantern','transit-speech','transit','signal','tin-lines','tin-memory','archive','relay-speech','relay','soundings-speech','soundings','fog-speech','fogsignal','pass-speech','lastpass','swing-speech','swing','cooperation']){
+for(const name of ['missions','traversal','floating','warp-speech','warping','fender-speech','fenders','arrival-speech','arrival','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','lookout','cistern-speech','cistern','glass-speech','chartroom','paper','lantern','transit-speech','transit','signal','tin-lines','tin-memory','archive','relay-speech','relay','soundings-speech','soundings','fog-speech','fogsignal','pass-speech','lastpass','swing-speech','swing','cooperation']){
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../dist',name+'.js'),'utf8'),box);
 }
 const {Session,near,surface,lookout,ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideSwing,TideCistern,TideGlass,TidePaper}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideSwing,TideCistern,TideGlass,TidePaper})',box);
-const {TideFenders,TideWarping,TideFloating}=vm.runInContext('({TideFenders,TideWarping,TideFloating})',box);
+const {TideFenders,TideWarping,TideFloating,TideArrival}=vm.runInContext('({TideFenders,TideWarping,TideFloating,TideArrival})',box);
 const {TideTransit}=vm.runInContext('({TideTransit})',box);
 const {TideTinMemory}=vm.runInContext('({TideTinMemory})',box);
 const empty=()=>({x:0,z:0,use:false,jump:false});
@@ -507,8 +507,28 @@ function fenderInputs(g,out){
   }
   return out;
 }
+function approachInputs(g,out){
+  const a=g.arrival,h=g.world.fenders.floatPose,[radio,helm]=out;
+  if(a.radio==='tune')radio.x=a.channel<12?1:a.channel>12?-1:0;
+  if(a.radio==='wait')radio.use=true;
+  if(a.radio==='test')radio.use=a.voice==='call';
+  const gap=h.anchorX-a.x,angle=Math.atan2(a.z-h.anchorZ,Math.max(2.5,gap));
+  helm.x=Math.max(-1,Math.min(1,(a.heading-Math.min(.53,angle))*3.7));
+  helm.z=a.attached?0:-Math.max(-.55,Math.min(1,gap*.50));
+  helm.use=a.attached;
+  if(a.radio==='line'&&!a.attached){
+    const end=TideArrival.cleat(g),target=TideFloating.local(h,end.x,end.y,end.z);
+    const side=target.x+h.anchorX-TideArrival.castSite.x-a.lateral;
+    const reach=TideArrival.castSite.z-h.anchorZ-target.z-a.reach;
+    radio.x=Math.max(-1,Math.min(1,side*4));radio.z=Math.max(-1,Math.min(1,-reach*4));
+    radio.use=(a.atBow||0)>.85&&Math.hypot(side,reach)<.32&&Math.abs(a.speed)<1.2;
+  }
+  if(a.attached)radio.use=true;
+  return out;
+}
 function control(g){
   const out=[empty(),empty()],sec=g.section,s=g.spec,q=g.state;
+  if(g.arrival&&!g.arrival.done)return approachInputs(g,out);
   if(TideFenders.active(g))return fenderInputs(g,out);
   if(TideSwing.active(g))return swingInputs(g,out);
   if(g.cistern)return cisternInputs(g,out);
@@ -703,6 +723,49 @@ if(require.main===module){
   function reach(g,condition){
     for(let j=0;j<60*120&&!condition()&&!g.complete;j++)g.tick(step,control(g));
     assert.ok(condition(),'Did not reach checkpoint in chapter '+(g.index+1)+' stage '+g.stage);
+  }
+  {
+    const g=new Session(0);
+    TideArrival.begin(g);
+    const a=g.arrival;
+    const idle=()=>[empty(),empty()];
+    function run(frames,inputs){
+      for(let j=0;j<frames;j++)g.tick(step,inputs());
+    }
+    function withoutPilot(){const input=control(g);input[1]=empty();return input;}
+    // The pilot can reach the quay before anyone hears the distress call.
+    const solo=new Session(0);TideArrival.begin(solo);
+    for(let j=0;j<60*16;j++){const input=control(solo);input[0]=empty();solo.tick(step,input);}
+    assert.equal(solo.arrival.channel,9);assert.equal(solo.arrival.radio,'tune');
+    assert.equal(TideFenders.checkpoint(solo),null);
+
+    for(let j=0;j<900&&a.radio!=='wait';j++)g.tick(step,withoutPilot());
+    assert.equal(a.radio,'wait');
+    g.tick(step,[{...empty(),use:true},empty()]);g.tick(step,idle());
+    assert.equal(a.radio,'wait');assert.match(a.warning,/松键太早/);
+    for(let j=0;j<600&&(a.atBow||0)<1;j++)g.tick(step,withoutPilot());
+    assert.equal(a.radio,'line');assert.equal(a.atBow,1);
+    g.tick(step,[{...empty(),use:true},empty()]);assert.equal(a.flight.hit,false);
+    run(75,idle);assert.equal(a.attached,false);assert.match(a.warning,/落空/);
+
+    // Stage a physically aligned cast with too much headway.
+    const h=g.world.fenders.floatPose;
+    a.x=h.anchorX;a.z=h.anchorZ;a.heading=0;a.speed=1.9;g.tick(step,idle());
+    const end=TideArrival.cleat(g),local=TideFloating.local(h,end.x,end.y,end.z);
+    a.lateral=local.x+h.anchorX-TideArrival.castSite.x;
+    a.reach=TideArrival.castSite.z-h.anchorZ-local.z;
+    g.tick(step,[{...empty(),use:true},empty()]);assert.ok(a.flight.fast&&!a.flight.hit);
+    run(75,idle);assert.match(a.warning,/收油/);
+    reach(g,()=>a.attached);
+    run(150,()=>[{...empty(),use:true},empty()]);
+    assert.ok(!a.secured&&!a.moored);
+    run(150,()=>[empty(),{...empty(),use:true}]);
+    assert.ok(a.secured&&!a.moored&&a.haul===0);
+    reach(g,()=>a.done);
+    assert.equal(TideFenders.checkpoint(g).berth,'moored');
+    assert.ok(g.players.every(p=>p.grounded));
+    const restored=new Session(0);TideFenders.restore(restored,TideFenders.checkpoint(g));
+    assert.ok(restored.fenders.moored&&!TideArrival.active(restored));
   }
   {
     const g=new Session(0),s=g.fenders;

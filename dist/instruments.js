@@ -67,7 +67,7 @@ const TideHud=(()=>{
       const riding=s.type==='ride' && (s.driver!==i||q.latch);
       v.querySelector('.reticle').hidden=!(TideLookout.active(g)&&g.watch.task.watcher===i&&g.engaged[i]||g.relay?.top&&!i&&g.engaged[i]||g.survey&&i===1&&g.engaged[i]||g.fog?.mode==='spot'&&i===1&&g.engaged[i]);
       const here=TideFenders.active(g)||TideSwing.active(g)||!!g.cistern||!!g.glass||!!g.fog||!!g.survey||!!g.relay||!!g.cable||close||g.signal&&g.stage===2&&i===0&&!g.signal.pinned||riding||!!g.section.tram,tag=TideHarbor.targetFor(g,i).name;
-      const task=TideTinMemory.active(g)?'十秒钟北岬 · 夏日录音':TideTransit.active(g)?'岸灯试光与船上报位':TideFenders.active(g)?'护舷井登岸':TideSwing.active(g)?(g.swing.phase==='report'?'桥头寄件柜':g.swing.phase==='stow'?'把尺交进吊篮':'桥下横移吊环'):g.cable?TideCableQuay.title(g):g.landfall?(g.landfall.pinned?'值班间收听':'防潮门'):g.rig?.belay?'浪沟接应':s.title;
+      const task=TideArrival.active(g)?'交通艇靠泊':TideTinMemory.active(g)?'十秒钟北岬 · 夏日录音':TideTransit.active(g)?'岸灯试光与船上报位':TideFenders.active(g)?'护舷井登岸':TideSwing.active(g)?(g.swing.phase==='report'?'桥头寄件柜':g.swing.phase==='stow'?'把尺交进吊篮':'桥下横移吊环'):g.cable?TideCableQuay.title(g):g.landfall?(g.landfall.pinned?'值班间收听':'防潮门'):g.rig?.belay?'浪沟接应':s.title;
       const title=g.state.doneAt!==null?'已完成 · '+task:(g.stage+1)+' / '+g.world.sections.length+'　'+task;
       set(v.querySelector('.tool'),title);
       set(v.querySelector('.instruction'),here?r.text||'靠近设备开始操作':g.archive?'前往'+tag:g.signal?'前往'+tag:g.optic?'沿塔顶外环前往'+tag:'前往'+tag+'，沿灯带通过栈桥');
@@ -85,7 +85,9 @@ const TideHud=(()=>{
       const childSends=g.archive?.memory&&(g.archive.memory.dir===1?i===0:i===1);
       const childhood=pads[i]!=null?(childSends?'RT 扶板　左摇杆倾斜　A 放手':'RT 托盒　左摇杆移盒'):
         (i?'Enter ':'E ')+(childSends?'扶板　'+(i?'方向键倾斜　/':'WASD 倾斜　空格')+'放手':'托盒　'+(i?'方向键':'WASD')+'移盒');
-      set(v.querySelector('.control-hint'),TideTinMemory.active(g)?childhood:TideTransit.active(g)&&i===1?(pads[1]!=null?'左摇杆转镜　A 报位':'方向键转镜　/ 报位'):rack?(i?'向前重听　操作中确认登记':'左右选列，前后选层　操作中确认提起 / 放回'):work?bindings:tips);
+      const arrivalHint=i?(pads[i]!=null?'左摇杆操舵与进退　RT 停机':'↑ 进车　↓ 倒车　← → 操舵　Enter 停机'):
+        (g.arrival?.radio==='line'?(pads[i]!=null?'左摇杆移动落点　RT 抛缆 / 收缆':'WASD 移动落点　E 抛缆 / 收缆'):(pads[i]!=null?'左摇杆左右调台　RT 发话':'A / D 调台　E 发话'));
+      set(v.querySelector('.control-hint'),TideArrival.active(g)?arrivalHint:TideTinMemory.active(g)?childhood:TideTransit.active(g)&&i===1?(pads[1]!=null?'左摇杆转镜　A 报位':'方向键转镜　/ 报位'):rack?(i?'向前重听　操作中确认登记':'左右选列，前后选层　操作中确认提起 / 放回'):work?bindings:tips);
     }
   }
   return {build,update};

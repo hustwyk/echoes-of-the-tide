@@ -306,6 +306,14 @@ window.TideAudioScene = (() => {
       setLayer(layers.rotor,now,pumpLoad * blade * .036,480);
       layers.drive.source.frequency.setTargetAtTime(42 + pumpLoad * 14,now,.42);
       layers.rotor.source.frequency.setTargetAtTime(84.6 + pumpLoad * 28.13,now,.39);
+      if(g.arrival?.engineRunning&&!g.arrival.done){
+        const load=Math.abs(g.arrival.drive),power=.40+.60*load,firing=25+27*load;
+        setLayer(layers.drive,now,.145*power,240+load*270,.11);
+        setLayer(layers.rotor,now,.075*power,430,.12);
+        setLayer(layers.pump,now,.102*power,160+load*178,.13);
+        layers.drive.source.frequency.setTargetAtTime(firing*1.99,now,.16);
+        layers.rotor.source.frequency.setTargetAtTime(firing*3.02,now,.16);
+      }
       setLayer(layers.wire,now,whistle * .44,562 + gust * 620);
       setLayer(layers.harmonic,now,whistle * .022,480);
       layers.harmonic.source.frequency.setTargetAtTime(211 + 21 * gust + 3 * Math.sin(.73*t),now,.3);
@@ -318,6 +326,11 @@ window.TideAudioScene = (() => {
       const winding = type === 'ride' && g.engaged[g.spec.driver] && !q.latch;
       setLayer(layers.reel,now,type === 'tape' && both ? .12 : winding ? .10 : 0,620 + (q.ferry + q.dials[0]) * 460);
       run.send.gain.setTargetAtTime(cellar ? .98 : high ? .65 : .51, now,.35);
+      if(g.arrival&&!g.arrival.done){
+        const a=g.arrival;
+        setLayer(layers.radio,now,a.radio==='tune'?(.013+.033*Math.min(1,Math.abs(a.dial-12))):0,1900,.05);
+        setLayer(layers.reel,now,a.haul*.105,570+70*Math.sin(t*5),.1);
+      }
       if (t >= run.nextDrop) {
         run.nextDrop = t + range(cellar ? 1.65 : .7,cellar ? 3.6 : 2.3);
         const p = range(-.84,.84), vol = range(.016,.042) * (secluded ? .32 : 1);

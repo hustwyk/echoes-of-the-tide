@@ -106,7 +106,7 @@
     });
     const sign=metallic(.50,.23,{map:plateMap});
     // The boat uses a single draw for each surface type, including all the fastenings and cord.
-    const hullBuckets=new Map(),shoreBuckets=new Map(),templates=new Map();
+    const hullBuckets=new Map(),shoreBuckets=new Map(),wheelBuckets=new Map(),throttleBuckets=new Map(),templates=new Map();
     let buckets=hullBuckets;
     const base=(key,make)=>{let g=templates.get(key);if(!g){g=make();templates.set(key,g);}return g;};
     const cube=base('box',()=>new T.BoxGeometry()), ball=base('ball',()=>new T.SphereGeometry(1,14,8));
@@ -365,8 +365,8 @@
     const ax=stem-.43;rod(hardware,gun,[ax,sheer(ax)+.07,cz-.26],[ax,sheer(ax)+.07,cz+.26],.054,12);
     for(const side of [-1,1])box(hardware,galv,ax,sheer(ax)+.079,cz+side*.25,.19,.131,.04);
     // Low side-console, a sloped windscreen, open instrument binnacle and rubber-rimmed wheel.
-    const hx=a-.49,hy=sheer(hx)+.023,hz=cz-.14;
-    box(enamel,green,hx,hy+.32,hz,.68,.62,1.27);
+    const hx=a-.36,hy=sheer(a-.49)+.153,hz=cz-.14;
+    box(enamel,green,hx+.075,hy+.22,hz,.444,.71,1.27);
     box(enamel,ivory,hx-.025,hy+.67,hz,.77,.22,1.35,[0,0,-.085]);
     const seatX=stern+.22,seatY=sheer(seatX)+.31;
     rod(hardware,galv,[seatX,sheer(seatX)+.03,hz],[seatX,seatY,hz],.049,11);
@@ -390,11 +390,13 @@
       face(pane,'#729e98',[p0,p1,p2],[[0,0],[.2,1],[1,0]],[0,0,side]);
       rod(hardware,galv,p2,p1,.018,9);rod(hardware,galv,p2,p0,.020,9);
     }
-    const wheelX=hx-.52,wy=hy+.66,wz=hz-.18,rad=.177;
+    const wheelX=hx-.53,wy=hy+.77,wz=hz-.18,rad=.177;
     const torus=base('wheel',()=>new T.TorusGeometry(1,.10,8,32));
+    buckets=wheelBuckets;
     primitive(torus,rubber,black,wheelX,wy,wz,rad,rad,rad,[0,Math.PI/2,0]);
     for(let i=0;i<3;i++){const q=TAU*i/3;rod(hardware,galv,[wheelX+.048,wy,wz],[wheelX,wy+Math.sin(q)*rad,wz+Math.cos(q)*rad],.012,7);}
-    rod(hardware,gun,[wheelX-.025,wy,wz],[wheelX+.14,wy,wz],.043,12);
+    buckets=hullBuckets;
+    rod(hardware,gun,[wheelX-.025,wy,wz],[hx-.30,wy,wz],.043,12);
     // Recessed dials with hand-painted needles and a short throttle quadrant.
     for(let i=0;i<3;i++){
       const z=hz-.45+i*.22,x=hx-.392,y=hy+.72,rr=i===1?.078:.063;
@@ -402,8 +404,16 @@
       for(let j=0;j<6;j++){const q=-1.98+j*.78;rod(enamel,pale,[x-.026,y+rr*.59*Math.sin(q),z+rr*.59*Math.cos(q)],[x-.026,y+rr*.77*Math.sin(q),z+rr*.77*Math.cos(q)],.003,5);}
       rod(enamel,yellow,[x-.029,y,z],[x-.029,y+rr*.48,z+rr*.16],.004,5);
     }
-    rod(hardware,galv,[hx-.18,hy+.78,hz+.46],[hx-.25,hy+.977,hz+.46],.018,9);
-    sphere(rubber,black,hx-.25,hy+.98,hz+.46,.042,.041,.041);
+    buckets=throttleBuckets;
+    rod(hardware,galv,[hx-.413,hy+.705,hz+.358],[hx-.483,hy+.902,hz+.358],.018,9);
+    sphere(rubber,black,hx-.483,hy+.905,hz+.358,.042,.041,.041);
+    buckets=hullBuckets;
+    box(enamel,green,hx-.29,hy+.66,hz+.36,.35,.09,.17);
+    for(const [x,z] of [[-5.556,16.45],[-5.514,16.85]]){
+      box(hardware,gun,x+.018,-2.5035,z,.30,.035,.15);
+      for(let j=0;j<7;j++)box(rubber,black,x-.096+j*.038,-2.486,z,.016,.007,.128);
+      rod(hardware,galv,[x-.06,-2.52,z],[x-.06,-2.64,z],.022,8);
+    }
     // Both navigation lamps have opaque side shields and a small protected Fresnel lens.
     for(const side of [-1,1]){
       const x=hx+.16,z=hz+side*.713,y=hy+.83;
@@ -428,10 +438,15 @@
         g.setAttribute(key,new T.Float32BufferAttribute(values,n));
       g.setIndex(b.idx);g.computeBoundingSphere();g.computeBoundingBox();return g;
     }
+    const helmWheel=new T.Group(),throttleLever=new T.Group();
+    helmWheel.position.set(wheelX,wy,wz);throttleLever.position.set(hx-.413,hy+.705,hz+.358);
+    root.add(helmWheel,throttleLever);
     let triangles=0;
-    for(const [set,owner] of [[hullBuckets,root],[shoreBuckets,quay]]){
+    for(const [set,owner] of [[hullBuckets,root],[shoreBuckets,quay],[wheelBuckets,helmWheel],[throttleBuckets,throttleLever]]){
       for(const [mat,b] of set){
-        const m=new T.Mesh(geometry(b),mat);
+        const geo=geometry(b);
+        if(owner===helmWheel||owner===throttleLever)geo.translate(-owner.position.x,-owner.position.y,-owner.position.z);
+        const m=new T.Mesh(geo,mat);
         m.name=owner===quay?'码头固定系缆羊角':mat===wood?'交通艇橡木舱面':mat===hullMaterial?'交通艇折角船壳':'交通艇舾装';
         m.castShadow=mat!==pane&&mat!==lamps&&mat!==cord;m.receiveShadow=mat!==pane&&mat!==lamps;
         owner.add(m);triangles+=b.idx.length/3;
@@ -489,8 +504,11 @@
     }
     let disposed=false,ready=false;
     const previous=new T.Matrix4();
-    function update(pose=w.floatPose){
+    function update(pose=w.floatPose,arrival){
       if(disposed)return;
+      helmWheel.rotation.x=(arrival?.rudder||0)*1.56;
+      throttleLever.rotation.z=-(arrival?.drive||0)*.55;
+      if(moorings)moorings.visible=!arrival||arrival.moored;
       if(pose){
         root.rotation.set(pose.pitch,pose.yaw,pose.roll,'YXZ');
         root.position.set(-pose.anchorX,-pose.anchorY,-pose.anchorZ).applyQuaternion(root.quaternion);
@@ -498,11 +516,11 @@
       }else{root.rotation.set(0,0,0,'YXZ');root.position.set(0,0,0);}
       root.updateMatrix();
       if(ready&&previous.equals(root.matrix))return;
-      previous.copy(root.matrix);ready=true;updateLines();
+      previous.copy(root.matrix);ready=true;if(moorings?.visible)updateLines();
       root.updateWorldMatrix(true,true);quay.updateWorldMatrix(true,true);
     }
     update();
-    return {update,dispose(){
+    return {root,helmWheel,throttleLever,update,dispose(){
       if(disposed)return;disposed=true;scene.remove(root,quay);moorings?.dispose();
       for(const r of resources)r.dispose();resources.clear();root.clear();quay.clear();
     }};
