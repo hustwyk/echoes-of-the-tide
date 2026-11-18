@@ -6,6 +6,7 @@ const TideHarbor = (() => {
   const vector=new T.Vector3();
   function targetFor(g,i) {
     const sec=g.section, s=g.spec,q=g.state;
+    if(TideSwing.active(g)){const s=TideSwing.target(g,i);return {p:s,name:s.label};}
     if(g.cistern){const s=TideCistern.target(g,i);return {p:s,name:s.label};}
     if(g.glass){const s=TideGlass.target(g,i);return {p:s,name:s.label};}
     if(g.fog){const site=TideFogSignal.target(g,i);return {p:site,name:site.label};}
@@ -62,27 +63,27 @@ const TideHarbor = (() => {
       this.yaws=[0,0];this.pitch=[0,0];this.quality=1;this.custom=new Set();
       this.haloGeo=new T.RingGeometry(.76,.83,48);this.dotGeo=new T.RingGeometry(.9,.93,48);
       this.haloMats=colors.map(c=>new T.MeshBasicMaterial({color:c,side:T.DoubleSide,transparent:true,opacity:.89,depthWrite:false}));
-      this.pointer=null;
+      this.pointers=new Map();
       canvas.addEventListener('pointerdown',e=>{
         if(e.button!==0)return;
         const b=canvas.getBoundingClientRect();
-        this.pointer={id:e.pointerId,i:e.clientX-b.left<b.width/2?0:1,x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);
+        this.pointers.set(e.pointerId,{i:e.clientX-b.left<b.width/2?0:1,x:e.clientX,y:e.clientY});canvas.setPointerCapture(e.pointerId);
       });
       canvas.addEventListener('pointermove',e=>{
-        const p=this.pointer;if(!p||p.id!==e.pointerId)return;
+        const p=this.pointers.get(e.pointerId);if(!p)return;
         this.yaws[p.i]-=(e.clientX-p.x)*.005;
         this.pitch[p.i]=clamp(this.pitch[p.i]+(e.clientY-p.y)*.008,-1.15,2.1);
         p.x=e.clientX;p.y=e.clientY;
       });
-      canvas.addEventListener('lostpointercapture',()=>this.pointer=null);
+      canvas.addEventListener('lostpointercapture',e=>this.pointers.delete(e.pointerId));
       canvas.addEventListener('dblclick',e=>{
         const b=canvas.getBoundingClientRect(),i=e.clientX-b.left<b.width/2?0:1;
-        this.yaws[i]=this.homeYaw;this.pitch[i]=0;
+        this.yaws[i]=this.actors[i].rotation.y;this.pitch[i]=0;
       });
     }
     free() {
-      if(!this.scene)return;
-      this.cisternRoom?.dispose();this.glassRoom?.dispose();this.fogHouse?.dispose();this.tideStation?.dispose();this.relayStation?.dispose();this.cableYard?.dispose();this.floodRoom?.dispose();this.archiveStudio?.dispose();this.signalhouse?.dispose();this.lanternroom?.dispose();this.bridgework?.dispose();this.dockside?.dispose();this.cinema?.dispose();this.fieldProps?.dispose();this.coast?.dispose();
+      this.pointers.clear();if(!this.scene)return;
+      this.swingYard?.dispose();this.cisternRoom?.dispose();this.glassRoom?.dispose();this.fogHouse?.dispose();this.tideStation?.dispose();this.relayStation?.dispose();this.cableYard?.dispose();this.floodRoom?.dispose();this.archiveStudio?.dispose();this.signalhouse?.dispose();this.lanternroom?.dispose();this.bridgework?.dispose();this.dockside?.dispose();this.cinema?.dispose();this.fieldProps?.dispose();this.coast?.dispose();
       for(const asset of this.custom)asset.dispose();
       this.custom.clear();this.lifeline=null;this.scene.clear();this.scene=null;this.equipment.releaseDecks();
       this.lens?.dispose();this.lens=null;
@@ -94,7 +95,7 @@ const TideHarbor = (() => {
       this.floors=new Map();this.rigs=[];this.halos=[];
       const add=(m)=>{this.scene.add(m);return m;};
       for(const d of g.world.floors){
-        const obj=d.axes||d.landfall||g.cistern||g.glass||g.fog||g.survey||g.relay||g.cable||g.archive||d.kind==='tram'?new T.Group():this.equipment.deck(d.w,d.d,d.kind);
+        const obj=d.sag||d.axes||d.landfall||g.cistern||g.glass||g.fog||g.survey||g.relay||g.cable||g.archive||d.kind==='tram'?new T.Group():this.equipment.deck(d.w,d.d,d.kind);
         obj.position.set(d.x,d.y,d.z);obj.visible=d.active;add(obj);this.floors.set(d,obj);
       }
       for(const section of g.world.sections) {
@@ -127,6 +128,7 @@ const TideHarbor = (() => {
         }
         this.halos.push(add(ring));
       }
+      this.swingYard=g.swing?TideSwingYard.create(this.scene,g):null;
       this.cisternRoom=g.cistern?TideCisternRoom.create(this.scene,g):null;
       this.glassRoom=g.glass?TideGlassRoom.create(this.scene,g):null;
       this.fogHouse=g.fog?TideFoghouse.create(this.scene,g):null;
@@ -141,7 +143,7 @@ const TideHarbor = (() => {
       this.ship.position.fromArray(TideLookout.vessel(g,g.time));if(!g.archive&&!g.cistern)add(this.ship);
       this.dockside=g.cistern||g.glass||g.fog||g.survey||g.relay||g.cable||g.world.lantern||g.signal||g.archive?null:TideDockside.create(this.scene,g);
       this.fieldProps=g.cistern||g.fog||g.survey||g.relay||g.cable||g.archive?null:TideFieldProps.create(this.scene,g,this.actors);
-      this.cinema=TideCinema.create(this.scene,g,{ship:this.ship,actors:this.actors,cameras:this.cameras,cisternRoom:this.cisternRoom,glassRoom:this.glassRoom,marker:this.coast?.marker});
+      this.cinema=TideCinema.create(this.scene,g,{ship:this.ship,actors:this.actors,cameras:this.cameras,swingYard:this.swingYard,cisternRoom:this.cisternRoom,glassRoom:this.glassRoom,marker:this.coast?.marker});
       this.homeYaw=g.glass&&g.glass.phase==='cabinet'?Math.PI:g.signal?TideSignal.yaw:g.world.lantern?TideLantern.yaw:0;
       this.yaws.fill(this.homeYaw);this.pitch.fill(0);this.snap=true;
     }
@@ -205,7 +207,7 @@ const TideHarbor = (() => {
       if(g.glass){
         if(this.chartPhase==='unload'&&g.glass.phase==='desk')this.yaws.fill(0);
         this.chartPhase=g.glass.phase;this.glassRoom.update(g);
-      }this.cisternRoom?.update(g,this.cinema.ended?0:this.cinema.time);this.fogHouse?.update(g);this.tideStation?.update(g);this.relayStation?.update(g);this.cableYard?.update(g);this.floodRoom?.update(g);this.archiveStudio?.update(g);this.signalhouse?.update(g);this.bridgework?.update();this.lanternroom?.update(g);
+      }this.swingYard?.update(g);this.cisternRoom?.update(g,this.cinema.ended?0:this.cinema.time);this.fogHouse?.update(g);this.tideStation?.update(g);this.relayStation?.update(g);this.cableYard?.update(g);this.floodRoom?.update(g);this.archiveStudio?.update(g);this.signalhouse?.update(g);this.bridgework?.update();this.lanternroom?.update(g);
       if(this.lifeline){
         const {line,eye}=this.lifeline,b=g.rig?.belay;
         line.visible=!!b;
@@ -239,10 +241,14 @@ const TideHarbor = (() => {
         const carryingTester=!acting&&g.cable&&i===1&&!g.engaged[i]&&(g.stage===0||g.stage===2&&!g.cable.backTest);
         const carryingLead=!acting&&i===0&&g.cable?.carried;
         const carry=!acting&&g.archive&&g.stage===1&&g.archive.fetched[i]&&!g.archive.mounted[i];
-        const relayHands=g.cistern?(acting?this.cisternRoom.filmHands(g,i,this.cinema.time):this.cisternRoom.hands(g,i)):g.glass&&!acting?this.glassRoom.hands(g,i):g.fog&&!acting?this.fogHouse.hands(g,i):g.survey&&!acting?this.tideStation.hands(g,i):g.relay&&!acting?this.relayStation.hands(g,i):null;
-        const grips=g.glass&&!acting?(relayHands||(using&&g.glass.phase==='desk'?this.paperGrips(g,i):null)):g.cistern||g.fog||g.survey||g.relay?relayHands:(carryingTester?this.cableYard.testerHands(g):carryingLead?this.cableYard.leadHands(g):using&&g.cable?this.cableYard.hands(g,i):hanging?this.belayGrips(p,g.rig.belay.anchor):carry?this.archiveStudio.carryGrips(g,i):!using?null:g.landfall?this.floodRoom.hands(TideLandfall.targets(g)[i].kind):g.archive?(g.archive.location[i]==='desks'?this.archiveStudio.desks[i].hands():this.archiveStudio.shelfGrips(g,i)):g.signal?this.signalhouse.hands(g,i):g.optic?this.lanternroom.hands(g,i):movingGrip?this.bridgework.hands(g.section,i):paper?this.paperGrips(g,i):this.equipment.grips(device));
+        const transfer=TideSwing.active(g);
+        const relayHands=transfer&&!acting?this.swingYard.hands(g,i):g.cistern?(acting?this.cisternRoom.filmHands(g,i,this.cinema.time):this.cisternRoom.hands(g,i)):g.glass&&!acting?this.glassRoom.hands(g,i):g.fog&&!acting?this.fogHouse.hands(g,i):g.survey&&!acting?this.tideStation.hands(g,i):g.relay&&!acting?this.relayStation.hands(g,i):null;
+        const grips=g.glass&&!acting?(relayHands||(using&&g.glass.phase==='desk'?this.paperGrips(g,i):null)):transfer||g.cistern||g.fog||g.survey||g.relay?relayHands:(carryingTester?this.cableYard.testerHands(g):carryingLead?this.cableYard.leadHands(g):using&&g.cable?this.cableYard.hands(g,i):hanging?this.belayGrips(p,g.rig.belay.anchor):carry?this.archiveStudio.carryGrips(g,i):!using?null:g.landfall?this.floodRoom.hands(TideLandfall.targets(g)[i].kind):g.archive?(g.archive.location[i]==='desks'?this.archiveStudio.desks[i].hands():this.archiveStudio.shelfGrips(g,i)):g.signal?this.signalhouse.hands(g,i):g.optic?this.lanternroom.hands(g,i):movingGrip?this.bridgework.hands(g.section,i):paper?this.paperGrips(g,i):this.equipment.grips(device));
         const workSpeed=g.optic?.mount&&!g.optic.mount.done&&using?g.optic.mount.speed||0:p.speed;
-        TideActors.animate(obj,{speed:acting?0:workSpeed,grounded:p.grounded,climbing:!i&&!!g.relay?.climb,operating:!!relayHands||using||carryingTester||carryingLead||carry||hanging,grips,...acting},dt,t);
+        TideActors.animate(obj, {speed:acting?0:workSpeed,vx:p.vx,vz:p.vz,vy:p.vy,yaw:p.yaw,launch:p.launch,landing:p.landing,
+          slopeX:p.ground?.axes?.nx||0,slopeZ:p.ground?.axes?.nz||0,
+          swing:transfer&&g.swing.occupied&&i===g.swing.rider?{angle:g.swing.angle,omega:g.swing.omega,phase:'ride',effort:g.swing.effort}:null,
+          grounded:p.grounded,climbing:(!i&&!!g.relay?.climb)||!!g.swing?.climb[i],operating:!!relayHands||using||carryingTester||carryingLead||carry||hanging,grips,...acting},dt,t);
       }
       this.dockside?.update(g,dt);this.fieldProps?.update(g,dt);this.cinema.update(g,dt);
       this.cisternRoom?.reflect(e,this.actors,this.halos);
@@ -286,7 +292,7 @@ const TideHarbor = (() => {
         const cableShot=ready&&g.cable?this.cableYard.shot(g,i):null;
         const tapeShot=ready&&g.archive?TideArchive.shot(g,i):null;
         const relayShot=ready&&g.fog?this.fogHouse.shot(g,i):ready&&g.survey?this.tideStation.shot(g,i):ready&&g.relay?this.relayStation.shot(g,i):null;
-        const shot=this.cinema.shot(g,i)||(ready&&g.cistern?this.cisternRoom.shot(g,i):null)||(ready&&g.glass?this.glassRoom.shot(g,i):null)||(ready&&g.lastPass?TideLastPass.shot(g,i):null)||relayShot||cableShot||rescueShot||floodShot||tapeShot||signalShot||lanternShot||(scoped?TideLookout.camera(g):paperView?TidePaper.camera(g,i):beam);
+        const shot=this.cinema.shot(g,i)||(ready&&TideSwing.active(g)?this.swingYard.shot(g,i):null)||(ready&&g.cistern?this.cisternRoom.shot(g,i):null)||(ready&&g.glass?this.glassRoom.shot(g,i):null)||(ready&&g.lastPass?TideLastPass.shot(g,i):null)||relayShot||cableShot||rescueShot||floodShot||tapeShot||signalShot||lanternShot||(scoped?TideLookout.camera(g):paperView?TidePaper.camera(g,i):beam);
         cam.fov=shot?.fov|| (cableShot?cableShot.fov:floodShot?floodShot.fov:tapeShot?tapeShot.fov:signalShot?signalShot.fov:lanternShot?lanternShot.fov:scoped?31:lighting?39:paperView?Math.max(54,2*Math.atan(1.19*height/(1.75*vw))*180/Math.PI):57);
         if(shot){cam.position.fromArray(shot.eye);cam.lookAt(vector.fromArray(shot.at));}
         cam.aspect=vw/height;cam.updateProjectionMatrix();

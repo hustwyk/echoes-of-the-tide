@@ -172,5 +172,5 @@ const TideDrawbridge=(()=>{
     if(c.travel>=1&&!c.arrived){c.arrived=true;g.sound(540,.12);g.alert('吊篮到站，桥头柜就在门边。');}
     return true;
   }
-  return {build,point,coordinates,onCart,carry,advance,restore,catchRider,tram};
+  return {build,point,coordinates,onCart,carry,advance,restore,catchRider,tram,tramSites};
 })();

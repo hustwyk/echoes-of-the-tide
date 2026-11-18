@@ -32,10 +32,10 @@ const TideCoop = (() => {
     constructor(index,events={}) {
       this.index=index;this.world=index===3?TideCistern.layout():index===5?TideGlass.layout():index===10?TideFogSignal.layout():index===8?TideSoundings.layout():index===7?TideRelay.layout():index===1?TideCableQuay.layout():index===2?TideSignal.layout():index===4?TideArchive.layout():index===9?TideLantern.layout():TideTraversal.build(index);this.events=events;
       if(index===0)TideLandfall.build(this.world);
-      TideRigging.build(this.world);TideDrawbridge.build(this.world);if(!this.world.cistern&&!this.world.glass&&!this.world.foghouse&&!this.world.soundings&&!this.world.relay&&!this.world.cableQuay&&!this.world.lantern&&!this.world.signal&&!this.world.archive)TideFieldWork.build(this.world,index);
+      TideRigging.build(this.world);TideDrawbridge.build(this.world);if(index===6)TideSwing.build(this.world);if(!this.world.cistern&&!this.world.glass&&!this.world.foghouse&&!this.world.soundings&&!this.world.relay&&!this.world.cableQuay&&!this.world.lantern&&!this.world.signal&&!this.world.archive)TideFieldWork.build(this.world,index);
       this.time=0;this.stage=0;this.setbacks=0;this.complete=false;this.notice='';this.noticeUntil=0;
       this.cues={light:0,angle:0,water:-4,rescue:0,ghost:0};
-      this.cistern=TideCistern.create(this);this.glass=TideGlass.create(this);this.fog=TideFogSignal.create(this);this.survey=TideSoundings.create(this);this.relay=TideRelay.create(this);this.cable=TideCableQuay.create(this);this.signal=TideSignal.create(this);
+      this.swing=TideSwing.create(this);this.cistern=TideCistern.create(this);this.glass=TideGlass.create(this);this.fog=TideFogSignal.create(this);this.survey=TideSoundings.create(this);this.relay=TideRelay.create(this);this.cable=TideCableQuay.create(this);this.signal=TideSignal.create(this);
       this.players=this.world.sections[0].starts.map(TideTraversal.spawn);
       this.checkpoints=this.world.sections[0].starts.slice();TidePassage.build(this);
       this.begin();
@@ -50,7 +50,7 @@ const TideCoop = (() => {
         returnGate:0,balance:0,warnUntil:0,buttonCooldown:0,releaseHeld:false,catchup:0};
       if(this.spec.type==='ride')this.state.dials[this.spec.driver]=.50;
       this.rig=TideRigging.reset(this);this.paper=TidePaper.create(this);this.optic=TideLantern.create(this);
-      if(this.optic){this.cues.light=.97;this.cues.rays=TideLantern.viewData(this).images;}TideFieldWork.reset(this);TideCableQuay.begin(this);TideLookout.reset(this);TideRelay.begin(this);TideSoundings.begin(this);TideGlass.begin(this);TideCistern.begin(this);TideFogSignal.begin(this);TideLastPass.begin(this);this.pilotHorn=TideFogSignal.formal(this);TideSignal.begin(this);TideArchive.begin(this);
+      if(this.optic){this.cues.light=.97;this.cues.rays=TideLantern.viewData(this).images;}TideFieldWork.reset(this);TideCableQuay.begin(this);TideLookout.reset(this);TideRelay.begin(this);TideSoundings.begin(this);TideGlass.begin(this);TideCistern.begin(this);TideSwing.begin(this);TideFogSignal.begin(this);TideLastPass.begin(this);this.pilotHorn=TideFogSignal.formal(this);TideSignal.begin(this);TideArchive.begin(this);
       this.events.stage?.(this);
     }
     alert(text,seconds=2.5) {
@@ -61,6 +61,7 @@ const TideCoop = (() => {
     resetPerson(side,cause) {
       Object.assign(this.players[side],TideTraversal.spawn(this.checkpoints[side]));
       this.setbacks++;this.events.reset?.(side);this.alert(cause+' · 已回到安全台');
+      if(this.swing)TideSwing.reset(this,side);
       if(this.cistern)TideCistern.fall(this,side);
       if(this.cable)TideCableQuay.fall(this,side);
       if(this.section.tram?.departed){
@@ -77,7 +78,7 @@ const TideCoop = (() => {
     }
     tick(dt,inputs,yaws=[0,0]) {
       if(this.complete)return;
-      this.time+=dt;if(this.cistern)TideCistern.narrate(this,dt);if(this.glass)TideGlass.narrate(this,dt);
+      this.time+=dt;if(this.swing)TideSwing.narrate(this,dt);if(this.cistern)TideCistern.narrate(this,dt);if(this.glass)TideGlass.narrate(this,dt);
       const q=this.state, section=this.section;
       q.age+=dt;TidePassage.update(this);TideRigging.updateLadders(section,dt);
       if(q.doneAt!==null && this.time-q.doneAt>1.15){
@@ -88,23 +89,26 @@ const TideCoop = (() => {
       if(this.survey)TideSoundings.step(this,dt);
       if(this.relay)TideRelay.step(this,dt);
       if(this.cable)TideCableQuay.update(this,dt);
+      const transfer=TideSwing.active(this);
       const activeSites=this.field.done?section.sites:section.field.sites;
-      this.near=this.players.map((p,i)=>this.cistern?TideCistern.near(this,i):this.glass?TideGlass.near(this,i):this.fog?TideFogSignal.near(this,i):this.survey?TideSoundings.near(this,i):this.relay?TideRelay.near(this,i):this.cable?TideCableQuay.near(this,i):this.landfall?TideLandfall.near(this,i):this.archive?TideArchive.near(this,i):near(p,activeSites[i]));
+      this.near=this.players.map((p,i)=>transfer?TideSwing.near(this,i):this.cistern?TideCistern.near(this,i):this.glass?TideGlass.near(this,i):this.fog?TideFogSignal.near(this,i):this.survey?TideSoundings.near(this,i):this.relay?TideRelay.near(this,i):this.cable?TideCableQuay.near(this,i):this.landfall?TideLandfall.near(this,i):this.archive?TideArchive.near(this,i):near(p,activeSites[i]));
       if(this.signal&&this.stage===2)this.near[0]&&=this.players[0].ground===this.world.signal.head;
       const cart=this.spec.mode==='bridge'&&!section.span.seated;
       if(cart)this.near[1-this.spec.driver]=TideDrawbridge.onCart(this,1-this.spec.driver,{use:true});
-      if(section.tram)this.near=this.near.map((v,i)=>v&&this.players[i].ground===section.tram.deck);
+      if(section.tram&&!transfer)this.near=this.near.map((v,i)=>v&&this.players[i].ground===section.tram.deck);
       this.engaged=this.near.map((ok,i)=>this.cable?TideCableQuay.working(this,i,inputs[i]):ok&&inputs[i].use);
       if(this.signal)TideSignal.step(this,dt);
       const prevStaff=section.span?.lower?TideDrawbridge.coordinates(section.span,this.players[1-this.spec.driver]):null;
       for(let side=0;side<2;side++){
         const p=this.players[side],oldZ=p.z,oldX=p.x;
+        if(transfer&&TideSwing.attached(this,side,inputs[side],dt))continue;
         if(this.relay&&!side&&TideRelay.climb(this,inputs[0],dt))continue;
         if(this.rig?.belay&&side!==this.spec.driver)continue;
         TideTraversal.move(p,inputs[side],dt,this.world,yaws[side],this.engaged[side]||TideRigging.lighting(this,side,inputs[side]));
         TidePassage.collide(this,p);
         if(this.world.landfall)TideLandfall.collide(this,p,oldZ);
-        if(this.cistern){TideCistern.collide(this,p,oldZ);if(this.engaged[side])TideCistern.stance(this,side,dt);}
+        if(transfer){TideSwing.gate(this,p,oldZ);if(this.engaged[side])TideSwing.stance(this,side,dt);}
+        else if(this.cistern){TideCistern.collide(this,p,oldZ);if(this.engaged[side])TideCistern.stance(this,side,dt);}
         else if(this.glass){TideGlass.collide(this,p,{x:oldX,z:oldZ});if(this.engaged[side])TideGlass.stance(this,side,dt);}
         else if(this.fog){TideFogSignal.collide(this,p);if(this.engaged[side])TideFogSignal.stance(this,side,dt);}
         else if(this.survey){TideSoundings.collide(this,p);if(this.engaged[side])TideSoundings.stance(this,side,dt);}
@@ -135,6 +139,7 @@ const TideCoop = (() => {
       }
       if(prevStaff)TideDrawbridge.carry(this,inputs,dt,prevStaff);
       if(q.doneAt!==null)return;
+      if(transfer){TideSwing.interact(this,inputs,dt);return;}
       if(this.cistern){TideCistern.interact(this,inputs,dt);return;}
       if(this.glass){TideGlass.interact(this,inputs,dt);return;}
       if(this.fog){TideFogSignal.interact(this,inputs,dt);return;}
@@ -225,11 +230,11 @@ const TideCoop = (() => {
       return;
     }
     if(c.arrived&&!c.heard&&g.players.every(p=>p.grounded&&p.ground!==c.deck&&Math.abs(p.z-g.section.mid.z)<3.75)){
-      g.skipTin=true;g.advance();return;
+      g.skipTin=true;TideSwing.openFile(g);return;
     }
     if(c.heard||g.skipTin){
       for(let i=0;i<2;i++)g.set(i,c.arrived?'吊篮已靠岸':'铁盒收好了，一起听吊轮经过桥腹',{caption:'吊篮行程 '+Math.round(c.travel*100)+'%'});
-      if(c.arrived)g.advance();
+      if(c.arrived)TideSwing.openFile(g);
       return;
     }
     if(g.engaged.every(Boolean)&&input.every(k=>k.z>.55)){
@@ -238,11 +243,12 @@ const TideCoop = (() => {
     }else q.catchup=0;
     q.taps??=[];q.answer??=[];
     const skip=c.arrived?'已靠岸，可从桌子两侧一起下车':'两人同时按住操作键和向后，可收起铁盒';
+    if(g.engaged.every(Boolean)&&!c.heard)TideSwing.speak(g,'knock');
     if(q.taps.length<3){
       const n=q.taps.length;
       if(g.commit(0,input) && (!n||g.time-q.taps[n-1]>.37)){
-        q.taps.push(g.time);q.yes[0]=true;g.sound(375+n*70,.09);
-        if(q.taps.length===3){q.mark=g.time;g.alert('林澈：轮到你了。把我的敲法还给我听。',3);}
+        q.taps.push(g.time);q.yes[0]=true;TideSwing.cue(g.swing,'tin');
+        if(q.taps.length===3){q.mark=g.time;g.alert('三声都收进了第一轨，轮到沈遥。',3);}
       }
       if(n&&g.time-q.taps[n-1]>2.6){q.taps=[];g.alert('录音留了太长的空白，再敲三下');}
       g.set(0,'按住操作键，按三次跳跃键，自己编一段敲铁盒的节奏',{vis:'dial',value:q.taps.length/3,caption:'录音 '+q.taps.length+' / 3　·　'+skip});
@@ -253,15 +259,15 @@ const TideCoop = (() => {
     const symbols=gaps.map(t=>t>.85?'长':'短').join(' · ');
     g.set(0,'现在换你听。再按跳跃键可以重放这段节奏',{caption:'原录音　● '+symbols+' ●　·　'+skip});
     g.set(1,'按住操作键，照刚才听见的间隔敲三下',{vis:'dial',value:q.answer.length/3,caption:'两次停顿 '+gaps.map(t=>t.toFixed(1)+' 秒').join(' / ')+'　·　回应 '+q.answer.length+' / 3'});
-    if(g.commit(0,input)&&!q.replay){q.replay=1;q.mark=g.time;g.sound(375,.10);}
+    if(g.commit(0,input)&&!q.replay){q.replay=1;q.mark=g.time;TideSwing.cue(g.swing,'tin');}
     if(q.replay&&g.time-q.mark>=q.taps[q.replay]-q.taps[0]){
-      g.sound(375+70*q.replay,.10);q.replay=q.replay===2?0:2;
+      TideSwing.cue(g.swing,'tin');q.replay=q.replay===2?0:2;
     }
     if(g.commit(1,input)&&(!q.answer.length||g.time-q.answer.at(-1)>.24)){
-      q.answer.push(g.time);g.sound(430,.095);
+      q.answer.push(g.time);TideSwing.cue(g.swing,'tin');
       if(q.answer.length===3){
         const matched=gaps.every((gap,i)=>Math.abs(q.answer[i+1]-q.answer[i]-gap)<.34+gap*.24);
-        if(matched){c.heard=true;g.alert('沈遥：铁皮饼干盒。我早猜到了。再给我放一遍。',3);}
+        if(matched){c.heard=true;TideSwing.speak(g,'laugh');g.events.checkpoint?.(g);}
         else{q.answer=[];g.alert('第一轨还在。听清两次停顿，就能重新答。');}
       }
     }

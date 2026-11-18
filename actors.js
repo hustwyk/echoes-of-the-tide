@@ -498,46 +498,194 @@
     arm.quaternion.slerp(armRotation,weight);fore.quaternion.slerp(foreRotation,weight);
   }
 
+  // Scratch space for the two leg chains. Targets are in actor metres before the root scale.
+  const legDown=new T.Vector3(0,-1,0),legUp=new T.Vector3(0,1,0);
+  const footGoal=new T.Vector3(),legAxis=new T.Vector3(),kneePole=new T.Vector3(),kneePoint=new T.Vector3();
+  const anklePlane=new T.Vector3(),palmMid=new T.Vector3(),shoulderMid=new T.Vector3();
+  const inversePelvis=new T.Matrix4(),localRotation=new T.Quaternion(),soleRotation=new T.Quaternion();
+  const soleEuler=new T.Euler(0,0,0,'YXZ');
+  const gaitClamp=T.MathUtils.clamp,gaitMix=T.MathUtils.lerp;
+  const easeStep=(a,b,x)=>T.MathUtils.smoothstep(x,a,b);
+  const wrapAngle=x=>Math.atan2(Math.sin(x),Math.cos(x));
+
+  function placeLeg(b,i,x,y,z,plane,pitch,yaw,roll) {
+    const thigh=b['thigh'+i],shin=b['shin'+i],boot=b['boot'+i];
+    footGoal.set(x,y,z).applyMatrix4(inversePelvis).sub(thigh.position);
+    const upper=-shin.position.y,lower=-boot.position.y;
+    const length=gaitClamp(footGoal.length(),.18,upper+lower-.00005);
+    legAxis.copy(footGoal).normalize();
+    kneePole.set(i?.065:-.065,0,-1);
+    kneePole.addScaledVector(legAxis,-kneePole.dot(legAxis)).normalize();
+    const along=(upper*upper-lower*lower+length*length)/(2*length);
+    kneePoint.copy(legAxis).multiplyScalar(along).addScaledVector(kneePole,Math.sqrt(Math.max(0,upper*upper-along*along)));
+    thigh.quaternion.setFromUnitVectors(legDown,footGoal.copy(kneePoint).normalize());
+    footGoal.copy(legAxis).multiplyScalar(length).sub(kneePoint).normalize().applyQuaternion(localRotation.copy(thigh.quaternion).invert());
+    shin.quaternion.setFromUnitVectors(legDown,footGoal);
+    soleRotation.setFromUnitVectors(legUp,plane).multiply(localRotation.setFromEuler(soleEuler.set(pitch,yaw,roll,'YXZ')));
+    localRotation.copy(b.hips.quaternion).multiply(thigh.quaternion).multiply(shin.quaternion).invert();
+    boot.quaternion.copy(localRotation.multiply(soleRotation));
+  }
+
+  // The real boot has a rounded tread under the instep and a flat heel/toe slab.
+  // Compensate for the changing support point when the heel rolls off the ground.
+  function treadHeight(pitch){
+    const c=Math.cos(pitch),s=Math.sin(pitch);
+    return Math.max(Math.hypot(.068*c,.144*s)-.009*c-.044*s,.035*c-.054*s+.0155*Math.abs(c)+.1085*Math.abs(s));
+  }
+
   function animate(actor,motion,dt,time) {
-    const rig=actor.userData.rig;
-    const b=rig.bones;
+    const rig=actor.userData.rig,b=rig.bones;
     TideCrew.express(rig.face,rig.id,time,!!motion.talking);
-    const s=Math.max(0,Math.min(.12,dt||0));
-    const blend=1-Math.exp(-12*s);
-    rig.pace+=((Math.min(1,Math.abs(motion.speed||0)/4.7))-rig.pace)*blend;
-    rig.work+=((motion.operating?1:0)-rig.work)*blend;
-    rig.air+=((motion.grounded===false?1:0)-rig.air)*blend;
-    rig.phase+=rig.pace*9.1*s;
-    const {phase,pace,air,work}=rig;
-    const groundPace=pace*(1-air),grips=motion.grips;
-    const handY=grips?Math.min(grips[0].y,grips[1].y)-actor.position.y:1.2;
-    const drop=grips?T.MathUtils.clamp(1.39-(handY+.28)/actor.scale.y,0,.52)*work:0;
-    const bend=Math.acos(1-drop/.793);
-    const breath=Math.sin(time*2.1+rig.id*2);
-    b.hips.position.y=.904+groundPace*(.019*Math.cos(2*phase)-.014)-drop;
-    b.hips.rotation.y=Math.sin(phase)*.068*groundPace;
-    b.chest.rotation.set(-.028-.052*pace-.075*work-drop*.34,-.083*Math.sin(phase)*groundPace,.025*Math.cos(phase)*groundPace);
-    b.chest.position.y=.087+breath*.0025;
-    b.head.rotation.set(.015+.017*Math.cos(2*phase)*groundPace-.08*work-(motion.incline||0),
-      Math.sin(time*.55+rig.id)*.05*(1-pace)+(motion.gaze||0),-b.chest.rotation.z*.6);
-    for(let i=0;i<2;i++) {
-      const angle=phase+i*Math.PI;
-      const stride=Math.sin(angle);
-      b['thigh'+i].rotation.x=.48*stride*groundPace+.035+air*(i===0?.44:.15);
-      b['shin'+i].rotation.x=-.065-.66*Math.max(0,stride)*groundPace-air*(i===0?.65:.4);
-      b['boot'+i].rotation.x=.035+.12*Math.max(0,stride)*groundPace+.12*air;
-      b['thigh'+i].rotation.x+=bend;b['shin'+i].rotation.x-=2*bend;b['boot'+i].rotation.x+=bend;
-      if(motion.climbing){
-        const knee=(1+Math.sin(actor.position.y*Math.PI/.29+i*Math.PI))*.5;
-        b['thigh'+i].rotation.x=.26+.72*knee;b['shin'+i].rotation.x=-.44-1.17*knee;b['boot'+i].rotation.x=.18+.38*knee;
-      }
-      const arm=b['arm'+i],forearm=b['forearm'+i];
-      arm.rotation.y=0;arm.rotation.x=.065-.42*stride*groundPace+.4*air+.55*work;
-      arm.rotation.z=(i===0?-1:1)*(.086+.27*air+.09*work);
-      forearm.rotation.set(0,0,0);b['wrist'+i].rotation.x=.10*work;
-      forearm.rotation.x=.135+.20*pace+.16*air+(.36+.20*Math.sin(time*4.3+i*Math.PI))*work;
-      if(grips)handleArm(b.chest,arm,forearm,grips[i],i,work);
+    const s=gaitClamp(Number.isFinite(dt)?dt:0,0,.12),blend=1-Math.exp(-s*14),slow=1-Math.exp(-s*8.5);
+    const ground=motion.grounded!==false,grips=motion.grips,hang=motion.swing;
+    const ride=!!(hang&&hang.phase==='ride'&&grips),reaching=!!(hang&&hang.phase==='reach'&&grips);
+    const yaw=Number.isFinite(motion.yaw)?motion.yaw:actor.rotation.y,co=Math.cos(yaw),si=Math.sin(yaw);
+    const speed=Math.max(0,Number.isFinite(motion.speed)?Math.abs(motion.speed):Math.hypot(motion.vx||0,motion.vz||0));
+    const st=rig.locomotion||(rig.locomotion={
+      phase:rig.id*.5+.17,ground,flight:0,vy:0,impact:0,impactAge:1,launch:0,launchHeld:false,leftLead:rig.id,
+      x:actor.position.x,y:actor.position.y,z:actor.position.z,yaw,vx:0,vz:0,travelX:0,travelZ:0,
+      run:0,move:0,brake:0,tilt:0,sway:0,reach:0,hangOffset:new T.Vector3(),
+      feet:[{planted:false},{planted:false}]
+    });
+    const dx=actor.position.x-st.x,dz=actor.position.z-st.z,measured=Math.hypot(dx,dz);
+    const reset=measured>Math.max(1.2,speed*s*3+.31)||Math.abs(actor.position.y-st.y)>1.65;
+    const vx=Number.isFinite(motion.vx)?motion.vx:-si*speed,vz=Number.isFinite(motion.vz)?motion.vz:-co*speed;
+    const horizontal=Math.hypot(vx,vz),dirX=horizontal>.025?vx/horizontal:-si,dirZ=horizontal>.025?vz/horizontal:-co;
+    const vy=Number.isFinite(motion.vy)?motion.vy:s>.00001&&!reset?(actor.position.y-st.y)/s:0;
+    let distance=0;
+    if(Number.isFinite(motion.strideDistance))distance=Math.max(0,motion.strideDistance);
+    else if(speed>.025&&!reset){
+      if(Number.isFinite(motion.vx)&&Number.isFinite(motion.vz)){
+        // Input can keep a velocity while a wall prevents any actual step.
+        distance=Math.min(Math.max(0,dx*dirX+dz*dirZ),horizontal*s*1.22);
+      }else distance=measured>.00001?measured:speed*s;
     }
+    if(reset){distance=0;st.feet.forEach(f=>{f.planted=false;});st.hangOffset.set(0,0,0);st.impact=0;st.launch=0;}
+    if(!s||!ground||ride||motion.climbing)distance=0;
+    distance=Math.min(distance,Math.max(.025,s*(speed+2.5)));
+    const wasGround=st.ground;
+    const launchHeld=motion.launch===true||motion.launch>.50;
+    const launching=(!ground&&wasGround&&!ride)||(launchHeld&&!st.launchHeld);
+    if(launching){st.launch=1;st.leftLead=st.phase<.5?0:1;}
+    else st.launch*=Math.exp(-s*9);
+    st.launchHeld=launchHeld;
+    if(ground&&!wasGround&&!ride&&!motion.climbing&&!reset){
+      st.impact=Math.max(.15,gaitClamp((-st.vy-1.0)/6.9,0,1),gaitClamp(Number(motion.landing)||0,0,1));
+      st.impactAge=0;st.phase=st.leftLead===0?.035:.535;st.feet[0].planted=st.feet[1].planted=false;
+    }else st.impactAge+=s;
+    const impactPhase=gaitClamp(st.impactAge/.32,0,1);
+    const suppliedImpact=gaitClamp(Number(motion.landing)||0,0,1);
+    const impact=ground?Math.max(st.impact*Math.sin(Math.PI*impactPhase)*(1-.37*impactPhase),suppliedImpact*.53):0;
+    const deltaSpeed=s>.00001&&!reset?(horizontal-Math.hypot(st.vx,st.vz))/s:0;
+    const turn=s>.00001&&!reset?wrapAngle(yaw-st.yaw)/s:0;
+    const previousSpeed=Math.hypot(st.vx,st.vz);
+    const reversal=previousSpeed>.8&&horizontal>.5?Math.max(0,-(vx*st.vx+vz*st.vz)/(previousSpeed*horizontal)):0;
+    st.brake=Math.max(st.brake*Math.exp(-s*7.6),ground?gaitClamp(-deltaSpeed/33,0,1)*Math.min(1,previousSpeed/2.0):0,ground?reversal*.81:0);
+    st.tilt+=((ground?gaitClamp(deltaSpeed/32,-1,1):0)-st.tilt)*slow;
+    st.sway+=(gaitClamp(turn*horizontal*.058,-1,1)-st.sway)*slow;
+    st.run+=(easeStep(2.05,5.30,speed)-st.run)*blend;
+    st.move+=(easeStep(.045,1.04,speed)-st.move)*blend;
+    st.flight+=((ground?0:1)-st.flight)*(1-Math.exp(-s*(ground?21:19)));
+    rig.work+=((motion.operating||ride||reaching?1:0)-rig.work)*blend;
+    const work=rig.work,run=st.run,move=st.move,air=st.flight;
+    const cycle=gaitMix(1.15,1.35,easeStep(.35,2.05,speed))+1.51*run;
+    const stance=gaitMix(.577,.302,run);
+    st.phase=(st.phase+distance/cycle)%1;st.travelX+=dirX*distance;st.travelZ+=dirZ*distance;
+    rig.phase=st.phase*TAU;rig.pace=move;rig.air=air;
+    const phase=rig.phase,stride=Math.sin(phase),turnLean=ground?st.sway*move:0;
+    const rise=easeStep(.16,4.1,vy),fall=easeStep(.21,5.6,-vy),apex=1-Math.max(rise,fall);
+    const sky=ride?1:air,unloaded=1-sky;
+    const handY=grips?Math.min(grips[0].y,grips[1].y)-actor.position.y:1.2;
+    const squat=grips&&!ride&&!reaching?gaitClamp(1.39-(handY+.28)/actor.scale.y,0,.50)*work:0;
+    const breath=Math.sin(time*2.1+rig.id*2);
+    const effort=hang?gaitClamp(hang.effort||0,-1,1):0,angle=hang?gaitClamp(hang.angle||0,-1.30,1.30):0,angular=hang?gaitClamp(hang.omega||0,-4,4):0;
+    const nx=ground?gaitClamp(motion.slopeX||0,-.85,.85):0,nz=ground?gaitClamp(motion.slopeZ||0,-.85,.85):0;
+    const ny=Math.sqrt(Math.max(.10,1-nx*nx-nz*nz));
+    // Make room for the farther, downhill support foot without lengthening either shin.
+    const slopeDrop=Math.min(.19,(.073+.255*move)*Math.hypot(nx,nz)/ny);
+    const contactWave=Math.cos(phase*2-stance*TAU);
+    b.hips.position.set(0,.891-(.069+.052*run)*move*unloaded+(.013+.020*run)*contactWave*move*unloaded
+      -.166*impact-.064*st.brake-.044*air-.012*apex*air-squat-slopeDrop,0);
+    b.hips.rotation.set(0,.065*stride*move*unloaded,turnLean*.020);
+    b.chest.position.set(0,.087+breath*.0026,0);
+    b.chest.rotation.set(-.024-(.049+.115*run)*move*unloaded-.044*st.tilt+.11*st.brake-.18*impact
+      -.083*work-.35*squat+air*(-.16*rise+.055*fall),-.094*stride*move*unloaded,
+      .023*Math.cos(phase)*move*unloaded+turnLean*.077);
+    b.head.rotation.set(.014-.075*work-(motion.incline||0)-b.chest.rotation.x*.24-.067*st.launch+.054*fall*air,
+      Math.sin(time*.55+rig.id)*.05*(1-move)+(motion.gaze||0),-b.chest.rotation.z*.68);
+    if(ride||reaching){
+      st.reach=ride?1:Math.min(1,st.reach+s*9.5);
+      const weight=st.reach,hangPitch=gaitClamp(angle*.51-angular*.038,-.70,.70);
+      b.chest.rotation.x=gaitMix(b.chest.rotation.x,-.035-hangPitch*.41-effort*.089,weight);
+      b.chest.rotation.y*=1-weight;b.chest.rotation.z*=1-weight;
+      b.hips.rotation.set(0,b.hips.rotation.y*(1-weight),0);
+      // Match the shoulder midpoint to the known moving ring, including body scale, before solving either arm.
+      palmMid.copy(grips[0]).add(grips[1]).multiplyScalar(.5);actor.worldToLocal(palmMid);
+      b.chest.updateMatrix();b.hips.updateMatrix();
+      shoulderMid.set(0,b.arm0.position.y,0).applyMatrix4(b.chest.matrix).applyMatrix4(b.hips.matrix);
+      palmMid.y-=.399*Math.cos(hangPitch);palmMid.z+=.399*Math.sin(hangPitch);
+      st.hangOffset.copy(palmMid.sub(shoulderMid)).multiplyScalar(weight);
+      b.head.rotation.x+=(-.11+hangPitch*.20)*weight;
+    }else{
+      st.reach=0;st.hangOffset.multiplyScalar(Math.exp(-s*18));
+      if(st.hangOffset.lengthSq()<.0000003)st.hangOffset.set(0,0,0);
+    }
+    b.hips.position.add(st.hangOffset);
+    b.hips.updateMatrix();inversePelvis.copy(b.hips.matrix).invert();
+    anklePlane.set(co*nx-si*nz,ny,si*nx+co*nz).normalize();
+    const localDX=co*dirX-si*dirZ,localDZ=si*dirX+co*dirZ;
+    for(let i=0;i<2;i++){
+      const sign=i?1:-1,u=(st.phase+i*.5)%1,onGround=u<stance,sw=gaitClamp((u-stance)/(1-stance),0,1);
+      const supportLength=cycle*stance,foot=st.feet[i];
+      const advance=onGround?supportLength*(.5-u/stance):
+        supportLength*(easeStep(0,1,sw)-.5)-Math.min(.47,cycle*(1-stance))*sw*(1-sw)*(1-2*sw);
+      let x=sign*(.093+.010*st.brake)+localDX*advance*move/actor.scale.x;
+      let z=sign*.012+localDZ*advance*move/actor.scale.z;
+      let footYaw=0;
+      if(ground&&!motion.climbing&&!ride&&!reaching&&move>.12&&speed>.18&&onGround){
+        if(!foot.planted){
+          foot.x=st.travelX+co*x*actor.scale.x+si*z*actor.scale.z;
+          foot.z=st.travelZ-si*x*actor.scale.x+co*z*actor.scale.z;
+          foot.yaw=yaw;foot.planted=true;
+        }
+        const px=foot.x-st.travelX,pz=foot.z-st.travelZ;
+        x=(co*px-si*pz)/actor.scale.x;z=(si*px+co*pz)/actor.scale.z;
+        footYaw=gaitClamp(wrapAngle(foot.yaw-yaw),-.49,.49);
+      }else foot.planted=false;
+      const sphase=gaitClamp(u/stance,0,1);
+      let pitch=(onGround?.095*(1-easeStep(.02,.29,sphase))-.27*easeStep(.67,1,sphase):
+        -.27*(1-easeStep(0,.49,sw))+.095*easeStep(.62,.98,sw))*move;
+      const localFloor=ground?-(nx*(co*x*actor.scale.x+si*z*actor.scale.z)+nz*(-si*x*actor.scale.x+co*z*actor.scale.z))/(ny*actor.scale.y):0;
+      let y=treadHeight(pitch)/ny+localFloor+(!onGround?(.106+.175*run)*Math.pow(Math.sin(Math.PI*sw),1.32)*move:0);
+      if(!ground&&air>.0001){
+        const lead=i===st.leftLead,fore=lead?-1:1;
+        const lift=.162+(lead?.193:.135)*rise+.107*apex-(lead?.086:.056)*fall;
+        x=gaitMix(x,sign*(.100+.018*fall),air);y=gaitMix(y,lift,air);
+        z=gaitMix(z,fore*(.066+.125*rise+.057*apex+.016*fall),air);
+        pitch=gaitMix(pitch,-.21*rise-.10*apex+.060*fall+(lead?0:-.053),air);
+      }
+      if(ride||reaching){
+        const weight=st.reach,legArc=gaitClamp(angle*.41+angular*.043-effort*.28,-.58,.58);
+        const tucked=.075+.085*Math.abs(effort)+.051*easeStep(.2,2.5,Math.abs(angular));
+        x=gaitMix(x,b.hips.position.x+sign*.108,weight);
+        y=gaitMix(y,b.hips.position.y-.71+tucked+(i===st.leftLead?.046:0)+.075*(1-Math.cos(legArc)),weight);
+        z=gaitMix(z,b.hips.position.z+Math.sin(legArc)*.58+(i===st.leftLead?-.074:.034),weight);
+        pitch=gaitMix(pitch,-.21-.12*easeStep(.1,.8,effort),weight);
+      }else if(!ground){y+=st.hangOffset.y;z+=st.hangOffset.z;x+=st.hangOffset.x;}
+      if(motion.climbing){
+        const k=(1+Math.sin(actor.position.y*Math.PI/.29+i*Math.PI))*.5;
+        b['thigh'+i].rotation.set(.26+.72*k,0,0);b['shin'+i].rotation.set(-.44-1.17*k,0,0);
+        b['boot'+i].rotation.set(.18+.38*k,0,0);
+      }else placeLeg(b,i,x,y,z,anklePlane,pitch,footYaw,0);
+      const arm=b['arm'+i],forearm=b['forearm'+i],wrist=b['wrist'+i];
+      const armSwing=Math.cos(u*TAU-Math.PI*stance);
+      arm.rotation.set(.065-(.30+.38*run)*armSwing*move*unloaded+.49*work+.17*st.brake
+        +air*(.25+.18*rise+(i===st.leftLead?-.23:.20)),0,sign*(.081+.075*work+.16*air+.19*fall*air+.061*Math.abs(turnLean)));
+      forearm.rotation.set(.148+.47*run*move+.13*air+.23*rise*air+(.32+.15*Math.sin(time*4.3+i*Math.PI))*work,0,0);
+      wrist.rotation.set(grips?0:.08*work+.035*run*move,0,0);
+      if(grips)handleArm(b.chest,arm,forearm,grips[i],i,ride?1:reaching?st.reach:work);
+    }
+    st.x=actor.position.x;st.y=actor.position.y;st.z=actor.position.z;st.yaw=yaw;st.vx=vx;st.vz=vz;st.vy=vy;st.ground=ground;
   }
 
   // Stations go from the pointed stem to the transom. Cross sections narrow

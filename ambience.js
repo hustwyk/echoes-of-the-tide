@@ -431,7 +431,7 @@ window.TideAudioScene = (() => {
         if (q.pulseAt > previous.pulse) click(now,panFor(0));
         if (q.received > previous.received) horn(now,.22);
       }
-      if (type === 'quiet' && q.yes[0] && !previous.yes) tinRoll(now,-.32);
+      if (type === 'quiet' && !g.swing && q.yes[0] && !previous.yes) tinRoll(now,-.32);
       if (type === 'ride' && q.latch && !previous.latch) {
         click(now,.22,1.1);
         ring(now+.03,176,.32,.20,.15,{end:157});
