@@ -55,7 +55,46 @@ const TideRigging=(()=>{
       g.alert(g.spec.mode==='raft'?'窗沿接住了浮架，去开另一头的旁通闸。':'横梁踩稳了。去松开折梯的棘爪。',2.5);
     }
   }
+  function catchLine(g){
+    if(g.index!==0||g.stage!==1||g.state.latch||!g.rig?.lit||g.rig.landed||g.rig.belay||g.state.ferry<.76)return;
+    const p=g.players[1-g.spec.driver],ledge=g.section.rig.ledge;
+    if(p.grounded||p.vy>=0||p.y>ledge.y-.60||p.z>ledge.z+5.6||
+      p.z<ledge.z-1.1||Math.abs(p.x-ledge.x)>3.56)return;
+    const anchor={x:ledge.x+.72,y:ledge.y+2.42,z:ledge.z+.98};
+    const dx=p.x-anchor.x,dz=p.z-anchor.z,down=anchor.y-p.y-.99;
+    g.rig.belay={anchor,x:clamp(dx,-1.7,1.7),angle:clamp(Math.atan2(dz,down),-.45,1.04),
+      length:clamp(Math.hypot(down,dz),2.72,4.16),speed:clamp(p.vz*.18,-.9,.9)};
+    g.rig.lightOn=false;g.alert('沈遥：安全绳挂住了！收短，我能荡回来。',3);
+  }
+  function haul(g,input,dt){
+    const rig=g.rig,b=rig.belay,d=g.spec.driver,r=1-d,p=g.players[r],led=g.section.rig.ledge;
+    const shortening=g.engaged[d]?clamp(-input[d].z,-1,1):0;
+    b.length=clamp(b.length-shortening*dt*.92,1.18,4.16);
+    b.speed+=dt*(-3.2*Math.sin(b.angle)-.81*b.speed+input[r].z*1.9);
+    b.angle=clamp(b.angle+b.speed*dt,-.78,1.05);
+    b.x=clamp(b.x+input[r].x*dt*1.3,-1.65,.82);
+    p.x=b.anchor.x+b.x;
+    // A hanging body meets the seaward face of the beam before its feet can clear the lip.
+    if(Math.abs(p.x-led.x)<led.w*.5+.20&&b.anchor.y-.99-b.length*Math.cos(b.angle)<led.y+.04){
+      const limit=Math.asin(clamp((led.z+led.d*.5+.24-b.anchor.z)/b.length,-1,1));
+      if(b.angle<limit){b.angle=limit;b.speed=Math.max(0,b.speed);}
+    }
+    p.y=b.anchor.y-.99-b.length*Math.cos(b.angle);
+    p.yaw+=Math.atan2(Math.sin(-p.yaw),Math.cos(p.yaw))*Math.min(1,dt*7);
+    p.z=b.anchor.z+b.length*Math.sin(b.angle);p.grounded=false;p.ground=null;p.speed=p.vx=p.vz=p.vy=0;
+    const clear=p.y>led.y-.26&&Math.abs(p.x-led.x)<led.w*.54&&Math.abs(p.z-led.z)<1.30;
+    g.set(d,'按住绞盘，前推收短安全绳。把同伴提到梁边。',{
+      vis:'dial',value:(4.16-b.length)/2.98,caption:'安全绳　·　余长 '+b.length.toFixed(1)+' m'});
+    g.set(r,'前后荡向横梁，左右找正落脚点。到梁边时按跳跃键松开腰钩。',{
+      caption:clear?'脚下是横梁　·　可以脱钩':'救生索已承重　·　梁边比脚底高 '+Math.max(0,Math.round((led.y-p.y)*100))+' cm'});
+    if(input[r].jump){
+      if(!clear){g.alert('还够不到横梁。让同伴收绳，向梁面摆。');return;}
+      rig.belay=null;p.vy=4.3;p.vz=-2.0;p.vx=clamp((led.x-p.x)*2.4,-1.3,1.3);
+      g.sound(425,.10);g.alert('脱钩了，往梁心收一步。');
+    }
+  }
   function basket(g,input,dt,pressure,target,onCourse){
+    if(g.rig.belay){haul(g,input,dt);return;}
     const s=g.spec,q=g.state,sec=g.section,rig=g.rig,d=s.driver,r=1-d;
     const f=sec.ferry,aboard=g.players[r].ground===f.deck;
     rig.lightOn=lighting(g,r,input[r]);
@@ -141,5 +180,5 @@ const TideRigging=(()=>{
     g.state.ferry=0;rig.lift=0;rig.reversing=false;rig.flow=0;rig.guider=false;rig.opened=false;
     const f=g.section.ferry;rig.water=f.from.y-.38;moveDeck(g,f.from.x,f.from.y,f.from.z);
   }
-  return {build,reset,lighting,ray,basket,pump,fall,signs,lower,updateLadders};
+  return {build,reset,lighting,ray,basket,pump,fall,catchLine,signs,lower,updateLadders};
 })();
