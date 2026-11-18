@@ -59,6 +59,11 @@ const TideArrival=(()=>{
     if(s.radio==='wait'&&pressed){s.radio='test';speak(s,'call');}
     if(!s.voice){s.caption='';return;}
     const clip=speech(s.voice);s.voiceAt+=dt;
+    if(s.stern?.queue.length){
+      const stale=s.voice==='sternHold'&&s.stern.phase!=='reach'||s.voice==='sternCaught'&&s.stern.phase==='fast';
+      const between=clip.cues?.some(q=>s.voiceAt>=q.end&&s.voiceAt-dt<q.end);
+      if(stale&&between){TideSternLine.nextVoice(s);return;}
+    }
     // The receiver catches the ship's call sign first. Lin echoes the number in
     // the pause; the same transmission continues from its passenger count.
     if(s.radio==='acquire'&&s.voice==='captain'&&s.voiceAt>=callSignEnd){
@@ -68,6 +73,7 @@ const TideArrival=(()=>{
     const line=clip.lines.findLast(l=>l[0]>=from&&l[0]<=s.voiceAt)?.[1]||'';
     if(line!==s.caption){s.caption=line;if(line)g.events.log?.(line);}
     if(s.voiceAt<clip.duration)return;
+    if(s.stern&&s.voice.startsWith('stern')){TideSternLine.nextVoice(s);return;}
     if(s.voice==='read'){s.voice='';s.caption='';}
     else if(s.voice==='tuned'){s.radio='listen';speak(s,'captain');s.voiceAt=callSignEnd;}
     else if(s.voice==='captain')speak(s,'heard');
@@ -101,9 +107,21 @@ const TideArrival=(()=>{
         const tension=s.haul;
         if(tension>0){
           const b=1-Math.exp(-dt*(.38+1.55*tension));
-          s.x+=(h.anchorX-s.x)*b;s.z+=(h.anchorZ-s.z)*b;s.heading*=1-b;
+          const opposed=s.stern?.phase==='draw'?Math.min(1,s.stern.draw*2):0;
+          s.x+=(h.anchorX-s.x)*b;s.z+=(h.anchorZ+.21*opposed-s.z)*b;
+          s.heading+=(.12*opposed-s.heading)*b;
         }
-        if(s.secured&&Math.abs(s.x-h.anchorX)<.09&&Math.abs(s.z-h.anchorZ)<.09&&Math.abs(s.heading)<.035){
+        if(s.stern&&!s.haul&&s.stern.phase==='reach'){
+          // With only the head line fast the tide sets the stern back out.
+          const drift=1-Math.exp(-dt*.46);
+          s.z+=(Math.max(s.z,h.anchorZ+1.12)-s.z)*drift;
+          s.heading+=(.13-s.heading)*drift;
+        }
+        if(s.stern?.phase==='draw'&&!s.haul){
+          const settle=(1-Math.exp(-dt*1.4))*s.stern.draw;
+          s.z+=(h.anchorZ-s.z)*settle;s.heading*=1-settle;
+        }
+        if(s.secured&&s.haul&&s.stern?.phase==='fast'&&Math.abs(s.x-h.anchorX)<.09&&Math.abs(s.z-h.anchorZ)<.09&&Math.abs(s.heading)<.035){
           s.moored=true;s.x=h.anchorX;s.z=h.anchorZ;s.heading=0;s.speed=0;tell(g,'hull');
         }
       }
@@ -122,21 +140,32 @@ const TideArrival=(()=>{
     const t=s.atBow;
     let a={x:radioSite.x+(castSite.x-radioSite.x)*t,y:radioSite.y,z:radioSite.z+(castSite.z-radioSite.z)*t};
     let b=helmSite,ay=0,by=-Math.PI*.5;
+    if(s.stern){
+      const f=s.stern.travel,d=TideSternLine.rail;
+      b={x:helmSite.x+(d.x-helmSite.x)*f,y:helmSite.y+(d.y-helmSite.y)*f,z:helmSite.z+(d.z-helmSite.z)*f+.32*Math.sin(Math.PI*f)};
+      if(!s.moored){
+        const end=TideSternLine.points(g).tip,local=TideFloating.local(g.world.fenders.floatPose,end.x,end.y,end.z);
+        const desired=clamp(Math.atan2(d.x-g.world.fenders.floatPose.anchorX-local.x,d.z-g.world.fenders.floatPose.anchorZ-local.z),-.94,.94);
+        s.stern.turn+=(desired-s.stern.turn)*(1-Math.exp(-dt*5));
+      }
+      by=-(1-f)*Math.PI*.5+s.stern.turn*f;
+    }
     if(s.moored){
       s.walking=Math.min(1,s.walking+dt*.285);
       const pathA=[[1.65,15.69],[.25,15.84],[-1.05,16.60],[-2.40,16.56],[-3.08,17.25]];
-      const pathB=[[-6.03,16.73],[-5.93,17.83],[-4.48,17.90],[-2.60,17.52],[-1.10,17.20],[.18,17.48],[1.15,17.25]];
+      const pathB=[[TideSternLine.rail.x,TideSternLine.rail.z],[-4.83,16.68],[-4.48,17.90],[-2.60,17.52],[-1.10,17.20],[.18,17.48],[1.15,17.25]];
       function cross(path,t,startY,endY,initial){
         const step=clamp(t,0,1)*(path.length-1),n=Math.min(path.length-2,Math.floor(step)),f=step-n;
         const [x,z]=path[n],dx=path[n+1][0]-x,dz=path[n+1][1]-z;
         return {x:x+dx*f,y:startY+(endY-startY)*t,z:z+dz*f,yaw:t>0?Math.atan2(-dx,-dz):initial};
       }
       a=cross(pathA,s.walking,castSite.y,-2.72,0);
-      b=cross(pathB,clamp((s.walking-.15)/.85,0,1),helmSite.y,-2.62,-Math.PI*.5);
+      b=cross(pathB,clamp((s.walking-.15)/.85,0,1),TideSternLine.rail.y,-2.62,s.stern.turn);
       ay=a.yaw;by=b.yaw;
     }
     if(t>0&&t<1&&!s.moored)ay=Math.atan2(radioSite.x-castSite.x,radioSite.z-castSite.z);
     moveTo(g,0,a,ay);moveTo(g,1,b,by);
+    if(s.stern&&s.stern.travel<1)g.players[1].speed=1.17;
     if(t>0&&t<1&&!s.moored)g.players[0].speed=Math.hypot(castSite.x-radioSite.x,castSite.z-radioSite.z)*1.2;
     if(s.moored&&s.walking>0&&s.walking<1){g.players[0].speed=1.65;g.players[1].speed=s.walking>.15?2.35:0;}
   }
@@ -165,7 +194,7 @@ const TideArrival=(()=>{
     inspectPlate(g,helm,dt);voice(g,dt,pressed);
     // Keys spring back to idle. The pilot can back up and try the same shore cleat again.
     const thrust=clamp(-helm.z,-1,1);
-    if(s.attached&&Math.abs(thrust)<.12&&Math.abs(s.speed)<.68&&helm.use){s.secured=true;s.engineRunning=false;}
+    if(s.attached&&!s.secured&&Math.abs(thrust)<.12&&Math.abs(s.speed)<.68&&helm.use){s.secured=true;s.engineRunning=false;TideSternLine.start(g);}
     s.haul=s.attached&&s.secured&&k.use?1:0;
     advanceHull(g,s.plate.held?s.rudder:helm.x,thrust,dt);
     if(s.radio==='line'&&!s.attached){
@@ -182,8 +211,9 @@ const TideArrival=(()=>{
           warn(g,f.fast?'船还在往前冲。先收油，再把缆圈送过去。':'缆圈落空了，收回来。看圈落在岸桩的哪一边。');}
       }
     }
+    if(s.stern&&!s.moored)TideSternLine.step(g,helm,dt);
     placeCrew(g,dt);s.use=k.use;
-    if(s.moored&&s.walking>=1){
+    if(s.moored&&s.walking>=1&&!s.voice){
       s.done=true;g.engaged.fill(false);g.near.fill(false);g.fenders.moored=true;
       for(let i=0;i<2;i++){const p=g.players[i],f=g.world.fenders.boats[i];p.ground=f;p.y=TideTraversal.surfaceHeight(f,p.x,p.z);p.yaw=0;p.grace=.1;}
       g.events.checkpoint?.(g);g.alert(TideFenders.briefing,3);return;
@@ -192,6 +222,7 @@ const TideArrival=(()=>{
   }
   function display(g){
     const s=g.arrival;g.near.fill(true);g.engaged.fill(true);
+    if(s.stern&&!s.moored){TideSternLine.show(g);return;}
     const end=cleat(g),here=endPoint(g),miss=Math.hypot(end.x-here.x,end.z-here.z);
     let radio,read;
     if(s.radio==='tune'){radio='转动防水电台的旋钮。让掌舵的人告诉你值班频道。';read='频道 '+String(s.channel).padStart(2,'0');}

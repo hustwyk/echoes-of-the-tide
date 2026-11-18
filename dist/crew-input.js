@@ -37,8 +37,8 @@ const TideCrewInput=(()=>{
         const {row,input,hint}=rows[i],pad=pads.find(p=>p.index===slots[i]);
         const labelPad=pads.length===1?'手柄':'手柄 '+(pads.indexOf(pad)+1);
         label(input,(pad?labelPad:'键盘')+' · '+(i?'方向键':'WASD'));
-        const kb=boat==='line'?(i?'↑ ↓ 进退车　Enter 停机':'WASD 瞄准　E 抛缆 / 收缆'):boat?(i?'↑ ↓ 进退车　Enter 查牌':'A / D 调台　E 发话'):pool?(i?'Enter 准备':'E 准备'):(i?'/ 跳跃　Enter 操作':'空格跳跃　E 操作');
-        const gp=boat==='line'?(i?'左摇杆掌舵　RT 停机':'左摇杆瞄准　RT 抛缆 / 收缆'):boat?(i?'左摇杆掌舵　RT 查牌':'左摇杆调台　RT 发话'):pool?'A 准备　左摇杆驾驶':'左摇杆移动　A 跳　RT 操作';
+        const kb=boat==='stern'?(i?'方向键送钩　/ 挑起　Enter 握杆':'E 收首缆　松开回缆'):boat==='line'?(i?'↑ ↓ 进退车　Enter 停机':'WASD 瞄准　E 抛缆 / 收缆'):boat?(i?'↑ ↓ 进退车　Enter 查牌':'A / D 调台　E 发话'):pool?(i?'Enter 准备':'E 准备'):(i?'/ 跳跃　Enter 操作':'空格跳跃　E 操作');
+        const gp=boat==='stern'?(i?'左摇杆送钩　A 挑起　RT 握杆':'RT 收首缆　松开回缆'):boat==='line'?(i?'左摇杆掌舵　RT 停机':'左摇杆瞄准　RT 抛缆 / 收缆'):boat?(i?'左摇杆掌舵　RT 查牌':'左摇杆调台　RT 发话'):pool?'A 准备　左摇杆驾驶':'左摇杆移动　A 跳　RT 操作';
         label(hint,pad?gp:kb);
         const active=layouts[i].some(k=>previewKeys.has(k))||!!pad&&(pad.axes.some(v=>Math.abs(v)>.22)||pad.buttons.some(b=>b.pressed));
         row.classList.toggle('input-seen',active);

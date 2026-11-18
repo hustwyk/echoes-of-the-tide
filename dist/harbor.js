@@ -318,7 +318,10 @@ const TideHarbor = (() => {
           wall:berth&&i?g.fenders.wall:null,pointAt:!acting&&ready?this.pointing.pointAt(i,g.time):null,grounded:p.grounded,climbing:!!g.gallery?.arrests[i]||(berth&&!i&&g.fenders.onLadder)||(!i&&!!g.relay?.climb)||!!g.swing?.climb[i],operating:TideArrival.active(g)?!!grips:!!relayHands||using||carryingTester||carryingLead||carry||hanging,grips,helmSeat:i&&TideArrival.active(g)?this.arrivalRig.seat():null,talking:starterLine?starterLine.speaker===(i?'沈遥':'林澈')&&(starterLine.mouth.levels[Math.floor(g.signal.clock*starterLine.mouth.hz)]||0)>10:haulLine?haulLine.speaker===(i?'沈遥':'林澈')&&(haulLine.mouth?.levels[Math.floor(g.fog.clock*20)]||0)>10:TideGallery.active(g)?!!(g.gallery.voice&&TideGallerySpeech[g.gallery.voice].speaker===(i?'沈遥':'林澈')&&(TideGallerySpeech[g.gallery.voice].mouth?.levels[Math.floor(g.gallery.clock*20)]||0)>10):TideArrival.active(g)&&g.arrival.voice&&(TideArrival.speech(g.arrival.voice).speaker===(i?'沈遥':'林澈'))&&
             (TideArrival.speech(g.arrival.voice).mouth?.levels[Math.floor(g.arrival.voiceAt*20)]||0)>12,...acting},dt,t);
         if(g.stage===0&&g.signal&&!acting)TideStarterPose.apply(obj,g,i,dt,t,grips);
-        if(i&&g.arrival&&!acting&&this.arrivalRig)TidePlatePose.apply(obj,g,dt,t,this.arrivalRig.plate);
+        if(i&&g.arrival&&!acting&&this.arrivalRig){
+          TidePlatePose.apply(obj,g,dt,t,this.arrivalRig.plate);
+          TideSternPose.apply(obj,g,this.arrivalRig.stern,dt);
+        }
         if(!i&&g.fog&&!acting)TideHaulPose.apply(obj,g,dt,t,this.fogHouse.haul);
       }
       this.signalhouse?.apron.update(g,this.actors);
@@ -374,11 +377,14 @@ const TideHarbor = (() => {
         const shot=cinemaShot||(TideGallery.active(g)?TideGallery.shot(g,i,yaw,this.pitch[i],ready):null)||(TideArrival.active(g)?this.arrivalRig.shot(i,yaw,this.pitch[i],ready,vw/height):null)||pocketShot||berthShot||(ready&&TideSwing.active(g)?this.swingYard.shot(g,i):null)||(ready&&g.cistern?this.cisternRoom.shot(g,i):null)||(ready&&g.glass?this.glassRoom.shot(g,i):null)||(ready&&g.lastPass?TideLastPass.shot(g,i):null)||relayShot||cableShot||rescueShot||floodShot||tapeShot||signalShot||lanternShot||(scoped?TideLookout.camera(g):paperView?TidePaper.camera(g,i):beam);
         cam.fov=shot?.fov|| (cableShot?cableShot.fov:floodShot?floodShot.fov:tapeShot?tapeShot.fov:signalShot?signalShot.fov:lanternShot?lanternShot.fov:scoped?31:lighting?39:paperView?Math.max(54,2*Math.atan(1.19*height/(1.75*vw))*180/Math.PI):57);
         if(shot){
-          cam.position.fromArray(shot.eye);
+          if(shot.blend<1)cam.position.lerp(vector.fromArray(shot.eye),shot.blend);
+          else cam.position.fromArray(shot.eye);
           if(TideGallery.active(g)&&g.gallery.phase==='stairs'){
             this.sightlines.retract(i,p,cam.position,g.time,dt,this.snap);
           }
-          cam.lookAt(vector.fromArray(shot.at));
+          vector.fromArray(shot.at);
+          if(shot.blend<1){vector.lerp(this.look[i],1-shot.blend);cam.fov=57+(cam.fov-57)*shot.blend;}
+          cam.lookAt(vector);
         }
         else{
           this.sightlines.retract(i,p,cam.position,g.time,dt,this.snap);

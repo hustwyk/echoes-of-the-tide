@@ -3,11 +3,11 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const box=vm.createContext({});
-for(const name of ['missions','traversal','floating','warp-speech','warping','fender-speech','fenders','plate-speech','arrival-speech','arrival','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','lookout','cistern-speech','cistern','glass-speech','chartroom','paper','lantern','gallery-speech','gallery','shift-speech','starter','transit-speech','transit','signal','tin-lines','tin-memory','archive','relay-speech','relay','soundings-speech','soundings','fog-speech','haul-speech','fog-recovery','fogsignal','pass-speech','lastpass','swing-speech','swing','cooperation']){
+for(const name of ['missions','traversal','floating','warp-speech','warping','fender-speech','fenders','plate-speech','arrival-speech','stern-line','arrival','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','lookout','cistern-speech','cistern','glass-speech','chartroom','paper','lantern','gallery-speech','gallery','shift-speech','starter','transit-speech','transit','signal','tin-lines','tin-memory','archive','relay-speech','relay','soundings-speech','soundings','fog-speech','haul-speech','fog-recovery','fogsignal','pass-speech','lastpass','swing-speech','swing','cooperation']){
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../dist',name+'.js'),'utf8'),box);
 }
 const {Session,near,surface,lookout,ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideSwing,TideCistern,TideGlass,TidePaper}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideSwing,TideCistern,TideGlass,TidePaper})',box);
-const {TideFenders,TideWarping,TideFloating,TideArrival}=vm.runInContext('({TideFenders,TideWarping,TideFloating,TideArrival})',box);
+const {TideFenders,TideWarping,TideFloating,TideArrival,TideSternLine}=vm.runInContext('({TideFenders,TideWarping,TideFloating,TideArrival,TideSternLine})',box);
 const {TideTransit}=vm.runInContext('({TideTransit})',box);
 const {TideTinMemory}=vm.runInContext('({TideTinMemory})',box);
 const {TideGallery}=vm.runInContext('({TideGallery})',box);
@@ -528,6 +528,18 @@ function approachInputs(g,out){
     radio.use=(a.atBow||0)>.85&&Math.hypot(side,reach)<.32&&Math.abs(a.speed)<1.2;
   }
   if(a.attached)radio.use=true;
+  if(a.stern){
+    const s=a.stern;
+    helm.use=false;helm.x=helm.z=0;
+    if(s.phase==='reach'){
+      const geom=TideSternLine.points(g),t=TideFloating.local(h,geom.eye.x,geom.eye.y,geom.eye.z);
+      const sx=(h.anchorX+t.x+4.82)/1.24,extension=(15.13-h.anchorZ-t.z)/1.66;
+      helm.x=Math.max(-1,Math.min(1,(sx-s.side)*7));helm.z=Math.max(-1,Math.min(1,(s.reach-extension)*7));
+      helm.jump=geom.near&&!s.lastJump;
+    }else if(s.phase==='draw'){
+      radio.use=false;helm.use=s.draw<.988;helm.z=1;
+    }
+  }
   return out;
 }
 function galleryInputs(g,out){
@@ -897,6 +909,20 @@ if(require.main===module){
     assert.ok(!a.secured&&!a.moored);
     run(150,()=>[empty(),{...empty(),use:true}]);
     assert.ok(a.secured&&!a.moored&&a.haul===0);
+    const standby=TideFenders.checkpoint(g),rejoined=new Session(0);
+    TideFenders.restore(rejoined,standby);assert.equal(rejoined.arrival.stern.phase,'reach');
+    assert.ok(rejoined.arrival.attached&&!rejoined.arrival.engineRunning);
+    // A glance and an untimed button press cannot catch a ring across open water.
+    run(1,()=>[empty(),{...empty(),jump:true}]);assert.equal(a.stern.phase,'reach');assert.equal(a.stern.mistakes,1);
+    run(28,idle);reach(g,()=>a.stern.phase==='draw');
+    const hookSave=TideFenders.checkpoint(g),caughtAgain=new Session(0);
+    TideFenders.restore(caughtAgain,hookSave);assert.equal(caughtAgain.arrival.stern.phase,'draw');
+    run(165,()=>[{...empty(),use:true},{...empty(),use:true,z:1}]);
+    assert.equal(a.stern.draw,.5);assert.ok(!a.moored&&a.heading>.07);
+    run(20,()=>[empty(),empty()]);assert.ok(a.stern.draw<.5,'ungripped wet line slips back');
+    reach(g,()=>a.stern.phase==='fast');
+    const tailSave=TideFenders.checkpoint(g),fastAgain=new Session(0);
+    TideFenders.restore(fastAgain,tailSave);assert.ok(fastAgain.arrival.stern.lower===1&&!fastAgain.arrival.done);
     reach(g,()=>a.done);
     assert.equal(TideFenders.checkpoint(g).berth,'moored');
     assert.ok(g.players.every(p=>p.grounded));

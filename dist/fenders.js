@@ -153,11 +153,12 @@ const TideFenders = (() => {
   }
   function checkpoint(g){
     if(!g.fenders||g.stage!==0)return null;
-    if(!['done','exit','upper'].includes(g.fenders.phase))return g.fenders.moored?{berth:'moored'}:null;
+    if(!['done','exit','upper'].includes(g.fenders.phase))return g.fenders.moored?{berth:'moored'}:TideSternLine.checkpoint(g);
     return {berth:g.fenders.phase};
   }
   function restore(g,mark){
     if(!g.fenders||g.stage!==0)return;
+    if(mark?.berth==='stern'){TideSternLine.restore(g,mark);return;}
     if(mark?.berth==='moored'){g.fenders.moored=true;return;}
     if(!['done','exit','upper'].includes(mark?.berth))return;
     const s=g.fenders,w=g.world.fenders;s.phase=mark.berth;s.top[1]=true;s.seen.fill(true);s.setting=1;s.voice='';s.heardPawl=mark.berth!=='upper';s.clock=0;s.line=-1;s.queue=[];s.subtitle='';s.warned=true;geometry(s);

@@ -63,8 +63,12 @@ const TideReceiverAudio=(()=>{
       const source=ctx.createBufferSource(),gain=ctx.createGain(),filter=ctx.createBiquadFilter();
       source.buffer=buffer;source.loop=repeat;
       if(repeat){source.loopStart=key==='horn/diaphone'?.18:.04;source.loopEnd=key==='horn/diaphone'?1.7:2.2;}
-      filter.type='lowpass';filter.frequency.value=6400;gain.gain.value=volume;
-      source.connect(filter).connect(gain).connect(output);
+      const pan=key.startsWith('boat/')?TideArrivalSpeech[key.slice(5)]?.pan:undefined;
+      const placement=Number.isFinite(pan)?ctx.createStereoPanner?.():null;
+      filter.type='lowpass';filter.frequency.value=placement?8300:6400;gain.gain.value=volume;
+      source.connect(filter).connect(gain);
+      if(placement){placement.pan.value=pan;gain.connect(placement).connect(output);}
+      else gain.connect(output);
       if(key==='horn/diaphone'){
         if(!echo){
           const delay=ctx.createDelay(1),wall=ctx.createBiquadFilter(),bounce=ctx.createGain(),wet=ctx.createGain();
@@ -76,7 +80,7 @@ const TideReceiverAudio=(()=>{
         gain.connect(echo.delay);
       }
       const clip={source,gain,filter,start:ctx.currentTime-at};
-      source.onended=()=>{source.disconnect();filter.disconnect();gain.disconnect();};
+      source.onended=()=>{source.disconnect();filter.disconnect();gain.disconnect();placement?.disconnect();};
       source.start(ctx.currentTime,at);return clip;
     }
     function end(clip){
@@ -125,7 +129,7 @@ const TideReceiverAudio=(()=>{
       if(TideArrival.active(g)){
         const s=g.arrival;
         if(arrivalSource!==s){arrivalSource=s;arrivalSerial=s.serial;}
-        for(const id of ['captain','heard','button','call','dark','pttDown','pttUp','dial','hull']){
+        for(const id of ['captain','heard','button','call','dark','pttDown','pttUp','dial','hull','sternOut','sternHold','sternCaught','sternFast','hookStone','wetLine','cleatDrop']){
           const key='boat/'+id;if(!buffers[key]&&!pending.has(key))decode(key).catch(()=>{});
         }
         if(s.serial!==arrivalSerial){arrivalSerial=s.serial;arrivalFoley=end(arrivalFoley);arrivalFoley=play('boat/'+s.cue,.71);}
