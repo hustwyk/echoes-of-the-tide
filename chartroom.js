@@ -20,13 +20,16 @@ const TideGlass=(()=>{
   }
   function create(g){return g.world.glass?{phase:'cabinet',keyTurn:0,drawer:0,lift:.28,transfer:0,receiving:false,keyed:false,
     cart:{x:0,z:3.52,a:0,roll:0},leg:0,blocked:false,unload:0,docked:false,slide:[0,1],clipped:[false,false],stamp:false,
-    mask:.09,beam:.13,rake:.45,rubs:[false,false],fragment:0,entry:[0,2],signed:[false,false],voice:'',clock:0,line:-1,subtitle:'',queue:[]}:null;}
+    mask:.09,beam:.13,rake:.45,rubs:[false,false],handExplained:false,fragment:0,entry:[0,2],signed:[false,false],voice:'',clock:0,line:-1,subtitle:'',queue:[]}:null;}
   function say(r,id){if(!r.voice){r.voice=id;r.clock=0;r.line=-1;r.subtitle='';}else if(!r.queue.includes(id)&&r.voice!==id)r.queue.push(id);}
   function narrate(g,dt){
     const r=g.glass;if(!r.voice)return;const clip=TideGlassSpeech[r.voice];
     r.clock+=dt;const i=clip.lines.findLastIndex(row=>row[0]<=r.clock);
     if(i>=0&&i!==r.line){r.line=i;r.subtitle=clip.lines[i][1];g.events.log?.(r.subtitle);}
-    if(r.clock>=clip.duration){r.voice='';r.subtitle='';r.clock=0;if(r.queue.length)say(r,r.queue.shift());}
+    if(r.clock>=clip.duration){
+      if(r.voice==='marginAnswer'){r.handExplained=true;snap(g);}
+      r.voice='';r.subtitle='';r.clock=0;if(r.queue.length)say(r,r.queue.shift());
+    }
   }
   function begin(g){
     const r=g.glass;if(!r)return;
@@ -143,6 +146,7 @@ const TideGlass=(()=>{
   function light(r,i){
     const b=bands[i];return clamp((r.mask-b.mask+.10)*9,0,1)*clamp(1-Math.abs(r.beam-b.x)/.23,0,1)*clamp(1-Math.abs(r.rake-b.rake)/.22,0,1);
   }
+  function explainHand(r){say(r,'marginAsk');say(r,'marginAnswer');}
   function margin(g,keys,dt){
     const r=g.glass,i=r.fragment,b=bands[i];
     if(g.engaged[0])r.mask=clamp(r.mask+keys[0].x*dt*.4,0,1);
@@ -152,7 +156,12 @@ const TideGlass=(()=>{
     g.set(1,'左右沿纸缘扫灯，前后改变入射角。凹下去的一行变清楚后，按确认拓印。',{caption:n>.55?b.word:r.mask<b.mask?'还有一截压在框下':Math.abs(r.beam-b.x)>.095?'沿纸边寻找下一行':r.rake<b.rake?'抬高手灯，让影子变短':'压低手灯，让笔槽投影'});
     if(g.commit(1,keys)){
       if(!g.engaged[0]||n<.56){g.alert('拓印缺笔。请同伴稳住遮框，把掠射灯移回字槽。');return;}
-      r.rubs[i]=true;g.sound(560+i*70,.11);if(i===0)r.fragment=1;else r.phase='record';snap(g);
+      r.rubs[i]=true;g.sound(560+i*70,.11);
+      if(i===0)r.fragment=1;
+      else{
+        r.phase='record';explainHand(r);
+      }
+      snap(g);
     }
   }
   function record(g,keys,dt){
@@ -165,7 +174,7 @@ const TideGlass=(()=>{
         r.entry[i]=selected;r.signed[i]=true;snap(g);g.sound(518,.10);
       }
     }
-    if(r.signed.every(Boolean))g.advance();
+    if(r.signed.every(Boolean)&&!r.voice)g.advance();
   }
   function registered(g){const r=g.glass;if(g.stage<2){g.advance();return;}r.phase='margin';say(r,'margin');snap(g);}
   function interact(g,keys,dt){
@@ -183,7 +192,7 @@ const TideGlass=(()=>{
   function checkpoint(g){
     const r=g.glass;if(!r||(!g.stage&&!r.keyed))return null;
     const p=g.paper;
-    return {stage:g.stage,phase:r.phase,keyed:r.keyed,drawer:r.drawer,lift:r.lift,cart:{...r.cart},unload:r.unload,leg:r.leg,stamp:r.stamp,rubs:r.rubs.slice(),signed:r.signed.slice(),entry:r.entry.slice(),
+    return {stage:g.stage,phase:r.phase,keyed:r.keyed,drawer:r.drawer,lift:r.lift,cart:{...r.cart},unload:r.unload,leg:r.leg,stamp:r.stamp,rubs:r.rubs.slice(),handExplained:r.handExplained,signed:r.signed.slice(),entry:r.entry.slice(),
       mask:r.mask,beam:r.beam,rake:r.rake,paper:p.pinned?{angle:p.angle,offset:p.offset.slice(),light:p.light}:null};
   }
   const num=(n,lo,hi,f)=>Number.isFinite(n)?clamp(n,lo,hi):f;
@@ -199,6 +208,7 @@ const TideGlass=(()=>{
     if(g.stage===2){r.rubs=[s.rubs?.[0]===true,s.rubs?.[1]===true];r.fragment=r.rubs[0]?1:0;
       for(const key of ['mask','beam','rake'])r[key]=num(s[key],0,1,r[key]);
       r.signed=[s.signed?.[0]===true,s.signed?.[1]===true];r.entry=[0,1].map(i=>num(s.entry?.[i],0,2,i?2:0));}
+    if(r.phase==='record'){r.handExplained=s.handExplained===true;if(!r.handExplained)explainHand(r);}
     if(s.paper&&r.docked){const p=g.paper;p.angle=num(s.paper.angle,-.65,.65,0);p.pinned=true;
       const [dx,dy]=TidePaper.residual(p,p.pin);p.offset[0]-=dx;p.offset[1]-=dy;p.light=num(s.paper.light,0,1,p.lightTarget);}
     g.checkpoints=[target(g,0),target(g,1)];g.players=g.checkpoints.map((s,i)=>({...TideTraversal.spawn(s),x:s.x,z:s.z,ground:g.world.glass.floor,yaw:s.face}));

@@ -1,6 +1,7 @@
 <!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>潮汐回声 · 故事文案与分屏关卡设计</title>
 <style>
 *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;color:#202a2b;background:#f4f1e9;font:16px/1.85 "PingFang SC","Microsoft YaHei",sans-serif}header{background:linear-gradient(90deg,#09151aeb,#0f2229a8 65%,#1128314a),url("assets/coast.jpg") center 48%/cover;color:#fff;padding:65px max(6%,calc((100vw - 930px)/2));border-bottom:4px solid #b87b42}header strong{color:#edb779;font-size:14px;letter-spacing:.13em}header h1{font:700 clamp(44px,7vw,76px)/1.1 "Songti SC",serif;margin:12px 0}header p{max-width:580px;color:#e1e9e5}main,nav{max-width:978px;margin:auto;padding:10px 24px}nav{display:flex;gap:12px 23px;flex-wrap:wrap;padding-block:20px;border-bottom:1px solid #abb6ac}a{color:#176066;text-underline-offset:4px}h2{font:700 32px/1.35 "Songti SC",serif;margin:48px 0 12px}h3{font-size:22px;margin:24px 0 4px}h4{margin:12px 0 3px;color:#205052}p{margin:5px 0 12px}section{scroll-margin-top:15px}.act{background:#203c40;color:#fff;padding:15px 22px;margin-top:38px;border-left:4px solid #d79d5a}.act h3{margin:0}.act p{margin:4px 0 0;color:#d1e0da}article{padding:15px 0 22px;border-bottom:1px solid #bac4b9;break-inside:avoid}article h3{margin:0 0 9px}blockquote{margin:12px 0 18px;padding:10px 16px;border-left:3px solid #bc844e;background:#e8e6da;color:#324043}dl{margin:4px 0}dt{font-weight:700;color:#23565a}dd{margin:0 0 8px}.refs{font-size:14px;color:#4d5a55}.refs a{margin-right:8px}.facts{border-left:3px solid #81938b;padding-left:17px}footer{padding:32px 0 50px}.act:has(+ article){break-after:avoid}@media print{body{font-size:10pt;background:white}header{padding:16px 0;background:none;color:#172828}header p,header strong{color:#444}nav{display:none}main{padding:0}.act{color:#222;background:#eee}.act p{color:#444}h2{font-size:19pt}h3{font-size:15pt}a{color:#234}blockquote{padding:4px 10px}}
+.window-pair{margin:16px 0 22px}.window-pair>div{display:grid;grid-template-columns:1.6fr 1fr;gap:8px;align-items:center}.window-pair img{display:block;width:100%;height:auto}.window-pair figcaption{margin-top:8px}@media(max-width:580px){.window-pair>div{grid-template-columns:1fr}}
 </style>
 <header><strong>3D 本地双人合作冒险 · 叙事设计稿</strong><h1>潮汐回声</h1><p>林澈修好了一盏灯，沈遥在电台里说了一句「可以了」。海上的船长以为，这句话准许她进港。</p></header>
 <nav aria-label="目录"><a href="#study">原作调研（含剧透）</a><a href="#story">原创故事</a><a href="#act1">第一幕</a><a href="#act2">第二幕</a><a href="#act3">第三幕</a><a href="#act4">第四幕</a><a href="#play">节奏与试玩</a></nav><main>
@@ -44,7 +45,7 @@
 <p>离防波堤还有一段水。沈遥坐在艇尾的舵轮前，往右侧身避开一串溅上来的浪。舵座旁的铜牌积了盐。沈遥用手套擦过一道直痕，又顺着旁边的弯钩往下走，露出一个「2」。她朝艇首喊：「外港值班……十二。林澈，试十二。」艇首电台的指针越过杂音，一个女人开始数人头。</p>
 <blockquote>梁青：「北岬，这里海雁。船上四十一位，算上我。」<br>林澈低头对着扬声器：「听见了。」<br>沈遥隔着半条船喊：「你没按发话键。她不知道。」</blockquote>
 <p>这一次林澈把侧键按到了底。一句话说完，绿色接收灯还在亮，旁边的发射灯始终是黑的。海雁号过了几秒，又在喊北岬。沈遥收油门，红白相间的首缆牌从细雨里移到他们身旁。要让梁青听到一句回话，两人得先上岸。</p>
-<p>十三年前两人也是这样坐在值班台边。林澈的父亲负责灯机，沈遥的母亲负责测潮。那晚一艘邮运船搁浅，调查简报上只剩两个挨在一起的签名。两家从此不再同桌吃饭。小时候他们合录过一盒《十秒钟北岬》：一个人去收一段怪响，另一个人对着空轨猜是什么。最后一题空了十三年。六天前，两人以机修员和信号员的身份回来交接这座塔，客客气气，只签自己那一栏。今晚一个来拆灯机，一个来封存电台。偏偏在灯塔停役的最后一夜，渡轮海雁号主机停车，救援艇赶不到它漂进礁区之前。</p>
+<p>十三年前两人也是这样坐在值班台边。林澈的父亲负责灯机，沈遥的母亲负责测潮。那晚一艘邮运船搁浅，调查简报上只剩两个挨在一起的签名。两家从此不再同桌吃饭。小时候他们合录过一盒《十秒钟北岬》：一个人去收一段怪响，另一个人对着空轨猜是什么。最后一题空了十三年。六天前，两人以机修员和信号员的身份回来交接这座塔，客客气气，见面只谈自己负责的那一栏。今晚一个来拆灯机，一个来封存电台。偏偏在灯塔停役的最后一夜，渡轮海雁号主机停车，救援艇赶不到它漂进礁区之前。</p>
 <h3>岸上与船上的人</h3>
 <p><b>林澈</b>要在设备交接单上拿到一个干净的签名。他记得父亲晚年连修个台灯都要人签收，厌烦这种习惯，却也总把「机器转了」当作工作的终点。玩家先用他的手把灯点亮，后来还会用这双手把灯遮住。</p>
 <p><b>沈遥</b>会从风声里辨出一句被截断的回话。她替母亲整理遗物时，只把能听清的一面数字化，另一轨上留着十五秒空白。她怕自己一旦说「没听清」，就会像母亲一样再也没人肯听。</p>
@@ -52,8 +53,11 @@
 <p><b>顾岚，当年邮运船上的水手。</b>上岸填笔录时，桌上只备了两把椅子，一把给值班员，一把给船长。她站在门边，借了支铅笔，在纸角留了个名字。第七关，玩家翻起纸夹时，还能看出那支铅笔写到一半钝了。</p>
 <h3>中场 · 同一页纸</h3>
 <p>第 6 关，玩家从两侧把纸推上透光台。一层是维修验收联，另一层是航测草图。它们曾被一枚订书钉穿在一起。孔对孔时，父亲签的「回转正常」落在草图的空海面上；右下角的「实测未毕」恰好被裁出了复印范围。</p>
-<blockquote>林澈：「这是我爸的字。」<br>沈遥：「还有我妈的。你看她把浪花画到哪儿了。」<br>电台响了。梁青：「你们要是还不知道，就跟我说不知道。我这边也有事能做。」<br>沈遥按下发话键：「不知道。请报你左舷能看见的东西。」</blockquote>
-<p>旧报告的附件注明了灯机可用、北线待测。六天前，林澈照着灯机做过一次验收；沈遥导出交接表时，纸上只印出了第一栏。林澈盯住签名旁一个浅浅的指甲印。那天他看见备注没印出来，用指甲在空白处划了一下，终究没有让同事重打一张。沈遥也记得自己在下班前替两个人按的那次确认。这回他们能更正的，首先是自己的话。</p>
+<blockquote>林澈：「这是我爸的字。」<br>沈遥：「还有我妈的。你看她把浪花画到哪儿了。」</blockquote>
+<p>旧报告的附件注明了灯机可用、北线待测。六天前，林澈照着灯机做过一次验收；沈遥导出交接表时，纸上只印出了第一栏。林澈盯住签名旁一个浅浅的指甲印。那天他看见备注没印出来，用指甲在空白处划了一下，终究没有让同事重打一张。玩家照出「须以当潮复测」的最后一个字，两人隔着桌子把手停在当年那一道笔槽的两边。林澈先开口。</p>
+<blockquote>林澈：「我指的是漏掉的那行。你那天看见了吗？」<br>沈遥：「我看见你的手了。我以为你叫我签字。」</blockquote>
+<p>沈遥把掠射灯留在亮处。林澈在设备联上只填自己验过的项目；她照着纸边的原话，另写一份航测结论。两个人都签好名，沈遥才按下发话键。</p>
+<blockquote>沈遥：「海雁，灯机验过了。北线能不能走，我们还不知道。」</blockquote>
 </section>
 <section id="act1"><div class="act">
 <h3>第一幕 · 风暴登陆</h3>
@@ -126,7 +130,7 @@
 <p>暴雨稍歇，玻璃图室里只听得见水沿着窗缝走。丙三柜的抽屉很沉。钥匙转过一圈，灯机验收联露出来，纸背上还粘着另一张图。林澈看见父亲的字，伸手想揭。沈遥把承托带递过去：「别揭。纸背还粘着字呢。把两张一起推过去。」</p>
 <dl><dt>从柜里到灯下</dt><dd>林澈转钥匙、向后拉图屉。沈遥用另一侧的承托带接住纸匣。图屉越往外，带子要托得越高；两道标线错开，抽屉就停。两人一起把匣子沿滚轮滑到图车。每人只推一侧车轮。同向走直线，一推一拉可以原地掉头。两排晾纸架把通路错开，得让对方看清自己这一端有没有擦到铁脚。松柄时车停在原地。</dd>
 <dt>装订孔与半枚红章</dt><dd>车停上透光台的铜轨。一个人推透明图，另一个人从斜侧看装订孔。铜针一旦别住，整张图只能绕这枚针转。第一处对齐以后，两人分头去东西墙找留样。西墙夹着机修票据，东墙夹着航测存根。三处撕裂的纤维长短不同；只有机修验收联的右沿能与潮图附件的左沿接回同一枚印。夹错时原件留在眼前，可以再比一次。</dd>
-<dt>裁边之外</dt><dd>两人回到灯台，交换站位，各自检查先前由对方看过的印痕。林澈推开当年复印时用过的遮框，沈遥让灯斜掠过纸面，先辨出「北线待测」，再辨出「须以当潮复测」。最后各自给梁青签一句话。林澈只验过灯机回转，沈遥能证明还需要当潮复测。一句「北线可通」会被退回到原稿，两人不用重新运纸。</dd></dl>
+<dt>裁边之外</dt><dd>两人回到灯台，交换站位，各自检查先前由对方看过的印痕。林澈推开当年复印时用过的遮框，沈遥让灯斜掠过纸面，先辨出「北线待测」，再辨出「须以当潮复测」。沈遥拓下第二行时，林澈问她，当年有没有看见他指着纸。她看见了，一直以为他在示意她签字。两人可以边听边分别写下给梁青的结论。林澈只验过灯机回转，沈遥能证明还需要当潮复测。一句「北线可通」会被退回到原稿，两人不用重新运纸。</dd></dl>
 <figure style="margin:18px 0"><img loading="lazy" src="assets/chart-cart.jpg" width="1440" height="900" style="display:block;width:100%;height:auto" alt="玻璃图室里的两人各握图车一侧，准备让纸匣绕过第二排晾纸架。"><figcaption class="refs">图车转到晾纸架的端头。左屏和右屏能分别看清两只车柄离架脚还有多远。</figcaption></figure>
 <figure style="margin:18px 0"><img loading="lazy" src="assets/chart-seal.jpg" width="1440" height="900" style="display:block;width:100%;height:auto" alt="两人从两面墙的存根夹里找出能接回同一枚红章的两张纸。"><figcaption class="refs">两半红章都带着北岬的名字，真正能辨认附件的是断边上三处不同深浅的裂口。</figcaption></figure>
 <p>林澈摸到签名边一条浅浅的指甲印。六天前他已经看见复印件少了一行，却没叫人重印。沈遥记得替两个人按下确认的手感。电台前，她第一次能够把「我们还不知道」几个字从头说到尾。梁青复述北线待测，叫阿棠回后甲板继续看浪。第二关他站在那里只够报一盏灯，现在她要他留心自己在驾驶台看漏的任何东西。</p>
@@ -223,6 +227,8 @@
 <p><b>演出与规模。</b>按一座灯塔、四组可复用场景设计。复用同一座吊桥的上层、桥腹和水线，让前一幕经过的地方成为后方参照。每关约 5–9 分钟，加上四幕演出，首通目标约 80–110 分钟。风暴推进由触发事件驱动，玩家停下听完一段录音不会害死船上的人。</p>
 <figure style="margin:22px 0"><img src="assets/lookout-play.jpg" alt="左屏林澈守在船位簿旁，右屏沈遥从远望镜中辨认海上的旧绿标。" width="1280" height="800" loading="lazy" style="display:block;width:100%;height:auto"><figcaption style="margin-top:6px;font-size:14px">第九关实机画面。左屏拿着海图线索，右屏可以转动远望镜寻找旧绿标与断桩。</figcaption></figure>
 <p><b>画面取舍。</b>写实细节集中在两人会停下来看的地方，例如右屏能读出受潮纸带上的三道针迹，左屏能看出铜齿还差多少才进检修窗。Three.js 在同一座海岬上渲染两台相机，近景使用扫描材质，海面按风浪动态反射灯光。本文配图均为浏览器实机抓帧。照片级画质和原作同档的双人挑战仍是制作目标。</p>
+<p id="two-windows"><b>一人一扇窗。</b>进关后点右上角「双窗口」，沈遥的视角会在新窗口打开。可以把它拖到第二块显示器，各自在自己的窗口全屏、转镜头或右击指出实物。暂停、潮水、无线电和关卡进度由两人共享。关掉副窗或点「合回同屏」，两个人会回到同一画面继续当前这一刻。</p>
+<figure class="window-pair"><div><a href="assets/two-windows-bow.jpg"><img loading="lazy" src="assets/two-windows-bow.jpg" width="1190" height="792" alt="林澈的独立窗口，艇首朝向黑礁，防水电台停在频道九。"></a><a href="assets/two-windows-helm.jpg"><img loading="lazy" src="assets/two-windows-helm.jpg" width="754" height="810" alt="沈遥的独立窗口，舵座前方可以看见林澈和正在接近的岸桩。"></a></div><figcaption class="refs">同一局靠泊。林澈从艇首看得见水面上的礁石；沈遥坐在艇尾，能看见他的人和整段登岸距离。点任一画面可查看该窗口原图。</figcaption></figure>
 <p><b>视野与输入。</b>两人各用独立第三人称镜头。行走时轻点跳跃可以小跳，按住可以跳得更高。林澈用 Q、R 转头，C 回正；沈遥用逗号、句号转头，反斜杠回正。行动简报里轻推摇杆，对应角色的名字会亮起。一只手柄可以交给任意一人，另一人用键盘；中途可暂停互换。使用手柄时各自用右摇杆控镜，按下右摇杆回到人物身后。隔着浪沟报不清落脚点时，可按住 F（林澈）或分号（沈遥），用方向选中木板、手轮或船上的实物，再松开。在两块画面里都能看见同一个位置，它会跟着浮台一起走。两人隔着塔身时，收到指示的一方可站稳，按住 G（林澈）、单引号（沈遥）或手柄 RB，转头看同伴指的实物。石墙挡住视线时，标记会说「视线被挡住了」。露出墙角、在自己画面里看清了，指路的人才会收到「已看见」和来自另一侧的提示音。松手回到原视角，移动、跳跃或操作器械会立即接回行动镜头。手柄使用 LB，也可以用鼠标在任一半屏右击。靠近器械后，只有操作者的镜头靠近仪表，另一位继续在场内活动。泵台、透镜、无线电各有声音和形状反馈。默认允许看伙伴的半屏，寻找信息的人仍须把自己的发现转成另一方能执行的动作。</p>
 <figure id="look-together" style="margin:22px 0"><video controls playsinline preload="none" width="1142" height="716" poster="assets/partner-bearing.jpg" style="display:block;width:100%;height:auto"><source src="assets/partner-bearing.mp4" type="video/mp4"><track kind="captions" src="assets/partner-bearing.vtt" srclang="zh" label="中文"></video><figcaption class="refs">十二秒连续实机。林澈指着检修台格栅，沈遥转头看清。林澈摇回平台，沈遥松开视角键，跳上平台，到背风台接手另一架手轮。<a href="assets/partner-bearing.mp4" download>下载片段</a></figcaption></figure>
 <p><b>挑战曲线。</b>第一幕教空间协作和回话；第二幕放慢动作，把难点转到听辨和证据对位；第三幕要求边移动边交换角色；第四幕让光、声、位置按顺序合流。第 6 关刻意去掉时限，第 11 关先提供安全排练。每次失误指明缺的是哪一次动作，最后一段重试不超过约 30 秒。以上为设计目标，难度需经真人双人试玩校准。</p>

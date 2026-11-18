@@ -54,3 +54,19 @@ dialog{width:min(590px,calc(100% - 22px));max-height:94vh;color:var(--text);back
 .crew-inputs strong{font-size:13px}.crew-inputs span{font-size:12px;line-height:1.5}.crew-inputs .seat-keys{color:#d4dcda}
 .crew-inputs .swap-pads{grid-column:span 2;justify-self:start;background:transparent;color:#cbd6d2;border:1px solid #4c615f;padding:4px 10px;font-size:12px}
 .crew-inputs .swap-pads[hidden]{display:none}
+
+#game[data-seat] .board{overflow:hidden}
+#game[data-seat="0"] #canvas{position:absolute;left:0;bottom:0}
+#game .board #partner-canvas{display:block;width:100%;height:100%;max-height:none;touch-action:none;cursor:grab;object-fit:fill}
+#game[data-seat] .viewport{width:100%;border:0}
+#game[data-seat="0"] .role1,#game[data-seat="1"] .role0,
+#game[data-seat="0"] .rg-1,#game[data-seat="1"] .rg-0,
+#game[data-seat="0"] .file-side:has([data-act="file"]),#game[data-seat="1"] .file-side:has([data-act="clip"]){display:none}
+#game[data-seat] .rg-layer,#game[data-seat] #filing:not([hidden]){grid-template-columns:minmax(0,1fr)}
+#game[data-seat] #file-note{grid-column:1}
+#game[data-seat] .rg-1,#game[data-seat] #filing:before{border-left:0}
+#window-note:not([hidden]){position:absolute;z-index:10;top:12px;left:50%;transform:translateX(-50%);width:max-content;max-width:90%;padding:9px 16px;background:#172625;color:#fff5d7;border:1px solid #9d9271;font-size:14px;pointer-events:none}
+
+#game[data-seat] :is(#filing,#film.two-shots)::before{content:none}
+
+main>footer a{color:#a9c6c1;text-underline-offset:3px}

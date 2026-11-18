@@ -73,7 +73,7 @@ const TideHud=(()=>{
       set(v.querySelector('.instruction'),here?r.text||'靠近设备开始操作':g.archive?'前往'+tag:g.signal?'前往'+tag:g.optic?'沿塔顶外环前往'+tag:'前往'+tag+'，沿灯带通过栈桥');
       const m=v.querySelector('.meter'),reading=v.querySelector('.reading');
       m.hidden=!here||!r.vis;reading.hidden=!here||!r.caption;
-      if(!m.hidden)meter(m,r,i,g.time);
+      if(!m.hidden){meter(m,r,i,g.time);if(i)TideWindows.meter(m);}
       set(reading,r.caption||'');
       const role=v.querySelector('.pname').lastChild,roleName=TideTinMemory.active(g)?(i?'童年 · 沈遥':'童年 · 林澈'):TideTransit.active(g)&&i===1?'梁青 · 驾驶台左舷':g.lastPass&&i&&g.state.mode&&g.near[1]?(g.lastPass.turned?'海雁号 · 回望船尾':'阿棠 · 后甲板视角'):g.fog&&i===1&&['bridge','spot'].includes(g.fog.mode)?'梁青 · 驾驶台视角':g.survey&&i===1&&g.stage===2&&g.engaged[i]?'阿棠 · 船尾视角':roles[i];
       if(role.textContent!==roleName)role.textContent=roleName;
