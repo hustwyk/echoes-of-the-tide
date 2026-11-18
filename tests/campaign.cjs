@@ -689,6 +689,17 @@ if(require.main===module){
   // A wave is identified at two different positions. A matching-looking trough one period later
   // must be rejected. The value recorded on the log sheet is the player's actual brass slider.
   {
+    // A point follows the selected wave phase toward shore. A solid surface
+    // nearer than the visible sea must prevent a mark passing through it.
+    const shore=new Session(8),eye=TideSoundings.point(-2,4,-14);
+    const mark=TideSoundings.pickWave(shore,eye,{x:0,y:-1,z:0},20);
+    assert.ok(mark);assert.equal(TideSoundings.pickWave(shore,eye,{x:0,y:1,z:0},70),null);
+    assert.equal(TideSoundings.pickWave(shore,eye,{x:0,y:-1,z:0},2),null);
+    const stage=shore.stage,m0=TideSoundings.phase(mark.x,mark.z,shore.time);
+    for(let j=0;j<75;j++)shore.tick(step,[empty(),empty()]);
+    const pos={};TideSoundings.wavePosition(shore,mark,pos);
+    assert.ok(pos.z>mark.z+5&&Math.abs(TideSoundings.phase(pos.x,pos.z,shore.time)-m0)<1e-10);
+    assert.equal(pos.y,TideSoundings.surface(pos.x,pos.z,shore.time));assert.equal(shore.stage,stage);
     const g=new Session(8),r=g.survey,w=g.world.soundings;
     reach(g,()=>r.taken&&r.safeLand===1);
     const saved=TideSoundings.checkpoint(g),landing=new Session(8);TideSoundings.restore(landing,saved);

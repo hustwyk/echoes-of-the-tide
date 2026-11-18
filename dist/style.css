@@ -23,3 +23,15 @@ dialog{width:min(590px,calc(100% - 22px));max-height:94vh;color:var(--text);back
 .logbook summary{cursor:pointer;color:#dfc29c}
 #game .field-tools button:disabled{opacity:.4;cursor:default}
 #info-content a{color:#e5c29c;text-underline-offset:3px}
+
+.point-cursor,.partner-pin{position:absolute;z-index:2;pointer-events:none;transform:translate(-50%,-50%);display:grid;justify-items:center;font:600 11px/1.35 system-ui,sans-serif;filter:drop-shadow(0 1px 3px #091013b8)}
+.point-cursor[hidden],.partner-pin[hidden]{display:none}
+.point-cursor i{width:18px;height:18px;border:1.5px solid white;border-radius:50%;box-shadow:inset 0 0 0 2px #15282b99,0 0 0 1px #15282b99}
+.point-cursor i::after{content:"";position:absolute;left:50%;top:50%;width:3px;height:3px;background:white;border-radius:50%;transform:translate(-50%,-50%)}
+.point-cursor span,.partner-pin span{position:absolute;bottom:calc(100% + 6px);padding:3px 6px;border-radius:3px;white-space:nowrap;color:#f2f3e9;background:#102024ed}
+.partner-pin{--point:#edaa6c}.partner-pin.from-right{--point:#8cddd5}
+.partner-pin i{width:13px;height:13px;border:2px solid var(--point);background:#17232c73;transform:rotate(45deg);box-shadow:0 0 0 1px #142124}
+.partner-pin.masked i{border-style:dashed;background:transparent}
+.partner-pin.at-edge i{width:0;height:0;background:none;box-shadow:none;border:6px solid transparent;border-bottom:12px solid var(--point);transform:rotate(var(--bearing));transform-origin:50% 66%}
+
+.partner-pin.label-inward-left span{left:0}.partner-pin.label-inward-right span{right:0}

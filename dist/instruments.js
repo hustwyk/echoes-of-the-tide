@@ -2,7 +2,7 @@ const TideHud=(()=>{
   const roles=['林澈 · 机修员','沈遥 · 信号员'];
   const pix=['#efad70','#85d6cf'];
   function build(root){
-    root.innerHTML=roles.map((name,i)=>'<div class="viewport role'+i+'"><div class="pname"><b>'+('0'+(i+1))+'</b>'+name+'</div><div class="reticle" hidden aria-hidden="true"><i></i></div><span class="pin" id="pin'+i+'"></span><div class="instrument"><div class="tool"></div><div class="instruction"></div><canvas class="meter" width="600" height="82" hidden></canvas><div class="reading"></div><div class="control-hint"></div></div></div>').join('');
+    root.innerHTML=roles.map((name,i)=>'<div class="viewport role'+i+'"><div class="pname"><b>'+('0'+(i+1))+'</b>'+name+'</div><div class="reticle" hidden aria-hidden="true"><i></i></div><span class="pin" id="pin'+i+'"></span><div class="point-cursor" aria-hidden="true" hidden><i></i><span></span></div><div class="partner-pin from-left" hidden><i></i><span></span></div><div class="partner-pin from-right" hidden><i></i><span></span></div><div class="instrument"><div class="tool"></div><div class="instruction"></div><canvas class="meter" width="600" height="82" hidden></canvas><div class="reading"></div><div class="control-hint"></div></div></div>').join('');
   }
   function line(ctx,color,x1,y1,x2,y2,width=2){
     ctx.strokeStyle=color;ctx.lineWidth=width;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();

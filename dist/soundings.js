@@ -33,6 +33,37 @@ const TideSoundings=(()=>{
     return -(.81+.075*Math.cos(a*.31))*Math.cos(a)+.085*Math.sin(2*a)+.037*Math.sin(x*.38-z*.27+t*.85);
   }
   function surface(x,z,t){return mean(t)+swell(x,z,t);}
+  // Select the first part of the visible wave train crossed by this sightline.
+  // Start at its vertical envelope, avoiding long marches through empty sky.
+  function pickWave(g,eye,dir,far){
+    const t=g.time,sea=mean(t),top=sea+1.06,low=sea-1.06;
+    let start=.12,end=Math.min(far,165);
+    if(Math.abs(dir.y)>.0001){
+      const a=(top-eye.y)/dir.y,b=(low-eye.y)/dir.y;
+      start=Math.max(start,Math.min(a,b));end=Math.min(end,Math.max(a,b));
+    }else if(eye.y>top||eye.y<low)return null;
+    if(start>=end)return null;
+    const above=d=>eye.y+d*dir.y-surface(eye.x+d*dir.x,eye.z+d*dir.z,t);
+    let old=start,height=above(start);
+    for(let next=start;next<end;){
+      next=Math.min(end,next+.56);
+      const h=above(next);
+      if(height>=0&&h<=0){
+        let left=old,right=next;
+        for(let i=0;i<8;i++){
+          const mid=(left+right)*.5;
+          if(above(mid)>0)left=mid;else right=mid;
+        }
+        return {kind:'wave',x:eye.x+right*dir.x,z:eye.z+right*dir.z,at:t};
+      }
+      old=next;height=h;
+    }
+    return null;
+  }
+  function wavePosition(g,mark,out){
+    out.x=mark.x;out.z=mark.z+celerity*(g.time-mark.at);out.y=surface(out.x,out.z,g.time);
+    return true;
+  }
   function wave(p,t){
     const q=phase(p.x,p.z,t),id=Math.round(q),height=surface(p.x,p.z,t);
     return {id,height,open:Math.abs(q-id)<.12&&height<-2.74};
@@ -254,6 +285,6 @@ const TideSoundings=(()=>{
       if(r.ack)say(g,'safe','advance');
     }else if(r.readings[g.stage]!=null){if(g.stage===0)g.advance();else say(g,'overlay','advance');}
   }
-  return {layout,create,begin,point,mean,phase,surface,swell,wave,step,target,guide,near,stance,collide,scopeAim,exposed,
+  return {layout,create,begin,point,mean,phase,surface,swell,wave,pickWave,wavePosition,step,target,guide,near,stance,collide,scopeAim,exposed,
     shipYaw,stern,vessel,sightLine,interact,checkpoint,restore,channels};
 })();
