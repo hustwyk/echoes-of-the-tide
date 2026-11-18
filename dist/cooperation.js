@@ -31,8 +31,8 @@ const TideCoop = (() => {
   }
   class Session {
     constructor(index,events={}) {
-      this.index=index;this.world=TideTraversal.build(index);this.events=events;
-      TideRigging.build(this.world);TideDrawbridge.build(this.world);TideFieldWork.build(this.world,index);
+      this.index=index;this.world=index===9?TideLantern.layout():TideTraversal.build(index);this.events=events;
+      TideRigging.build(this.world);TideDrawbridge.build(this.world);if(!this.world.lantern)TideFieldWork.build(this.world,index);
       this.time=0;this.stage=0;this.setbacks=0;this.complete=false;this.notice='';this.noticeUntil=0;
       this.cues={light:0,angle:0,water:-4,rescue:0,ghost:0};
       this.players=this.world.sections[0].starts.map(TideTraversal.spawn);
@@ -48,7 +48,8 @@ const TideCoop = (() => {
         pulse:0,pulseAt:-10,nextShot:0,received:0,choice:0,word:null,mode:0,mark:-8,readAt:-8,
         returnGate:0,balance:0,warnUntil:0,buttonCooldown:0,releaseHeld:false,catchup:0};
       if(this.spec.type==='ride')this.state.dials[this.spec.driver]=.50;
-      this.rig=TideRigging.reset(this);this.paper=TidePaper.create(this);TideFieldWork.reset(this);TideLookout.reset(this);
+      this.rig=TideRigging.reset(this);this.paper=TidePaper.create(this);this.optic=TideLantern.create(this);
+      if(this.optic){this.cues.light=.97;this.cues.rays=TideLantern.viewData(this).images;}TideFieldWork.reset(this);TideLookout.reset(this);
       this.events.stage?.(this);
     }
     alert(text,seconds=2.5) {
@@ -91,7 +92,8 @@ const TideCoop = (() => {
         const p=this.players[side];
         TideTraversal.move(p,inputs[side],dt,this.world,yaws[side],this.engaged[side]||TideRigging.lighting(this,side,inputs[side]));
         TidePassage.collide(this,p);
-        if(this.engaged[side]&&!(cart&&side!==this.spec.driver))approachInstrument(this,side,activeSites[side],dt);
+        if(this.optic){TideLantern.collide(p);if(this.engaged[side])TideLantern.stance(this,side,dt);}
+        else if(this.engaged[side]&&!(cart&&side!==this.spec.driver))approachInstrument(this,side,activeSites[side],dt);
         if(p.y<Math.min(...section.starts.map(d=>d.y),...section.ends.map(d=>d.y))-4.2) {
           this.resetPerson(side,'安全索接住了你');
         } else if(p.ground && section.danger.includes(p.ground) && this.hazardPhase()>.78) {
@@ -100,6 +102,7 @@ const TideCoop = (() => {
       }
       if(prevStaff)TideDrawbridge.carry(this,inputs,dt,prevStaff);
       if(q.doneAt!==null)return;
+      if(this.optic){TideLantern.interact(this,inputs,dt);return;}
       if(!TideFieldWork.interact(this,inputs,dt)&&!TideLookout.interact(this,inputs,dt))handlers[this.spec.type](this,inputs,dt);
     }
     hazardPhase(){return (this.time/(4.5-.08*this.index)+.16*this.stage)%1;}

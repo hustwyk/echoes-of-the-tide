@@ -19,7 +19,7 @@ const TideLookout=(()=>{
   }
   function vessel(g,t){
     const f=g.cues.rescue;
-    const x=marks.ship.x-16*f+Math.sin(t*.055)*1.8,z=marks.ship.z-12*f;
+    const x=marks.ship.x+(g.index===9?9.5:0)-16*f+Math.sin(t*.055)*1.8,z=marks.ship.z-(g.index===9?6:0)-12*f;
     return [x,g.cues.water+.5*(swell(x-3,z,t)+swell(x+3,z,t)),z];
   }
   function point(g,id){

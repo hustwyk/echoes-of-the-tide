@@ -3,10 +3,10 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const box=vm.createContext({});
-for(const name of ['missions','traversal','passage','rigging','drawbridge','fieldwork','lookout','paper','cooperation']){
+for(const name of ['missions','traversal','passage','rigging','drawbridge','fieldwork','lookout','paper','lantern','cooperation']){
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../dist',name+'.js'),'utf8'),box);
 }
-const {Session,near,surface,lookout,ridePressure}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure})',box);
+const {Session,near,surface,lookout,ridePressure,TideLantern}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure,TideLantern})',box);
 const empty=()=>({x:0,z:0,use:false,jump:false});
 function steer(g,i,target,keys){
   const p=g.players[i],dx=target.x-p.x,dz=target.z-p.z,dist=Math.hypot(dx,dz);
@@ -41,6 +41,31 @@ function routeTo(g,i,site,keys) {
 }
 function control(g){
   const out=[empty(),empty()],sec=g.section,s=g.spec,q=g.state;
+  if(g.optic){
+    const o=g.optic,k=o.phase;
+    for(let i=0;i<2;i++){
+      const site=sec.sites[i],p=g.players[i];
+      if(near(p,site)){out[i].use=true;continue;}
+      // Walk around the central optic when crossing from the inside to the seaward apron.
+      const {x:u,z:v}=TideLantern.local(p),{x:zu,z:zv}=TideLantern.local(site);
+      const flank=(zu||u)<0?-2.3:2.3;
+      if(Math.abs(u)<1.90&&v*zv<0){
+        steer(g,i,TideLantern.coords(flank,0,v),out[i]);
+      }else if(Math.abs(zu)<1.6&&v<2.3&&zv>2.3){
+        const ux=u<0?-2.3:2.3;steer(g,i,TideLantern.coords(ux,0,2.65),out[i]);
+      }else steer(g,i,site,out[i]);
+    }
+    if(o.mount&&!o.mount.done){
+      const m=o.mount,angle=[.69,-.55,0][m.gate];if(out[0].use)out[0].z=-1;
+      if(out[1].use)out[1].x=Math.max(-1,Math.min(1,(angle-m.angle)*12));return out;
+    }
+    if(out[o.op].use)out[o.op].x=Math.max(-1,Math.min(1,(o.settings.zero[k]-o.axes[k])*20));
+    if(out[o.observer].use){
+      const d=TideLantern.viewData(g);
+      out[o.observer].z=Math.max(-1,Math.min(1,d.dy*8));out[o.observer].jump=o.stable>.28&&!o.tag;
+    }
+    out[o.op].jump=o.tag;return out;
+  }
   if(!g.field.done){
     const f=g.field,job=sec.field,step=g.stage;
     for(let i=0;i<2;i++){
@@ -286,6 +311,48 @@ if(require.main===module){
   chart.tick(step,letGo);assert.equal(chart.state.doneAt,null);
   reach(chart,()=>chart.stage===1);
 
+  const light=new Session(9);
+  reach(light,()=>light.engaged.every(Boolean));
+  for(let j=0;j<170;j++){
+    const a=control(light);a[0].x=1;a[1].jump=true;light.tick(step,a);
+  }
+  assert.equal(light.optic.phase,0);
+  assert.ok(TideLantern.viewData(light).images[0].ghost>.95,'Clipping too little leaves a second visible ray.');
+  for(let j=0;j<240;j++){
+    const a=control(light);a[0].x=-1;a[1].jump=true;light.tick(step,a);
+  }
+  assert.equal(light.optic.phase,0);
+  assert.ok(TideLantern.viewData(light).images[0].power<.1,'Closing the shutter over the sound glass must extinguish the main band.');
+  reach(light,()=>light.optic.stable>.22&&!light.optic.tag);
+  const simultaneous=control(light);simultaneous[0].jump=simultaneous[1].jump=true;
+  light.tick(step,simultaneous);
+  assert.equal(light.optic.phase,0,'A simultaneous press cannot secure an observation before it is received.');
+  assert.ok(light.optic.tag);
+  const drop=control(light);drop[1].use=false;drop[0].jump=true;light.tick(step,drop);
+  assert.ok(light.optic.phase===0&&!light.optic.tag,'The locking pin needs a current observation.');
+  reach(light,()=>light.optic.phase===1);
+  const mark=TideLantern.checkpoint(light),again=new Session(9);
+  TideLantern.restore(again,JSON.parse(JSON.stringify(mark)));
+  assert.equal(again.optic.phase,1);assert.equal(again.section.sites[1].label,'远端检视窗');
+  assert.ok(Math.abs(again.optic.axes[0]-light.optic.axes[0])<.001);
+  reach(light,()=>light.stage===1&&light.engaged.every(Boolean));
+  for(let j=0;j<270;j++){
+    const a=control(light);a[1].use=false;light.tick(step,a);
+  }
+  assert.ok(light.optic.mount.travel<.10,'The trolley cannot be pushed without its guide.');
+  for(let j=0;j<420;j++){
+    const a=control(light);a[1].x=-1;light.tick(step,a);
+  }
+  const m=light.optic.mount;
+  assert.equal(m.gate,0);assert.ok(Math.abs(m.travel-TideLantern.gauges[0].at)<1e-8);
+  reach(light,()=>m.gate===1);
+  const savedMount=TideLantern.checkpoint(light);
+  const resumeLamp=new Session(9);resumeLamp.stage=1;resumeLamp.begin();TideLantern.restore(resumeLamp,savedMount);
+  assert.equal(resumeLamp.optic.mount.gate,1);assert.equal(resumeLamp.optic.mount.travel,TideLantern.gauges[0].at);
+  reach(light,()=>m.done);assert.equal(light.optic.op,1);
+  reach(light,()=>light.complete);
+  assert.equal(light.optic.stamp,2);assert.equal(light.optic.phase,1);
+
   // The final radio remains occupied until the signal operator releases it.
   const final=new Session(11);
   let held=0;
@@ -306,5 +373,5 @@ if(require.main===module){
     quiet.tick(1/60,inputs);
   }
   assert.ok(quiet.complete&&quiet.skipTin);
-  console.log('Verified both roles, basket mark, hydraulic sill, two drawbridge catches, folding staff, shared cable car, paper registration, final radio release and optional recording.');
+  console.log('Verified both roles, basket mark, hydraulic sill, two drawbridge catches, folding staff, shared cable car, lantern shutters, optical carriage and saved guide positions, paper registration, final radio release and optional recording.');
 }

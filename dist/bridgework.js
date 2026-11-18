@@ -12,30 +12,7 @@ const TideBridgework=(()=>{
     const base=group(scene,'桥墩、索塔和接收座');
     const plain=own(new T.MeshStandardMaterial({roughness:.57,metalness:.46}));
     const light=own(new T.MeshBasicMaterial());
-    function finish(i){
-      const maps=window.TideBridgeSteel[i].map((uri,j)=>{
-        const t=own(new T.TextureLoader().load(uri));if(!j)t.colorSpace=T.SRGBColorSpace;
-        t.anisotropy=8;t.wrapS=t.wrapT=T.RepeatWrapping;return t;
-      });
-      const [diffuse,normal,arm]=maps;
-      const m=own(new T.MeshStandardMaterial({map:diffuse,normalMap:normal,metalnessMap:arm,roughnessMap:arm,metalness:.82,roughness:.84}));
-      m.normalScale.setScalar(.65);m.onBeforeCompile=s=>{
-        s.uniforms.bridgeRepeat={value:i?1.65:.75};
-        s.vertexShader=s.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 assembly,faceDir;')
-          .replace('#include <worldpos_vertex>',`#include <worldpos_vertex>
-            mat3 ax=mat3(instanceMatrix);
-            assembly=(instanceMatrix*vec4(transformed,1.)).xyz;
-            faceDir=normalize(ax*(normal/vec3(dot(ax[0],ax[0]),dot(ax[1],ax[1]),dot(ax[2],ax[2]))));`);
-        s.fragmentShader=s.fragmentShader.replace('#include <common>','#include <common>\nvarying vec3 assembly,faceDir;uniform float bridgeRepeat;')
-          .replace('#include <map_fragment>',`vec3 a=abs(faceDir);vec2 localUV=bridgeRepeat*(a.y>.68?assembly.xz:(a.x>a.z?assembly.zy:assembly.xy));
-            diffuseColor.rgb*=texture2D(map,localUV).rgb;vec3 arm=texture2D(roughnessMap,localUV).rgb;diffuseColor.rgb*=mix(.78,1.,arm.r);`)
-          .replace('#include <roughnessmap_fragment>','float roughnessFactor=clamp(roughness*arm.g,.23,.97);')
-          .replace('#include <metalnessmap_fragment>','float metalnessFactor=metalness*arm.b;')
-          .replace('#include <normal_fragment_begin>',T.ShaderChunk.normal_fragment_begin.replaceAll('vNormalMapUv','localUV'))
-          .replace('#include <normal_fragment_maps>',T.ShaderChunk.normal_fragment_maps.replaceAll('vNormalMapUv','localUV'));
-      };return m;
-    }
-    const iron=finish(0),plate=finish(1),stone=own(TideConcrete.material(0xbac2ba));
+    const iron=TideSteel.material(0,own),plate=TideSteel.material(1,own),stone=own(TideConcrete.material(0xbac2ba));
     function add(parent,shape,mat,tint,p,size,rotation){
       const key=[parent.id,shape.id,mat.id].join('-');
       if(!batches.has(key))batches.set(key,{parent,shape,mat,parts:[]});

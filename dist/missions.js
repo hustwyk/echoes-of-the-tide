@@ -49,7 +49,7 @@ const TideMissions = (() => {
     ],
     [
       step('optic','合并双影',['wheel','lens'],'沈遥：我在外环，看得见你调出来的重影。',{v:[.31,.68]}),
-      step('optic','侧镜调焦',['lens','wheel'],'林澈：换我从检视孔看。你来调焦。',{v:[.71,.27],cross:true}),
+      step('optic','侧镜调焦',['lens','wheel'],'林澈：扶住镜框，我来推车。等辅镜上座，我替你去窗边看。',{v:[.71,.27],cross:true}),
       step('optic','锁住侧槽光带',['wheel','lens'],'梁青：现在只剩一道光。再往安全带里收一点。',{v:[.56,.79],rough:1})
     ],
     [

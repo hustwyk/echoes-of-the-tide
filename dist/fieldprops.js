@@ -735,7 +735,7 @@ window.TideFieldProps=(()=>{
       clearSection();
       stage=s.stage;section=new T.Group();root.add(section);staticParts=new Map();
       const buildProps=builders[s.spec.type];
-      if(buildProps&&!s.section.span)buildProps(s);
+      if(buildProps&&!s.section.span&&!s.optic)buildProps(s);
       fieldStation(s);
       for(const [geometry,data] of staticParts){
         const instances=local(new T.InstancedMesh(geometry,metal,data.length));
