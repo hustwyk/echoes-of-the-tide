@@ -39,7 +39,11 @@ const TideArchiveStudio=(()=>{
     }
     // The entrance passage continues behind the players. During a reverse
     // portrait their shoulders are framed by the watertight door and pipe chase.
-    for(let j=0;j<5;j++)piece(panel,-5.22+j*2.61,1.89,10.94,2.60,3.8,.25);
+    for(let j=0;j<5;j++){
+      const x=-5.22+j*2.61;
+      piece(panel,x,1.89,10.94,2.60,3.8,.25);
+      for(let n=0;n<3;n++)piece(panel,x,-.076,7.12+n*1.55,2.608,.148,1.55);
+    }
     for(const x of [-6.47,6.47])piece(panel,x,1.89,8.64,.20,3.80,4.45);
     piece(beam,.82,1.24,10.76,1.88,2.51,.19);
     piece(ivory,.82,1.22,10.59,1.64,2.37,.12);
