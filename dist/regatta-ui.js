@@ -21,7 +21,7 @@ const TideRegattaUI=(()=>{
     count.className='rg-count';panel.className='rg-panel';layer.append(count,panel);panel.hidden=true;
     const out=fromMemory?'回到录音桌':'返回行动档案';
     function ensureSound(){if(wantsAudio&&!sound.enabled)sound.enable(true).then(updateAudio);}
-    function ready(i){ensureSound();TideRegatta.confirm(r,i);canvas.focus();hud();}
+    function ready(i){ensureSound();TideRegatta.confirm(r,i);TideWindows.focus(canvas);hud();}
     function setPanel(title,body,buttons){
       panel.hidden=false;panel.replaceChildren();
       const box=document.createElement('div'),h=document.createElement('h2');box.className='rg-card';h.textContent=title;box.append(h);
@@ -29,16 +29,16 @@ const TideRegattaUI=(()=>{
       const controls=document.createElement('div');controls.className='rg-actions';box.append(controls);
       for(const [label,fn] of buttons){const b=document.createElement('button');b.textContent=label;b.onclick=fn;controls.append(b);}
       if(paused)seatPanel=TideCrewInput.panel(box,false,true);else seatPanel=null;
-      panel.append(box);controls.firstElementChild.focus({preventScroll:true});
+      panel.append(box);TideWindows.focus(controls.firstElementChild);
     }
     function restart(){
       audio?.dispose();audio=null;r=TideRegatta.create(r.round+1);paused=false;held.clear();last=carry=0;panePhase='';activeVoice='';panel.hidden=true;
-      $('pause').disabled=false;$('pause').textContent='暂停';hud();canvas.focus();
+      $('pause').disabled=false;$('pause').textContent='暂停';hud();TideWindows.focus(canvas);
     }
     function pause(force=false){
       if(r.phase==='result'||force&&paused)return;
       paused=!paused;last=carry=0;held.clear();audio?.quiet();$('pause').textContent=paused?'继续':'暂停';
-      if(!paused){panel.hidden=true;canvas.focus();hud();return;}
+      if(!paused){panel.hidden=true;TideWindows.focus(canvas);hud();return;}
       const qualityButton=()=>{quality=quality===1?.72:1;panel.querySelectorAll('button')[1].textContent='画质　'+(quality===1?'高':'流畅');view.draw(r,quality);};
       setPanel('船停在这里', ['两艘船和计时都已暂停。'],[['继续比赛',()=>pause()],['画质　'+(quality===1?'高':'流畅'),qualityButton],['交换航道重赛',restart],[out,leave]]);
     }
@@ -93,10 +93,10 @@ const TideRegattaUI=(()=>{
         const edge=j=>buttons.has(j)&&!previous?.has(j);
         if(edge(9)&&r.phase!=='result')pause();
         else if(paused||r.phase==='result'){
-          const options=[...panel.querySelectorAll('button:not([hidden])')],pos=options.indexOf(document.activeElement);
+          const options=[...panel.querySelectorAll('button:not([hidden])')],pos=options.indexOf(TideWindows.active());
           if(edge(1)){if(paused)pause();else leave();}
-          else if(edge(12)||edge(14)||edge(13)||edge(15)){const dir=edge(12)||edge(14)?-1:1;options[(pos+dir+options.length)%options.length]?.focus();}
-          else if(edge(0)&&options.includes(document.activeElement))document.activeElement.click();
+          else if(edge(12)||edge(14)||edge(13)||edge(15)){const dir=edge(12)||edge(14)?-1:1;TideWindows.focus(options[(pos+dir+options.length)%options.length]);}
+          else if(edge(0)&&options.includes(TideWindows.active()))TideWindows.active().click();
         }else{
           if((edge(0)||edge(7))&&r.phase==='ready')ready(i);
           if(edge(11))view.toggle(i);
@@ -124,7 +124,7 @@ const TideRegattaUI=(()=>{
       if(['KeyC','Backslash'].includes(e.code))view.toggle(e.code==='KeyC'?0:1);
     }
     function dispose(){dead=true;held.clear();audio?.dispose();view.dispose();layer.remove();$('pause').disabled=false;}
-    TideRegattaAudio.load();hud();return {frame,key,up:code=>held.delete(code),pause,dispose};
+    TideRegattaAudio.load();hud();return {frame,key,up:code=>held.delete(code),release:()=>held.clear(),redraw:()=>view.draw(r,quality),pause,dispose};
   }
   return {create};
 })();

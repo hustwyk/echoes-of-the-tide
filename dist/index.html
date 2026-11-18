@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head><link rel="icon" href="data:,">
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="潮汐回声，一部有十二关的同屏双人合作冒险。">
+<meta name="description" content="潮汐回声，一部十二关的本地双人 3D 合作冒险。支持同屏和双窗口。">
 <title>潮汐回声 · Echoes of the Tide</title>
 <link rel="stylesheet" href="style.css">
 <script defer src="vendor/three.min.js"></script>
@@ -137,6 +137,7 @@
 <script defer src="harborreflection.js"></script>
 <script defer src="footlight.js"></script>
 <script defer src="static-piers.js"></script>
+<script defer src="windows.js"></script>
 <script defer src="harbor.js"></script>
 <script defer src="ambience.js"></script>
 <script defer src="tapeaudio.js"></script>
@@ -181,10 +182,10 @@
 <div class="player amber"><span class="avatar">◇</span><div><small>玩家 01</small><strong>林澈 <span>／ 机修员</span></strong></div><div class="keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><kbd>空格</kbd><kbd>E</kbd></div></div>
 <div class="player teal"><span class="avatar">⌁</span><div><small>玩家 02</small><strong>沈遥 <span>／ 信号员</span></strong></div><div class="keys"><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd><kbd>/</kbd><kbd>↵</kbd></div></div>
 </section>
-<footer><span>◈ &nbsp; ECHOES OF THE TIDE</span><span>同一台设备 · 两名玩家</span></footer>
+<footer><span>◈ &nbsp; ECHOES OF THE TIDE</span><a href="story.html#study">剧情调研与十二关设计（含剧透）</a><span>本地双人 · 同屏或双窗口</span></footer>
 </main>
 <dialog id="info"><div class="dialog-bar"><span>◈ &nbsp; 潮汐回声</span><form method="dialog"><button class="icon" aria-label="关闭">×</button></form></div><div id="info-content"></div></dialog>
-<dialog id="game" aria-label="双人分屏救援行动"><header class="field-top"><div><span id="act"></span><h2 id="level-title"></h2></div><div class="field-tools"><button id="field-audio" aria-label="音效开关">音效</button><button id="pause">暂停</button><button id="expand" aria-label="切换全屏">⛶</button></div></header>
-<div class="board"><canvas id="canvas" aria-label="左右分屏的实时三维世界"></canvas><div id="split"></div><div id="film" hidden><span id="subtitle"></span><button id="skip">跳过演出</button></div><div id="filing" hidden aria-label="顾岚的回件"></div><div id="overlay"></div></div>
+<dialog id="game" aria-label="双人分屏救援行动"><header class="field-top"><div><span id="act"></span><h2 id="level-title"></h2></div><div class="field-tools"><button id="field-audio" aria-label="音效开关">音效</button><button id="detach" aria-expanded="false" title="将玩家二的视角放到独立窗口">双窗口</button><button id="pause">暂停</button><button id="expand" aria-label="切换全屏">⛶</button></div></header>
+<div class="board"><canvas id="canvas" aria-label="左右分屏的实时三维世界"></canvas><div id="split"></div><div id="film" hidden><span id="subtitle"></span><button id="skip">跳过演出</button></div><div id="filing" hidden aria-label="顾岚的回件"></div><div id="overlay"></div><output id="window-note" role="status" hidden></output></div>
 <div class="game-footer"><span id="status" role="status"></span><span id="elapsed"></span></div>
 </dialog></body></html>

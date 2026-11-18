@@ -133,14 +133,15 @@ const TideRegattaView=(()=>{
       pdl.rotation.y=-TideRegatta.paddle(t).angle;
       buoys.forEach((p,j)=>{p.position.y=.0035*Math.sin(t*2.5+j*.8);p.rotation.z=.034*Math.sin(t*2+j);});
       flags.forEach((f,j)=>f.rotation.y=-.56+.19*Math.sin(t*4.3+j*.47));
-      const c=renderer.domElement,w=c.clientWidth,h=c.clientHeight;if(!w||!h)return;
-      const ratio=Math.min(window.devicePixelRatio||1,1.5)*quality;
+      const layout=TideWindows.layout(),w=layout.w,h=layout.h;if(!w||!h)return;
+      const ratio=TideWindows.density()*quality;
       if(w!==lastWidth||h!==lastHeight||ratio!==lastRatio){renderer.setPixelRatio(ratio);renderer.setSize(w,h,false);lastWidth=w;lastHeight=h;lastRatio=ratio;}
       renderer.setScissorTest(true);renderer.shadowMap.autoUpdate=false;renderer.shadowMap.needsUpdate=true;
       for(let i=0;i<2;i++){
-        const l=Math.floor(w*i/2),ww=Math.floor(w*(i+1)/2)-l,cam=cams[i];cam.aspect=ww/h;cam.updateProjectionMatrix();camera(r,i,dt);
+        const {x:l,w:ww,h}=layout.panes[i],cam=cams[i];cam.aspect=ww/h;cam.updateProjectionMatrix();camera(r,i,dt);
         TideHarbor.viewport(renderer,l,ww,h);reflection.use(i,cam,ww,h,t,quality);renderer.render(scene,cam);
       }
+      TideWindows.present(layout,ratio);
     }
     const gateLimits={side:.80,up:.62,down:.32},gateScreen={};
     function target(r,i){

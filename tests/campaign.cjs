@@ -1559,7 +1559,15 @@ if(require.main===module){
     reach(evidence,()=>evidence.glass.phase==='record');
     for(let j=0;j<60;j++){const k=control(evidence);k[0].x=k[1].x=0;k[0].jump=k[1].jump=true;evidence.tick(step,k);}
     assert.deepEqual(Array.from(evidence.glass.signed),[false,false]);
-    reach(evidence,()=>evidence.complete);assert.ok(evidence.glass.signed.every(Boolean));
+    const beforeReply=TideGlass.checkpoint(evidence);
+    delete beforeReply.handExplained; // A saved chart from before the conversation was added.
+    const resumed=new Session(5);resumed.stage=2;resumed.begin();TideGlass.restore(resumed,beforeReply);
+    assert.equal(resumed.glass.voice,'marginAsk');
+    reach(resumed,()=>resumed.glass.voice==='marginAnswer');
+    reach(resumed,()=>resumed.glass.handExplained);
+    const afterReply=TideGlass.checkpoint(resumed),heard=new Session(5);heard.stage=2;heard.begin();
+    TideGlass.restore(heard,afterReply);assert.equal(heard.glass.voice,'');
+    reach(evidence,()=>evidence.complete);assert.ok(evidence.glass.signed.every(Boolean)&&evidence.glass.handExplained);
   }
   const chart=new Session(5);
   reach(chart,()=>chart.paper.pinned);
