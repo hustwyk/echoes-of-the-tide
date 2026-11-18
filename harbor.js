@@ -8,13 +8,25 @@ const TideHarbor = (() => {
     const sec=g.section, s=g.spec,q=g.state;
     if(!g.field.done){const site=sec.field.sites[i];return {p:site,name:site.label};}
     if(TideLookout.active(g))return {p:sec.sites[i],name:i===g.watch.task.watcher?'远望镜':'船位记录簿'};
+    if(sec.tram){
+      const c=sec.tram;
+      if(!c.departed)return {p:c.deck,name:'同乘背风吊篮'};
+      if(c.heard||g.skipTin)return {p:sec.mid,name:'桥头值班柜'};
+      return {p:sec.sites[i],name:i?'监听录音机':'螺丝铁盒'};
+    }
     if(s.type==='ride'){
       if(q.latch){
         if(i!==s.driver&&q.returnGate<2&&(s.mode!=='basket'||(g.index===0&&g.stage===1)))return {p:sec.sites[i],name:'回程闸'};
         return {p:sec.ends[i],name:'会合点'};
       }
+      if(sec.span){
+        const b=sec.span;
+        if(i===s.driver)return {p:sec.sites[i],name:'吊桥制动鼓'};
+        if(!b.seated)return {p:b.grip,name:'桥面配重车'};
+        return b.landed?{p:sec.sites[i],name:'桥头棘轮'}:{p:b.lip,name:'接收槽'};
+      }
       if(g.rig && i!==s.driver && !g.rig.landed && q.ferry>.78)return {p:sec.rig.ledge,name:s.mode==='raft'?'水窗窗沿':'着陆横梁'};
-      if(i!==s.driver && q.ferry<.78)return {p:sec.ferry.deck,name:s.mode==='raft'?'登上浮架':s.mode==='bridge'?'移动桥面':'登上吊篮'};
+      if(i!==s.driver && q.ferry<.78)return {p:sec.ferry.deck,name:s.mode==='raft'?'登上浮架':'登上吊篮'};
     }
     return {p:sec.sites[i],name:TideMissions.names[sec.sites[i].kind]};
   }
@@ -56,7 +68,7 @@ const TideHarbor = (() => {
     }
     free() {
       if(!this.scene)return;
-      this.dockside?.dispose();this.cinema?.dispose();this.fieldProps?.dispose();this.coast?.dispose();
+      this.bridgework?.dispose();this.dockside?.dispose();this.cinema?.dispose();this.fieldProps?.dispose();this.coast?.dispose();
       for(const asset of this.custom)asset.dispose();
       this.custom.clear();this.scene.clear();this.scene=null;this.equipment.releaseDecks();
       this.lens?.dispose();this.lens=null;
@@ -68,20 +80,20 @@ const TideHarbor = (() => {
       this.floors=new Map();this.rigs=[];this.halos=[];
       const add=(m)=>{this.scene.add(m);return m;};
       for(const d of g.world.floors){
-        const obj=this.equipment.deck(d.w,d.d,d.kind);
+        const obj=d.axes||d.kind==='tram'?new T.Group():this.equipment.deck(d.w,d.d,d.kind);
         obj.position.set(d.x,d.y,d.z);obj.visible=d.active;add(obj);this.floors.set(d,obj);
       }
       for(const section of g.world.sections) {
         section.devices=section.sites.map((site,i)=>{
-          const obj=this.equipment.device(site.kind,i);
+          const obj=this.equipment.device(section.span?'brake':site.kind,i);
           obj.position.set(site.x,site.y,site.z-.95);
-          if(section.spec.type==='paper')obj.visible=false;
+          if(section.tram||section.spec.type==='paper')obj.visible=false;
           return add(obj);
         });
         if(section.field)section.field.devices=section.field.sites.map((site,i)=>{
           const obj=this.equipment.device(site.kind,i);obj.scale.setScalar(.88);obj.position.set(site.x,site.y,site.z-.95);return add(obj);
         });
-        if(section.ferry)this.addRig(section);
+        if(section.ferry&&!section.span)this.addRig(section);
       }
       this.hazards=[];
       const warningMat=this.own(new T.MeshBasicMaterial({color:0xff8840,transparent:true,opacity:.28,depthWrite:false}));
@@ -99,6 +111,7 @@ const TideHarbor = (() => {
         }
         this.halos.push(add(ring));
       }
+      this.bridgework=TideBridgework.create(this.scene,g,this.floors,this.actors);
       this.ship.position.fromArray(TideLookout.vessel(g,g.time));add(this.ship);
       this.dockside=TideDockside.create(this.scene,g);
       this.fieldProps=TideFieldProps.create(this.scene,g,this.actors);
@@ -144,12 +157,14 @@ const TideHarbor = (() => {
           obj.position.set(T.MathUtils.lerp(d.hingeX,d.x,d.hinge),d.y-Math.sin(angle)*d.d*.5,
             T.MathUtils.lerp(d.hingeZ+d.hingeDirection*d.d*.5*Math.cos(angle),d.z,d.hinge));
         }
+        if(d.axes)obj.rotation.set(d.pitch,d.yaw,d.roll,'YXZ');
         if(d.dynamic)obj.position.set(d.x,d.y,d.z);
       }
       for(const {deck,h,ropes} of this.rigs)for(const {m,s} of ropes){
         const top=deck.y+.94;
         m.position.set(deck.x+s*1.25,(h+top)/2,deck.z);m.scale.y=h-top;
       }
+      this.bridgework?.update();
       const phase=g.hazardPhase();
       for(const {sec,mesh} of this.hazards){
         mesh.visible=sec===g.section;
@@ -167,7 +182,9 @@ const TideHarbor = (() => {
         if(g.section.field)this.equipment.drive(g.section.field.devices[i],g.field.values[i],t);
         const using=!acting&&g.engaged[i],paper=using&&g.paper&&g.field.done;
         const device=g.field.done?g.section.devices[i]:g.section.field.devices[i];
-        const grips=!using?null:paper?this.paperGrips(g,i):this.equipment.grips(device);
+        const span=g.section.span;
+        const movingGrip=g.section.tram||span&&!span.seated&&i!==g.spec.driver;
+        const grips=!using?null:movingGrip?this.bridgework.hands(g.section,i):paper?this.paperGrips(g,i):this.equipment.grips(device);
         TideActors.animate(obj,{speed:acting?0:p.speed,grounded:p.grounded,operating:using,grips,...acting},dt,t);
       }
       this.dockside.update(g,dt);this.fieldProps.update(g,dt);this.cinema.update(g,dt);
@@ -177,12 +194,15 @@ const TideHarbor = (() => {
       for(let i=0;i<count;i++){
         const start=Math.floor(width*i/count),end=Math.floor(width*(i+1)/count),vw=end-start;
         const cam=this.cameras[i],p=g.players[i],yaw=this.yaws[i];
-        const cameraHeight=(g.engaged[i]?2.7:3.55)+this.pitch[i];
-        const radius=g.engaged[i]?4.15:5.25;
-        vector.set(p.x+Math.sin(yaw)*radius,p.y+cameraHeight,p.z+Math.cos(yaw)*radius);
+        const inside=g.section.span?.lower&&p.ground===g.section.span.deck;
+        const braking=g.section.span&&!g.section.span.seated&&i===g.spec.driver&&g.engaged[i];
+        const angle=yaw+(braking?(i?.46:-.46):0);
+        const cameraHeight=(inside?1.80:g.engaged[i]?2.7:3.55)+this.pitch[i];
+        const radius=inside?2.95:braking?5.45:g.engaged[i]?4.15:5.25;
+        vector.set(p.x+Math.sin(angle)*radius,p.y+cameraHeight,p.z+Math.cos(angle)*radius);
         const blend=this.snap?1:1-Math.exp(-Math.max(dt,.001)*8);
         cam.position.lerp(vector,blend);
-        vector.set(p.x-Math.sin(yaw)*2,p.y+1.6,p.z-Math.cos(yaw)*2);
+        vector.set(p.x-Math.sin(angle)*(braking?4:2),p.y+(inside?1.16:1.6),p.z-Math.cos(angle)*2);
         this.look[i].lerp(vector,blend);cam.lookAt(this.look[i]);
         const scoped=ready&&TideLookout.active(g)&&g.watch.task.watcher===i&&g.engaged[i];
         const lighting=ready&&g.rig?.lightOn&&!g.rig.lit&&g.spec.driver!==i;

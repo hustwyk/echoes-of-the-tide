@@ -3,7 +3,7 @@ const TidePassage = (() => {
   const TAU=Math.PI*2;
   function build(g){
     g.crossings=[];
-    g.solidSites=g.world.sections.flatMap(section=>section.sites.concat(section.field?.sites||[]));
+    g.solidSites=g.world.sections.flatMap(section=>section.tram?[]:section.sites.concat(section.field?.sites||[]));
     const act=Math.floor(g.index/3);
     for(let stage=0;stage<g.world.sections.length;stage++){
       const section=g.world.sections[stage],s=section.spec;
@@ -33,6 +33,20 @@ const TidePassage = (() => {
   // Push occupants out of the solid casings. The control ring is in front of each panel.
   function collide(g,p){
     if(!p.grounded)return;
+    const c=g.section.tram;
+    if(c&&p.ground===c.deck){
+      const x=p.x-c.deck.x,z=p.z-c.deck.z;
+      // The tin sits on one narrow central desk. The two exits flank it.
+      if(Math.abs(x)<.96&&z<-.32&&z>-1.40){
+        const xGuard=.96-Math.abs(x),zGuard=Math.min(-.32-z,z+1.40);
+        if(xGuard<zGuard){p.x=c.deck.x+(x<0?-.96:.96);p.vx=0;}
+        else{p.z=c.deck.z+(z>-.86?-.32:-1.40);p.vz=0;}
+      }
+      if(c.departed&&!c.arrived){
+        p.x=c.deck.x+Math.max(-2.08,Math.min(2.08,p.x-c.deck.x));
+        p.z=c.deck.z+Math.max(-1.62,Math.min(1.64,p.z-c.deck.z));
+      }
+    }
     for(const site of g.solidSites){
       if(Math.abs(p.y-site.y)>.6)continue;
       const dx=p.x-site.x,dz=p.z-site.z+.95,d=Math.hypot(dx,dz);

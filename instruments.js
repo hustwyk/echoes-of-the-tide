@@ -43,7 +43,7 @@ const TideHud=(()=>{
       const v=views[i],r=g.station[i],close=g.near[i],s=g.spec,q=g.state,k=TideCoop.roleKeys[i];
       const riding=s.type==='ride' && (s.driver!==i||q.latch);
       v.querySelector('.reticle').hidden=!(TideLookout.active(g)&&g.watch.task.watcher===i&&g.engaged[i]);
-      const here=close||riding,tag=TideHarbor.targetFor(g,i).name;
+      const here=close||riding||!!g.section.tram,tag=TideHarbor.targetFor(g,i).name;
       const title=g.state.doneAt!==null?'已完成 · '+s.title:(g.stage+1)+' / '+g.world.sections.length+'　'+s.title;
       set(v.querySelector('.tool'),title);
       set(v.querySelector('.instruction'),here?r.text||'靠近设备开始操作':'前往'+tag+'，沿灯带通过栈桥');

@@ -84,10 +84,20 @@ const TideTraversal = (() => {
   function spawn(s) {
     return {x:s.x,y:s.y,z:s.z+.65,vx:0,vz:0,vy:0,yaw:0,ground:s,grounded:true,grace:.1,jumpBuffer:0,speed:0};
   }
+  function surfaceHeight(d,x,z){
+    const a=d.axes,dx=x-d.x,dz=z-d.z;
+    if(!a)return Math.abs(dx)<=d.w*.5+.08&&Math.abs(dz)<=d.d*.5+.08?d.y:-Infinity;
+    const det=a.ux*a.vz-a.uz*a.vx;
+    const u=(dx*a.vz-dz*a.vx)/det,v=(a.ux*dz-a.uz*dx)/det;
+    if(d.gap&&v>d.gap[0]&&v<d.gap[1]&&Math.abs(u)<d.w*.5-.19)return -Infinity;
+    return Math.abs(u)<=d.w*.5+.08&&Math.abs(v)<=d.d*.5+.08?d.y+u*a.uy+v*a.vy:-Infinity;
+  }
   function surface(world,x,z,maxY) {
-    let best=null;
-    for(const d of world.floors) {
-      if(d.active && d.y<=maxY && (!best||d.y>best.y) && Math.abs(x-d.x)<d.w*.5+.08 && Math.abs(z-d.z)<d.d*.5+.08) best=d;
+    let best=null,top=-Infinity;
+    for(const d of world.floors)if(d.active){
+      if(!d.axes&&(d.y<=top||d.y>maxY))continue;
+      const height=surfaceHeight(d,x,z);
+      if(height<=maxY&&height>top){best=d;top=height;}
     }
     return best;
   }
@@ -111,20 +121,11 @@ const TideTraversal = (() => {
     const oldY=p.y;
     p.x+=p.vx*dt;p.z+=p.vz*dt;p.vy-=19.5*dt;p.y+=p.vy*dt;
     const floor=surface(world,p.x,p.z,oldY+(p.grace>0&&p.vy<=0?.48:.055));
-    if(floor && p.vy<=0 && p.y<=floor.y+.012) {
-      p.y=floor.y;p.vy=0;p.ground=floor;p.grounded=true;p.grace=.095;
+    const top=floor?surfaceHeight(floor,p.x,p.z):-Infinity;
+    const descending=floor?.axes&&p.ground===floor&&p.grounded&&oldY-top<.40;
+    if(floor && p.vy<=0 && (p.y<=top+.012||descending)) {
+      p.y=top;p.vy=0;p.ground=floor;p.grounded=true;p.grace=.095;
     } else {p.grounded=false;p.ground=null;p.grace-=dt;}
   }
-  function setFerry(section,t,time,players) {
-    const {deck,from,to}=section.ferry;
-    const f=smooth(t),s=section.spec;
-    const x=mix(from.x,to.x,f)+Math.sin(time*1.65)*Math.sin(Math.PI*t)*(s.swing||.28);
-    const y=mix(from.y,to.y,f)+Math.sin(Math.PI*t)*(s.mode==='basket'?1.45:s.mode==='raft'?-.3:.4);
-    const z=mix(from.z,to.z,f);
-    for(const p of players)if(p.ground===deck) {
-      p.x+=x-deck.x;p.y+=y-deck.y;p.z+=z-deck.z;
-    }
-    Object.assign(deck,{x,y,z});
-  }
-  return {build,spawn,move,setFerry,surface,clamp,mix};
+  return {build,spawn,move,surfaceHeight,surface,clamp,mix};
 })();
