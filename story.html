@@ -151,10 +151,13 @@
 <figure style="margin:18px 0"><img loading="lazy" src="assets/fog-timing.jpg" width="1440" height="900" style="display:block;width:100%;height:auto" alt="双人实机画面。左侧检修盘对齿，右侧纸带留下岸台三响、船尾三响、驾驶台两响的实际声迹。"><figcaption class="refs">沈遥看到驾驶台少了一道针迹。林澈得把相应的齿转进检修窗，她才能改动下一圈的间隔。</figcaption></figure>
 <blockquote>梁青：「先空转一圈。舵在我手上，这一轮我不会转。」</blockquote>
 </article>
-<article>
+<article id="scene-12">
 <h3>12　航道重现</h3>
 <p>雨幕裂开一道缝。左屏能看见透镜的刻口，右屏能看见海面上那条窄光，谁都看不见梁青脚边的推进开关。</p>
-<dl><dt>林澈 · 左屏</dt><dd>第一拍保持灯束跟住安全带。第二拍海雁遮住岸上的基准，林澈依据沈遥的报数微调。最终收到梁青确认后，亲手把手轮锁回原位。</dd><dt>沈遥 · 右屏</dt><dd>先从远处白浪辨认船影，再趁同伴稳定住光带打出三响。最后一个可操作动作是松开发话键，让梁青把整句说完。</dd><dt>合流与检查点</dt><dd>前两段各有检查点。梁青看到光带后又等一拍。塔上两块表都亮起，右屏的通话键已可松开。传来阿棠从尾甲板的喊声，先前挡住视线的断桩终于露出来了。梁青自行使用最后一次推进，船艉越过白浪进入背风水，救援艇接缆。镜头沿同一条缆绳汇合，两人第一次同时听完四十一个人的点名。</dd></dl>
+<dl><dt>林澈 · 左屏</dt><dd>机房里那条白线只能指示手轮转了多少。林澈先从望远镜里找到断桩，再找经过它的驾驶台，让沈遥把两处船位抄进记录。守灯时他左右转手轮。岸上的光束和海面的反光跟着同一根轴走；沈遥听见「桩出来了」时，他仍得把光留在船前。最后轮到阿棠报告船尾已经进湾，他才敢把手轮转回原刻口，亲手锁住。</dd>
+<dt>沈遥 · 右屏</dt><dd>正式发号沿用雾号演练时锁好的第二齿和第三齿。她在三次触点经过时各压下一次气阀，再听驾驶台复述。最后一道引导发完，松开电台的发话键。右屏来到阿棠站的后甲板，能看见第九关那根上箍缺了一截的木桩。它慢慢滑过船尾栏杆的转角。沈遥若又按住发话键，岸台会压住回话；等她松开，船上会把整条报告重新说完。</dd>
+<dt>合流与结局</dt><dd>船还贴着断桩时，阿棠会让梁青等。两道箍越过船尾、岸上的窄光仍然对准船首，梁青才决定用掉应急推进。她说完「现在我转」，渡轮才转过岬角。在断桩边抬头，能看到海雁号留下两股航迹，绕进背风水。右舷的救援艇抛来缆绳，两人的画面沿着它合到一起，听见四十一人全员到齐。船尾的报告、船长的决定和入湾后的回报分别留下检查点。</dd></dl>
+<figure style="margin:18px 0"><img loading="lazy" src="assets/final-passage.jpg" width="1440" height="900" style="display:block;width:100%;height:auto" alt="左屏林澈控制落在渡轮船首的窄光，右屏阿棠从后甲板看双箍断桩越过船尾栏杆。"><figcaption class="refs">岸上看得到整艘船。要知道船尾有没有越过桩，得听甲板上的人开口。</figcaption></figure>
 <blockquote>梁青：「北岬，我看见了。」短暂静默。「现在是我转。」</blockquote>
 </article>
 </section>
@@ -166,10 +169,11 @@
 <h2>分屏、难度与制作边界</h2>
 <p><b>演出与规模。</b>按一座灯塔、四组可复用场景设计。复用同一座吊桥的上层、桥腹和水线，让前一幕经过的地方成为后方参照。每关约 5–9 分钟，加上四幕演出，首通目标约 80–110 分钟。风暴推进由触发事件驱动，玩家停下听完一段录音不会害死船上的人。</p>
 <figure style="margin:22px 0"><img src="assets/lookout-play.jpg" alt="左屏林澈守在船位簿旁，右屏沈遥从远望镜中辨认海上的旧绿标。" width="1280" height="800" loading="lazy" style="display:block;width:100%;height:auto"><figcaption style="margin-top:6px;font-size:14px">第九关实机画面。左屏拿着海图线索，右屏可以转动远望镜寻找旧绿标与断桩。</figcaption></figure>
+<p><b>画面取舍。</b>写实细节集中在两人会停下来看的地方，例如右屏能读出受潮纸带上的三道针迹，左屏能看出铜齿还差多少才进检修窗。Three.js 在同一座海岬上渲染两台相机，近景使用扫描材质，海面按风浪动态反射灯光。本文配图均为浏览器实机抓帧。照片级画质和原作同档的双人挑战仍是制作目标。</p>
 <p><b>视野与输入。</b>两人各用独立第三人称镜头，移动和跳跃始终可用。靠近器械后，只有操作者的镜头靠近仪表，另一位继续在场内活动。泵台、透镜、无线电各有声音和形状反馈。默认允许看伙伴的半屏，寻找信息的人仍须把自己的发现转成另一方能执行的动作。</p>
 <p><b>挑战曲线。</b>第一幕教空间协作和回话；第二幕放慢动作，把难点转到听辨和证据对位；第三幕要求边移动边交换角色；第四幕让光、声、位置按顺序合流。第 6 关刻意去掉时限，第 11 关先提供安全排练。每次失误指明缺的是哪一次动作，最后一段重试不超过约 30 秒。以上为设计目标，难度需经真人双人试玩校准。</p>
 <p><b>验收方式。</b>两组玩家交换角色，分别测试熟悉平台跳跃和初次玩双人游戏的组合。重点记录第 3 关结束时能否复述船长误解了什么，第 7 关两边是否都经历过主动接人的时刻，第 12 关两人是否自然松手等船长回话。若一名玩家可以长时间离开，或连续两次失败仍说不出同伴看见了什么，就调整关卡反馈。</p>
-<p class="refs">第一关值班间的渡轮呼叫、第二关岸台和海雁号的首轮双向通话、第五关八句档案对白和章末四句岸船通话、第八关的呼号、分词报文和具名更正，第九关岸上报浪与船尾辨桩，以及第十一关的雾号演练与驾驶台回话使用 hexgrad 的 <a href="https://huggingface.co/hexgrad/Kokoro-82M">Kokoro-82M v1.0</a> 预设声线离线合成。手链棘轮、船台松键声、铁盒、继电器、马达、水尺、柜闩、气动雾号与磁带底噪均为本作原创。</p>
+<p class="refs">第一关值班间的渡轮呼叫、第二关岸台和海雁号的首轮双向通话、第五关八句档案对白和章末四句岸船通话、第八关的呼号、分词报文和具名更正，第九关岸上报浪与船尾辨桩，第十一关的雾号演练与驾驶台回话，以及第十二关船尾报位、船长决定和船尾入湾的通话使用 hexgrad 的 <a href="https://huggingface.co/hexgrad/Kokoro-82M">Kokoro-82M v1.0</a> 预设声线离线合成。手链棘轮、船台松键声、铁盒、继电器、马达、水尺、柜闩、气动雾号与磁带底噪均为本作原创。</p>
 <p class="refs">林澈与沈遥的肖像、侧面与雨衣图像为本作原创生成素材。面部网格改编自 <a href="https://github.com/google-ai-edge/mediapipe/blob/master/mediapipe/modules/face_geometry/data/canonical_face_model.obj">MediaPipe 标准脸模</a>，随包附<a href="vendor/mediapipe-LICENSE.txt">许可文本</a>。衣料织纹使用 colormass 摄影、Rico Cilliers 处理的 <a href="https://polyhaven.com/a/stretch_poplin">Stretch Poplin</a>。</p>
 <p class="refs">码头与泵井使用 Dimitrios Savva 的 CC0 扫描材质。<a href="https://polyhaven.com/a/concrete_slab_wall">Poly Haven · Concrete Slab Wall</a></p>
 <p class="refs">断桥钢构和防滑板采用 Rob Tuytel 的实物扫描材质。<a href="https://polyhaven.com/a/green_metal_rust">Green Metal Rust</a> · <a href="https://polyhaven.com/a/metal_plate">Metal Plate</a>（CC0）。</p>

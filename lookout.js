@@ -18,6 +18,7 @@ const TideLookout=(()=>{
     return .46*Math.sin(x*.23+z*.11+t*1.12)+.34*Math.sin(-x*.17+z*.29-t*.88)+.18*Math.sin(x*.49-z*.41+t*1.42)+.09*Math.sin(x*.81+z*.62-t*1.64);
   }
   function vessel(g,t){
+    if(g.index===11)return TideLastPass.vessel(g,t);
     if(g.survey)return TideSoundings.vessel(g,t);
     if(g.relay)return TideRelay.vessel(g,t);
     if(g.signal){const p=TideSignal.ship(g,t);return [p.x,p.y,p.z];}
@@ -28,7 +29,7 @@ const TideLookout=(()=>{
   function point(g,id){
     const t=g.time,w=g.cues.water;
     if(id==='buoy')return [marks.buoy.x,w+(g.survey?TideSoundings.swell:swell)(marks.buoy.x,marks.buoy.z,t)+2.97,marks.buoy.z];
-    if(id==='stump')return [marks.stump.x,g.survey?-2.52:-1.16,marks.stump.z];
+    if(id==='stump')return [marks.stump.x,g.survey||g.index===11?-2.52:-1.16,marks.stump.z];
     const position=vessel(g,t);position[1]+=3.7;return position;
   }
   // Telescopes sit beyond the outer rail, clear of the overhead crane and tower walls.

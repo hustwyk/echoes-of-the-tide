@@ -75,7 +75,7 @@ const TideHud=(()=>{
       m.hidden=!here||!r.vis;reading.hidden=!here||!r.caption;
       if(!m.hidden)meter(m,r,i,g.time);
       set(reading,r.caption||'');
-      const role=v.querySelector('.pname').lastChild,roleName=g.fog&&i===1&&['bridge','spot'].includes(g.fog.mode)?'梁青 · 驾驶台视角':g.survey&&i===1&&g.stage===2&&g.engaged[i]?'阿棠 · 船尾视角':roles[i];
+      const role=v.querySelector('.pname').lastChild,roleName=g.lastPass&&i&&g.state.mode&&g.near[1]?(g.lastPass.turned?'海雁号 · 回望船尾':'阿棠 · 后甲板视角'):g.fog&&i===1&&['bridge','spot'].includes(g.fog.mode)?'梁青 · 驾驶台视角':g.survey&&i===1&&g.stage===2&&g.engaged[i]?'阿棠 · 船尾视角':roles[i];
       if(role.textContent!==roleName)role.textContent=roleName;
       const tips=pads[i]!=null?'左摇杆移动　A 跳跃/确认　RT 操作　右摇杆视角':k.use+' 操作　'+k.jump+' 跳跃 / 操作中确认　'+k.trim+' 微调';
       const work=g.archive&&here&&g.archive.sourceLoaded&&g.archive.review===null;

@@ -121,6 +121,7 @@ window.TideCoast = (() => {
   const waterFragment = `
     uniform sampler2D uNoise,uSky;
     uniform float uTime,uHasSky,uSignal,uBearing,uInside,uSurvey;
+    uniform vec2 uPilot;
     ${surveyWaves}
     uniform float uShoreLamp;uniform vec4 uTurningShip;
     uniform vec3 uSun,uFog;uniform vec4 basin,uNearOptic,uFarOptic;uniform vec2 uGhost,uRangeAxis;
@@ -163,7 +164,13 @@ window.TideCoast = (() => {
       lit=mix(lit,vec3(.49,.55,.53),foam*.55);
       float ledX=14.+(p.y+85.)*tan(clamp(uBearing,-.7,.7));
       float streak=exp(-abs(p.x-ledX)*.38)*(noiseB.r*.8+.1);
-      if(uNearOptic.w<0.)lit+=vec3(.68,.43,.15)*streak*uSignal*.45;
+      if(uPilot.y>0.){
+        vec2 dir=vec2(sin(uPilot.x),-cos(uPilot.x)),span=p-vec2(14.,-91.);
+        float range=dot(span,dir),crossing=dot(span,vec2(dir.y,-dir.x));
+        float focus=exp(-pow(crossing/(.55+.033*max(0.,range)),2.))*smoothstep(18.,31.,range)*(1.-smoothstep(51.,68.,range));
+        float facet=.24+.93*smoothstep(-.29,.32,normal.z+.37*normal.x+.43*(noiseB.g-.5));
+        lit+=vec3(2.16,1.79,.89)*focus*facet*uSignal;
+      }else if(uNearOptic.w<0.)lit+=vec3(.68,.43,.15)*streak*uSignal*.45;
       else{
         vec2 fromLamp=p-vec2(14.,-91.);
         float depth=-dot(fromLamp,uRangeAxis),u=dot(fromLamp,vec2(uRangeAxis.y,-uRangeAxis.x));
@@ -188,6 +195,8 @@ window.TideCoast = (() => {
         vec2 nearMark=p-vec2(-42.,-120.);
         float markerShine=exp(-pow(dot(nearMark,across)/.76,2.)-pow(dot(nearMark,transit)/3.3,2.));
         lit+=facet*vec3(.07,1.17,.43)*(shine*uShoreLamp+.38*markerShine);
+      }
+      if(uTurningShip.w>0.){
         vec2 waterTrack=p-uTurningShip.xy,stern=vec2(sin(uTurningShip.z),cos(uTurningShip.z));
         float aft=dot(waterTrack,stern),sideWake=abs(dot(waterTrack,vec2(stern.y,-stern.x)));
         float legs=exp(-pow((sideWake-2.8-.19*aft)/(.64+.043*max(0.,aft)),2.));
@@ -265,7 +274,7 @@ window.TideCoast = (() => {
       vertices.setX(i,320*Math.sign(x)*Math.pow(Math.abs(x),1.55));
       vertices.setZ(i,270*Math.sign(z)*Math.pow(Math.abs(z),1.45));
     }
-    const uniforms={uSurvey:{value:index===8?1:0},uTime:{value:0},uNoise:{value:noise},uSky:{value:noise},uHasSky:{value:0},uSignal:{value:0},
+    const uniforms={uPilot:{value:new T.Vector2()},uSurvey:{value:index===8?1:0},uTime:{value:0},uNoise:{value:noise},uSky:{value:noise},uHasSky:{value:0},uSignal:{value:0},
       uShoreLamp:{value:index===2?0:-1},uTurningShip:{value:new T.Vector4()},
       uNearOptic:{value:new T.Vector4(0,0,1,-1)},uFarOptic:{value:new T.Vector4()},uGhost:{value:new T.Vector2()},uRangeAxis:{value:new T.Vector2(Math.sin(TideLantern.yaw),Math.cos(TideLantern.yaw))},
       basin:{value:new T.Vector4()},uBearing:{value:0},uInside:{value:act===1?.9:0},uSun:{value:new T.Vector3(-.42,.40,-.82).normalize()},uFog:{value:fogColor}};
@@ -512,10 +521,18 @@ window.TideCoast = (() => {
       strut.quaternion.setFromUnitVectors(yAxis,hi.sub(lo).normalize());
     }
     const marks=TideLookout.marks;
-    const stump=mesh(shapes.round,iron,marks.stump.x,-2.51,marks.stump.z);
-    stump.name='断桩';stump.visible=index!==8;
-    if(index!==8)[-.95,-1.25].forEach(h=>{const collar=mesh(shapes.round,copper,marks.stump.x,h,marks.stump.z);collar.scale.set(.91,.105,.82);collar.rotation.z=.28;});
-    stump.scale.set(.76,3.1,.71);stump.rotation.z=.28;
+    if(index===11){
+      const pile=new T.Group();pile.position.set(marks.stump.x,0,marks.stump.z);group.add(pile);
+      const rod=(parent,material,a,b,r,rz=r)=>{
+        const d=b.clone().sub(a),length=d.length(),mid=a.clone().lerp(b,.5).add(parent.position);
+        addInstance('round',material,mid.x,mid.y,mid.z,r*2,length,rz*2,new T.Quaternion().setFromUnitVectors(yAxis,d.normalize()));
+      };
+      TideSurveyPier.buildPile(pile,o=>o.isMaterial?mat(o):geom(o),rod,black,copper,iron);
+    }else if(index!==8){
+      const stump=mesh(shapes.round,iron,marks.stump.x,-2.51,marks.stump.z);
+      stump.name='断桩';stump.scale.set(.76,3.1,.71);stump.rotation.z=.28;
+      [-.95,-1.25].forEach(h=>{const collar=mesh(shapes.round,copper,marks.stump.x,h,marks.stump.z);collar.scale.set(.91,.105,.82);collar.rotation.z=.28;});
+    }
 
     function timberPier(){
       for(const side of [-1,1])for(let i=0;i<6;i++){
@@ -735,6 +752,7 @@ window.TideCoast = (() => {
     });
     glowGeo.setAttribute('position',new T.Float32BufferAttribute(glowPos,3));
     glowGeo.setAttribute('tint',new T.Float32BufferAttribute(glowTint,3));
+    const beamAxis=new T.Vector3(0,0,1),beamDirection=new T.Vector3();
     const glow=mat(new T.ShaderMaterial({transparent:true,depthWrite:false,blending:T.AdditiveBlending,
       vertexShader:'attribute vec3 tint; varying vec3 c;void main(){c=tint;vec4 mv=modelViewMatrix*vec4(position,1.);gl_Position=projectionMatrix*mv;gl_PointSize=clamp(525./max(1.,-mv.z),4.,42.);}',
       fragmentShader:'varying vec3 c;void main(){vec2 p=gl_PointCoord*2.-1.;float d=dot(p,p);float a=max(0.,exp(-d*4.)-exp(-4.));gl_FragColor=vec4(c,a*.38);}'
@@ -767,6 +785,11 @@ window.TideCoast = (() => {
           uniforms.uNearOptic.value.set(a.x,a.twin,a.width,a.power);
           uniforms.uFarOptic.value.set(b.x,b.twin,b.width,b.power);
           uniforms.uGhost.value.set(a.ghost,b.ghost);lamp.visible=false;
+        }
+        if(cues.pilot){
+          const b=cues.pilot;
+          uniforms.uPilot.value.set(b.bearing,1);uniforms.uTurningShip.value.set(b.x,b.z,b.yaw,b.wake);
+          beam.quaternion.setFromUnitVectors(beamAxis,beamDirection.set(Math.sin(b.bearing),-.62,-Math.cos(b.bearing)).normalize());
         }
         uniforms.uSignal.value=strength;uniforms.uBearing.value=angle;
         rotors.forEach((obj,i)=>obj.rotation.x=t*(i%2?.27:-.25)*(1+strength*2));

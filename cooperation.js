@@ -50,7 +50,7 @@ const TideCoop = (() => {
         returnGate:0,balance:0,warnUntil:0,buttonCooldown:0,releaseHeld:false,catchup:0};
       if(this.spec.type==='ride')this.state.dials[this.spec.driver]=.50;
       this.rig=TideRigging.reset(this);this.paper=TidePaper.create(this);this.optic=TideLantern.create(this);
-      if(this.optic){this.cues.light=.97;this.cues.rays=TideLantern.viewData(this).images;}TideFieldWork.reset(this);TideCableQuay.begin(this);TideLookout.reset(this);TideRelay.begin(this);TideSoundings.begin(this);TideFogSignal.begin(this);TideSignal.begin(this);TideArchive.begin(this);
+      if(this.optic){this.cues.light=.97;this.cues.rays=TideLantern.viewData(this).images;}TideFieldWork.reset(this);TideCableQuay.begin(this);TideLookout.reset(this);TideRelay.begin(this);TideSoundings.begin(this);TideFogSignal.begin(this);TideLastPass.begin(this);this.pilotHorn=TideFogSignal.formal(this);TideSignal.begin(this);TideArchive.begin(this);
       this.events.stage?.(this);
     }
     alert(text,seconds=2.5) {
@@ -83,7 +83,7 @@ const TideCoop = (() => {
         if(this.stage+1===this.world.sections.length) {this.complete=true;this.events.finish?.(this);return;}
         this.checkpoints=section.ends.slice();this.stage++;this.begin();return;
       }
-      if(this.fog)TideFogSignal.step(this,dt);
+      if(this.fog||this.pilotHorn)TideFogSignal.step(this,dt);
       if(this.survey)TideSoundings.step(this,dt);
       if(this.relay)TideRelay.step(this,dt);
       if(this.cable)TideCableQuay.update(this,dt);
@@ -212,35 +212,6 @@ const TideCoop = (() => {
     q.hold=two&&ok.every(Boolean)?q.hold+dt:0;
     if(q.hold>(strict?1.7:1.05))g.advance();
   }
-  function rhythm(g,input){
-    const q=g.state,s=g.spec;
-    if(q.nextShot===2){
-      const replied=g.time-q.mark>1.35;
-
-      g.set(0,'保持光标，听驾驶台独立复述',{caption:'塔上指示灯 ●●●'});
-      g.set(1,replied?'收到复述，按跳跃键确认':'闭合电台，等待船上回话',{caption:replied?'梁青：我数到三声。':'阿棠：我在后甲板，三声都到了。'});
-      if(replied&&g.commit(1,input))g.advance();
-      return;
-    }
-    const clock=q.age+(s.irregular?.30*Math.sin(q.age*.9):0);
-    const f=(clock%s.period)/s.period;
-    const interval=.72;
-    const expected=q.pulseAt+.6+q.received*interval;
-    const prepared=q.nextShot===1;
-    g.set(0,'刻口进入亮区时按跳跃键发预备灯',{vis:'dial',value:f,target:.24,band:.14,caption:prepared?'预备灯已发':'旋转刻口'});
-    g.set(1,prepared?'每次指针经过亮区按一下跳跃键':'等同伴的预备灯',{vis:'dial',value:prepared?clamp(.5+(g.time-expected),0,1):0,target:.5,band:.25,caption:'雾号　'+'●'.repeat(q.received)+'○'.repeat(3-q.received)});
-    g.cues.light=f<.5?.82:.1;
-    if(g.commit(0,input)&&!prepared){
-      if(Math.abs(f-.24)<.14){q.nextShot=1;q.pulseAt=g.time;q.received=0;g.sound(730,.14);}
-      else g.alert('错过刻口，等下一圈');
-    }
-    if(prepared&&g.commit(1,input)){
-      if(Math.abs(g.time-expected)<.25){
-        q.received++;
-        if(q.received===3){q.nextShot=2;q.mark=g.time;g.alert('阿棠：后甲板三响。正在等待驾驶台复述。',2.5);}
-      } else {q.received=0;q.nextShot=0;g.alert('间隔不齐，下一圈重新预备');}
-    }else if(prepared&&g.time>expected+.27){q.received=0;q.nextShot=0;g.alert('漏了一响，等下一圈');}
-  }
   function quiet(g,input,dt){
     const q=g.state,c=g.section.tram;
     if(!TideDrawbridge.tram(g,dt)){
@@ -289,23 +260,6 @@ const TideCoop = (() => {
       }
     }
   }
-  function release(g,input,dt){
-    const q=g.state;g.cues.light=1;
-    if(q.mode===0){
-      g.set(0,'保持灯束，等船尾确认');g.set(1,'按住电台，让梁青听见引导信号');
-      q.hold=g.engaged.every(Boolean)?q.hold+dt:0;
-      if(q.hold>1.35){q.mode=1;q.mark=g.time;g.alert('梁青：等一拍。把频道留给我。',4);}
-    }else if(q.mode===1){
-      g.set(0,'守住灯束，听船尾的回话');g.set(1,'松开操作键，给船长留出频道');
-      if(!input[1].use&&g.time-q.mark>.95 && g.engaged[0]){
-        q.mode=2;q.mark=g.time;g.alert('阿棠：桩出来了。　梁青：现在我转。',4);g.sound(295,.32);
-      }
-    }else{
-      g.cues.rescue=clamp((g.time-q.mark)/3.4,0,1);
-      g.set(0,'船艉穿过浪花后，按跳跃键锁住手轮');g.set(1,'海雁号正在转入背风水域');
-      if(g.cues.rescue===1 && g.commit(0,input))g.advance();
-    }
-  }
-  const handlers={ride,paper:TidePaper.interact,optic:alignment,rhythm,quiet,release};
+  const handlers={ride,paper:TidePaper.interact,optic:alignment,rhythm:TideFogSignal.interact,quiet,release:TideLastPass.release};
   return {Session,roleKeys,near,ridePressure};
 })();

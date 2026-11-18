@@ -182,7 +182,7 @@ const TideHarbor = (() => {
       }
       this.coast?.update(t,g.cues);
       this.ship.position.fromArray(TideLookout.vessel(g,t));
-      this.ship.rotation.set(.028*Math.sin(t*.78),g.fog?TideFogSignal.shipYaw:g.survey?TideSoundings.shipYaw:g.signal?TideSignal.ship(g,t).yaw:1.12+g.cues.rescue*.7,.034*Math.sin(t*.91));
+      this.ship.rotation.set(.028*Math.sin(t*.78),g.index===11?TideLastPass.yaw(g):g.fog?TideFogSignal.shipYaw:g.survey?TideSoundings.shipYaw:g.signal?TideSignal.ship(g,t).yaw:1.12+g.cues.rescue*.7,.034*Math.sin(t*.91));
       for(const [d,obj] of this.floors){
         obj.visible=d.active;
         if(d.hinge!==undefined){
@@ -221,7 +221,7 @@ const TideHarbor = (() => {
         const goal=targetFor(g,i).p;this.halos[i].position.set(goal.x,goal.y+.065,goal.z);
         this.halos[i].scale.setScalar(1+.075*Math.sin(t*3+i));
         const drivingValve=g.spec.mode==='raft'&&i===g.spec.driver;
-        const v=drivingValve ? .5+.45*g.rig.flow : g.spec.type==='ride'?g.state.ferry:g.state.dials[i];
+        const v=g.pilotHorn?(i?g.pilotHorn.valve:g.pilotHorn.spin%1):g.lastPass&&!i?(g.lastPass.wheel+1.62)/1.19:drivingValve ? .5+.45*g.rig.flow : g.spec.type==='ride'?g.state.ferry:g.state.dials[i];
         this.equipment.drive(g.section.devices[i],v,t);
         if(g.section.field)this.equipment.drive(g.section.field.devices[i],g.field.values[i],t);
         const hanging=!acting&&g.rig?.belay&&i!==g.spec.driver;
@@ -276,7 +276,7 @@ const TideHarbor = (() => {
         const cableShot=ready&&g.cable?this.cableYard.shot(g,i):null;
         const tapeShot=ready&&g.archive?TideArchive.shot(g,i):null;
         const relayShot=ready&&g.fog?this.fogHouse.shot(g,i):ready&&g.survey?this.tideStation.shot(g,i):ready&&g.relay?this.relayStation.shot(g,i):null;
-        const shot=this.cinema.shot(g,i)||relayShot||cableShot||rescueShot||floodShot||tapeShot||signalShot||lanternShot||(scoped?TideLookout.camera(g):paperView?TidePaper.camera(g,i):beam);
+        const shot=this.cinema.shot(g,i)||(ready&&g.lastPass?TideLastPass.shot(g,i):null)||relayShot||cableShot||rescueShot||floodShot||tapeShot||signalShot||lanternShot||(scoped?TideLookout.camera(g):paperView?TidePaper.camera(g,i):beam);
         cam.fov=shot?.fov|| (cableShot?cableShot.fov:floodShot?floodShot.fov:tapeShot?tapeShot.fov:signalShot?signalShot.fov:lanternShot?lanternShot.fov:scoped?31:lighting?39:paperView?Math.max(54,2*Math.atan(1.19*height/(1.75*vw))*180/Math.PI):57);
         if(shot){cam.position.fromArray(shot.eye);cam.lookAt(vector.fromArray(shot.at));}
         cam.aspect=vw/height;cam.updateProjectionMatrix();
