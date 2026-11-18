@@ -1,18 +1,18 @@
 // Original spoken report and synchronized Mandarin captions.
 const TideRelaySpeech={
   "answer": {
-    "duration": 6.617,
+    "duration": 6.681,
     "lines": [
       [
         0.311,
         "梁青　两句都收到。"
       ],
       [
-        1.8506,
+        1.9143,
         "梁青　阿棠，你到船尾去。"
       ],
       [
-        3.678,
+        3.7417,
         "梁青　把你自己看见的说给他们听。"
       ]
     ]
@@ -35,7 +35,7 @@ const TideRelaySpeech={
     ]
   },
   "checkin": {
-    "duration": 4.782,
+    "duration": 4.817,
     "lines": [
       [
         0.255,
@@ -46,7 +46,7 @@ const TideRelaySpeech={
         "林澈　机修员林澈。"
       ],
       [
-        3.2506,
+        3.3399,
         "林澈　林，双木林。"
       ]
     ]
@@ -90,35 +90,35 @@ const TideRelaySpeech={
     ]
   },
   "shen": {
-    "duration": 5.407,
+    "duration": 4.929,
     "lines": [
       [
         0.255,
         "沈遥　我是沈遥。"
       ],
       [
-        1.5502,
+        1.385,
         "沈遥　把灯机恢复报成北线恢复的人，"
       ],
       [
-        4.2229,
+        4.0577,
         "沈遥　是我。"
       ]
     ]
   },
   "stationreply": {
-    "duration": 4.585,
+    "duration": 4.344,
     "lines": [
       [
         0.311,
         "梁青　北岬，林师傅。"
       ],
       [
-        1.7272,
+        1.616,
         "梁青　收到。"
       ],
       [
-        2.6718,
+        2.5646,
         "梁青　请报更正项。"
       ]
     ]
