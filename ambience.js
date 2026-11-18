@@ -478,6 +478,43 @@ window.TideAudioScene = (() => {
       previous.pulse = q.pulseAt;
       previous.read = q.readAt;
     }
+    function summerSound(g,now){
+      const m=g.archive.memory,mix=run;
+      if(!previous.memory||previous.memory!==m){
+        previous.memory=m;previous.tinSerial=0;mix.nextMix=0;
+      }
+      if(now>=mix.nextMix){
+        mix.nextMix=now+.16;
+        for(const [name,layer] of Object.entries(mix.layers)){
+          const tide=.70+.30*Math.sin(g.time*.49);
+          const volume=name==='surf'?.075*tide:name==='foam'?.019*tide:name==='lee'?.026:0;
+          setLayer(layer,now,volume,0,.12);
+        }
+      }
+      tinEvents(m,now);
+    }
+    function tinEvents(m,now){
+      if(previous.tinSource!==m){previous.tinSource=m;previous.tinSerial=0;}
+      for(const e of m.events){
+        if(e.serial<=previous.tinSerial||m.elapsed-e.time>.32)continue;
+        const pan=e.replay?e.pan*.13:e.pan*.69,level=e.gain*(e.replay?.72:1);
+        if(e.type==='tin'||e.type==='rim'||e.type==='settle'){
+          const pitch=e.type==='tin'?1:e.type==='rim'?1.41:.79;
+          for(const [hz,d,gain] of [[416,.37,.14],[679,.26,.11],[1170,.18,.066],[1995,.12,.040]]){
+            const f=hz*pitch*(1+.021*e.pan);
+            ring(now,f,d,level*gain,pan,{end:f*.992,wet:.20});
+          }
+          brush(now,'pink','bandpass',1700,1.4,.002,.067,level*.26,pan,.14);
+        }else if(e.type==='grain'){
+          brush(now,'pink','bandpass',740+1100*level,.85,.003,.040,level*.13,pan,.09);
+        }else{
+          const peg=e.type==='peg',wood=e.type==='wood',f=wood?203:peg?1380:e.type==='edge'?590:902;
+          ring(now,f,wood?.11:.068,level*(wood?.22:.12),pan,{end:f*(wood?.82:.98),wet:.14});
+          brush(now,'pink','bandpass',f*1.7,.91,.002,wood?.101:.048,level*.24,pan,.12);
+        }
+      }
+      previous.tinSerial=m.serial;
+    }
     function update(g, dt) {
       if (dead || !g || g.complete) return;
       const mix = getRun(), now = ctx.currentTime;
@@ -488,6 +525,8 @@ window.TideAudioScene = (() => {
         mix.nextDrop = g.time + range(.45,1.7);
         mix.nextGust = g.time + range(1.6,4.4);
       }
+      if(TideTinMemory.active(g)){summerSound(g,now);return;}
+      if(g.state.pocket)tinEvents(g.state.pocket,now);
       for (let i = 0; i < 2; i++) {
         motion(g,clamp(Number(dt) || 0,0,.16),now,i);
         if(!g.archive)instruments(g,now,i);

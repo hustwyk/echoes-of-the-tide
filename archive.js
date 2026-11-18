@@ -42,7 +42,7 @@ const TideArchive=(()=>{
     if(!g.world.archive)return;
     const ready=g.stage!==1;
     g.archive={head:[0,0],speed:[0,0],tuning:.51,count:0,pending:null,fetched:[g.stage===2,g.stage===2],mounted:[ready,ready],
-      sourceLoaded:ready,location:['desks','desks'],mistake:'',againAfter:0,review:null,keys:null,
+      sourceLoaded:ready,memory:null,location:['desks','desks'],mistake:'',againAfter:0,review:null,keys:null,
       take:0,preview:[null,null],captions:['','']};
     for(let i=0;i<2;i++)select(g,i,ready?'desks':'shelves');
   }
@@ -76,6 +76,7 @@ const TideArchive=(()=>{
   }
   function monitor(g,i){
     const a=g.archive,r=rolls[g.stage],review=a.review;
+    if(a.memory)return {time:0,speed:0,quality:0};
     if(a.keys){
       const t=g.time-a.keys.replay;
       return i&&g.engaged[i]&&t<3.65?{time:11.20+t,speed:1,quality:1}:{time:seconds,speed:0,quality:1};
@@ -241,12 +242,15 @@ const TideArchive=(()=>{
     if(!a.sourceLoaded){mount(g,k);return;}
     if(a.keys){chooseKey(g,k,dt);return;}
     if(a.review!==null){review(g,dt);return;}
-    if(a.count===rolls[g.stage].pins.length){readings(g);if(g.time>=a.againAfter+.75)g.advance();return;}
+    if(a.count===rolls[g.stage].pins.length){readings(g);if(g.time>=a.againAfter+.75){
+      if(g.stage===0&&!a.memory){TideTinMemory.create(g);g.events.checkpoint?.(g);}
+      else if(!a.memory||a.memory.done)g.advance();
+    }return;}
     transport(g,k,dt);punch(g,k);readings(g);
   }
   function checkpoint(g){
     const a=g.archive;if(!a)return null;
-    return a.count||g.stage===1&&a.fetched.some(Boolean)?{count:a.count,fetched:a.fetched.slice(),mounted:a.mounted.slice(),...(a.keys?{keyRack:true}:{})}:null;
+    return a.count||g.stage===1&&a.fetched.some(Boolean)?{count:a.count,fetched:a.fetched.slice(),mounted:a.mounted.slice(),...(a.memory?{takes:a.memory.takes}:{}),...(a.keys?{keyRack:true}:{})}:null;
   }
   function restore(g,m){
     const a=g.archive;if(!a||!m||!Number.isInteger(m.count))return;
@@ -260,9 +264,11 @@ const TideArchive=(()=>{
       a.sourceLoaded=a.mounted.every(Boolean);
     }
     if(a.count){const t=r.pins[a.count-1][0];a.head=[t,toHead(r,1,t)];}
+    if(a.count===r.pins.length&&g.stage===0&&Array.isArray(m.takes))TideTinMemory.create(g,m.takes);
     if(a.count===r.pins.length&&g.stage===2){if(m.keyRack===true)setKeys(g,0,0);else a.review=0;}
   }
   function shot(g,i){
+    if(TideTinMemory.active(g))return TideTinMemory.shot(g,i);
     if(!g.engaged[i]&&(g.archive.review===null||g.archive.keys))return null;
     const s=g.section.sites[i],side=i?1:-1;
     if(g.archive.location[i]==='keyRack')return {eye:[s.x+.015,1.73,-3.15],at:[s.x,1.66,-4.72],fov:48,handsOnly:true};

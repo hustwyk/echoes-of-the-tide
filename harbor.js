@@ -85,7 +85,7 @@ const TideHarbor = (() => {
     }
     free() {
       this.pointers.clear();if(!this.scene)return;
-      this.contactSurf?.dispose();this.boat?.dispose();this.fenderYard?.dispose();this.seaReflection?.dispose();this.pointing?.dispose();this.sightlines?.dispose();this.footlight?.dispose();this.swingYard?.dispose();this.cisternRoom?.dispose();this.glassRoom?.dispose();this.fogHouse?.dispose();this.tideStation?.dispose();this.relayStation?.dispose();this.cableYard?.dispose();this.floodRoom?.dispose();this.archiveStudio?.dispose();this.transitRig?.dispose();this.transitGlass?.dispose();this.transitOptics?.dispose();this.signalhouse?.dispose();this.lanternroom?.dispose();this.bridgework?.dispose();this.dockside?.dispose();this.cinema?.dispose();this.fieldProps?.dispose();this.coast?.dispose();
+      this.contactSurf?.dispose();this.boat?.dispose();this.fenderYard?.dispose();this.seaReflection?.dispose();this.pointing?.dispose();this.sightlines?.dispose();this.footlight?.dispose();this.swingYard?.dispose();this.cisternRoom?.dispose();this.glassRoom?.dispose();this.fogHouse?.dispose();this.tideStation?.dispose();this.relayStation?.dispose();this.cableYard?.dispose();this.floodRoom?.dispose();this.childDuo?.dispose();this.screwTable?.dispose();this.summerRoom?.dispose();this.archiveStudio?.dispose();this.transitRig?.dispose();this.transitGlass?.dispose();this.transitOptics?.dispose();this.signalhouse?.dispose();this.lanternroom?.dispose();this.bridgework?.dispose();this.dockside?.dispose();this.cinema?.dispose();this.fieldProps?.dispose();this.coast?.dispose();
       for(const asset of this.custom)asset.dispose();
       this.custom.clear();this.lifeline=null;this.scene.clear();this.scene=null;this.equipment.releaseDecks();
       this.lens?.dispose();this.lens=null;
@@ -148,6 +148,7 @@ const TideHarbor = (() => {
       this.transitGlass=g.signal?TideTransitGlass.create(this.scene):null;
       this.transitOptics=g.signal?TideTransitOptics.create(this.scene,g):null;
       this.signalhouse=g.signal?TideSignalHouse.create(this.scene,g,this.equipment):null;
+      this.childDuo=this.screwTable=this.summerRoom=null;
       this.archiveStudio=g.archive?TideArchiveStudio.create(this.scene,g,this.renderer):null;
       this.lanternroom=g.world.lantern?TideLanternRoom.create(this.scene,g):null;
       this.bridgework=TideBridgework.create(this.scene,g,this.floors,this.actors);
@@ -223,7 +224,13 @@ const TideHarbor = (() => {
       if(g.glass){
         if(this.chartPhase==='unload'&&g.glass.phase==='desk')this.yaws.fill(0);
         this.chartPhase=g.glass.phase;this.glassRoom.update(g);
-      }this.boat?.update(g.world.fenders.floatPose);this.fenderYard?.update(g.fenders,t);this.swingYard?.update(g);this.cisternRoom?.update(g,this.cinema.ended?0:this.cinema.time);this.fogHouse?.update(g);this.tideStation?.update(g);this.relayStation?.update(g);this.cableYard?.update(g);this.floodRoom?.update(g);this.archiveStudio?.update(g);this.signalhouse?.update(g);this.transitRig?.update(g,t);this.transitOptics?.update(g,t);this.bridgework?.update();this.lanternroom?.update(g);
+      }this.boat?.update(g.world.fenders.floatPose);this.fenderYard?.update(g.fenders,t);this.swingYard?.update(g);this.cisternRoom?.update(g,this.cinema.ended?0:this.cinema.time);this.fogHouse?.update(g);this.tideStation?.update(g);this.relayStation?.update(g);this.cableYard?.update(g);this.floodRoom?.update(g);if(g.archive&&g.stage===0&&g.archive.count>0&&!this.summerRoom){
+        this.summerRoom=TideSummerRoom.create(this.scene);
+        this.screwTable=TideScrewTable.create(this.scene);
+        this.childDuo=TideChildDuo.create(this.scene);
+      }
+      this.summerRoom?.update(g,t);this.screwTable?.update(g,t);this.childDuo?.update(g,t);
+      this.archiveStudio?.update(g);this.signalhouse?.update(g);this.transitRig?.update(g,t);this.transitOptics?.update(g,t);this.bridgework?.update();this.lanternroom?.update(g);
       if(this.lifeline){
         const {line,eye}=this.lifeline,b=g.rig?.belay;
         line.visible=!!b;
@@ -312,7 +319,9 @@ const TideHarbor = (() => {
         const tapeShot=ready&&g.archive?TideArchive.shot(g,i):null;
         const relayShot=ready&&g.fog?this.fogHouse.shot(g,i):ready&&g.survey?this.tideStation.shot(g,i):ready&&g.relay?this.relayStation.shot(g,i):null;
         const berthShot=TideFenders.active(g)&&ready?TideFenders.shot(g,i,yaw,this.pitch[i]):null;
-        const shot=this.cinema.shot(g,i)||berthShot||(ready&&TideSwing.active(g)?this.swingYard.shot(g,i):null)||(ready&&g.cistern?this.cisternRoom.shot(g,i):null)||(ready&&g.glass?this.glassRoom.shot(g,i):null)||(ready&&g.lastPass?TideLastPass.shot(g,i):null)||relayShot||cableShot||rescueShot||floodShot||tapeShot||signalShot||lanternShot||(scoped?TideLookout.camera(g):paperView?TidePaper.camera(g,i):beam);
+        const atTin=g.section.tram&&!g.section.tram.heard&&g.engaged[i]&&g.state.taps?.length;
+        const pocketShot=ready&&(g.state.pocket||atTin)?this.bridgework?.pocketShot(i):null;
+        const shot=this.cinema.shot(g,i)||pocketShot||berthShot||(ready&&TideSwing.active(g)?this.swingYard.shot(g,i):null)||(ready&&g.cistern?this.cisternRoom.shot(g,i):null)||(ready&&g.glass?this.glassRoom.shot(g,i):null)||(ready&&g.lastPass?TideLastPass.shot(g,i):null)||relayShot||cableShot||rescueShot||floodShot||tapeShot||signalShot||lanternShot||(scoped?TideLookout.camera(g):paperView?TidePaper.camera(g,i):beam);
         cam.fov=shot?.fov|| (cableShot?cableShot.fov:floodShot?floodShot.fov:tapeShot?tapeShot.fov:signalShot?signalShot.fov:lanternShot?lanternShot.fov:scoped?31:lighting?39:paperView?Math.max(54,2*Math.atan(1.19*height/(1.75*vw))*180/Math.PI):57);
         if(shot){cam.position.fromArray(shot.eye);cam.lookAt(vector.fromArray(shot.at));}
         else{
@@ -323,6 +332,7 @@ const TideHarbor = (() => {
         if(paperView)for(let j=0;j<2;j++)this.actors[j].visible=!g.engaged[j];
         if(shot?.handsOnly)for(const part of this.coats[i])part.visible=false;
         if(lanternShot&&i===g.optic.observer&&(!g.optic.mount||g.optic.mount.done))this.actors[i].visible=false;
+        this.childDuo?.setView?.(shot?.memory?i:-1);
         this.transitGlass?.update(g,cam,i,cam.aspect,Boolean(shot?.transit));
         if(shot?.transit)cam.layers.enable(TideTransitOptics.layer);else cam.layers.disable(TideTransitOptics.layer);
         this.seaReflection?.use(i,cam,vw,height,t,this.quality);
@@ -335,6 +345,7 @@ const TideHarbor = (() => {
         if(paperView)for(const actor of this.actors)actor.visible=true;
         if(ready){this.pin(g,i);this.pointing.draw(i,g.time,p);}
       }
+      this.childDuo?.setView?.(-1);
       this.snap=false;
     }
     belayGrips(p,anchor){
@@ -370,7 +381,7 @@ const TideHarbor = (() => {
       node.style.top=clamp(behind?.36:(1-vector.y)/2,.16,.70)*100+'%';
       const label=(behind?'↶ ':vector.x>1?'→ ':vector.x< -1?'← ':'◇ ')+name+'　'+Math.round(dist)+'m';
       if(node.textContent!==label)node.textContent=label;
-      node.hidden=g.engaged[i] || dist<1.6 || (g.rig?.lightOn&&!g.rig.lit&&g.spec.driver!==i);
+      node.hidden=TideTinMemory.active(g)||g.engaged[i] || dist<1.6 || (g.rig?.lightOn&&!g.rig.lit&&g.spec.driver!==i);
     }
   }
   return {WorldView,targetFor};

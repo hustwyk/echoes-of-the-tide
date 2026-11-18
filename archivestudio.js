@@ -98,7 +98,7 @@ const TideArchiveStudio=(()=>{
     }
     return {desks,shelfGrips,carryGrips,update(g){
       room.update(g);for(let i=0;i<2;i++)desks[i].update(TideArchive.markView(g,i));
-      if(!captured&&++captureAt>=4){captured=true;capture();}
+      if(!TideTinMemory.active(g)&&!captured&&++captureAt>=4){captured=true;capture();}
     },dispose(){
       for(const d of desks)d.dispose();room.dispose();key.shadow.dispose();lights.removeFromParent();
       if(scene.environment===reflection?.texture)scene.environment=null;

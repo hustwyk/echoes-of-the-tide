@@ -86,6 +86,7 @@ const TideCoop = (() => {
         if(this.stage+1===this.world.sections.length) {this.complete=true;this.events.finish?.(this);return;}
         this.checkpoints=section.ends.slice();this.stage++;this.begin();return;
       }
+      if(TideTinMemory.active(this)){TideTinMemory.step(this,inputs,dt);return;}
       if(TideFenders.active(this)){TideFenders.step(this,inputs,yaws,dt);return;}
       if(this.fog||this.pilotHorn)TideFogSignal.step(this,dt);
       if(this.survey)TideSoundings.step(this,dt);
@@ -245,9 +246,10 @@ const TideCoop = (() => {
       q.catchup+=dt;
       if(q.catchup>.75){g.skipTin=true;g.alert('两人一起合上了铁盒，吊篮向泊位滑去。');return;}
     }else q.catchup=0;
+    if(TideTinMemory.pocket(g,input,dt))return;
     q.taps??=[];q.answer??=[];
     const skip=c.arrived?'已靠岸，可从桌子两侧一起下车':'两人同时按住操作键和向后，可收起铁盒';
-    if(g.engaged.every(Boolean)&&!c.heard)TideSwing.speak(g,'knock');
+    if(g.engaged.every(Boolean)&&!c.heard&&!(g.pocketTape?.length===2&&input.every(k=>k.z<-.55)))TideSwing.speak(g,'knock');
     if(q.taps.length<3){
       const n=q.taps.length;
       if(g.commit(0,input) && (!n||g.time-q.taps[n-1]>.37)){
@@ -255,7 +257,7 @@ const TideCoop = (() => {
         if(q.taps.length===3){q.mark=g.time;g.alert('三声都收进了第一轨，轮到沈遥。',3);}
       }
       if(n&&g.time-q.taps[n-1]>2.6){q.taps=[];g.alert('录音留了太长的空白，再敲三下');}
-      g.set(0,'按住操作键，按三次跳跃键，自己编一段敲铁盒的节奏',{vis:'dial',value:q.taps.length/3,caption:'录音 '+q.taps.length+' / 3　·　'+skip});
+      g.set(0,g.pocketTape?.length===2&&!q.taps.length?'按确认敲出第一下。想先听以前那盒带子，两个人扶住桌子一同向前推。':'按住操作键，按三次跳跃键，自己编一段敲铁盒的节奏',{vis:'dial',value:q.taps.length/3,caption:'录音 '+q.taps.length+' / 3　·　'+skip});
       g.set(1,'听同伴的三下敲击，看看两次停顿各有多长',{vis:'wave',value:n?g.time-q.taps[n-1]:0,caption:n&&g.time-q.taps[n-1]<.23?'●　铁盒响了':(c.arrived?skip:'监听')});
       return;
     }

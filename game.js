@@ -1,6 +1,7 @@
 const $=id=>document.getElementById(id);
 const info=$('info'),game=$('game'),overlay=$('overlay'),canvas=$('canvas');
-let progress=0,resume=null;
+let progress=0,resume=null,pocketTape=[];
+try{pocketTape=TideTinMemory.readTakes(JSON.parse(localStorage.getItem('tide-childhood-takes')));}catch{}
 const journal=[];
 try {
   progress=Math.max(0,Math.min(levels.length,Math.floor(Number(localStorage.getItem('tide-progress'))||0)));
@@ -49,6 +50,10 @@ function campaign() {
 }
 
 function savePoint(g){
+  const takes=g.archive?.memory?.takes;
+  if(takes?.length===2&&pocketTape!==takes){
+    pocketTape=takes;try{localStorage.setItem('tide-childhood-takes',JSON.stringify(takes));}catch{}
+  }
   if(g.index!==progress)return;
   const fenders=TideFenders.checkpoint(g),landfall=TideLandfall.checkpoint(g),mark=TideLantern.checkpoint(g),signal=TideSignal.checkpoint(g),archive=TideArchive.checkpoint(g);
   const swing=TideSwing.checkpoint(g),cistern=TideCistern.checkpoint(g),cable=TideCableQuay.checkpoint(g),relay=TideRelay.checkpoint(g),survey=TideSoundings.checkpoint(g),glass=TideGlass.checkpoint(g),fog=TideFogSignal.checkpoint(g),pass=TideLastPass.checkpoint(g);
@@ -108,11 +113,11 @@ function openLevel(n,stage=0,mark=null){
     if(n===7)TideReceiverAudio.loadRelay();
     if(n===1)TideReceiverAudio.loadQuay();
     if(n===2)TideReceiverAudio.loadTransit();
-    if(n===4)TideTapeAudio.load();
+    if(n===4){TideTapeAudio.load();TideReceiverAudio.loadTin();}
     session=new TideCoop.Session(n,{
       stage:onStage,checkpoint:savePoint,log:note,alert:line=>{
-        if(/^(林澈|沈遥|阿棠|梁青|海雁复述|值班员|测潮员|哐啷)/.test(line)){
-          note(line);if(voice&&!session?.signal?.voice)say(line);
+        if(/^(小林澈|小沈遥|林澈|沈遥|阿棠|梁青|海雁复述|值班员|测潮员|哐啷)/.test(line)){
+          note(line);if(voice&&!session?.signal?.voice&&!session?.archive?.memory?.voice)say(line);
         }
       },success:()=>sound.tone(580,.23,'triangle'),sound:(f,d)=>sound.tone(f,d),
       reset:side=>{view.snap=true;sound.cue('reset',side);},finish:finishLevel
@@ -125,6 +130,7 @@ function openLevel(n,stage=0,mark=null){
         deck.active=true;if(deck.hinge!==undefined){deck.unlocked=true;deck.hinge=1;}
       }
     }
+    session.pocketTape=pocketTape;
     if(mark){if(mark.berth)TideFenders.restore(session,mark);else if(session.swing)TideSwing.restore(session,mark);else if(session.cistern)TideCistern.restore(session,mark);else if(session.glass)TideGlass.restore(session,mark);else if(session.lastPass)TideLastPass.restore(session,mark);else if(session.fog)TideFogSignal.restore(session,mark);else if(session.survey)TideSoundings.restore(session,mark);else if(session.relay)TideRelay.restore(session,mark);else if(session.cable)TideCableQuay.restore(session,mark);else if(session.world.landfall)TideLandfall.restore(session,mark);else if(session.archive)TideArchive.restore(session,mark);else if(session.signal)TideSignal.restore(session,mark);else TideLantern.restore(session,mark);savePoint(session);}
     view.load(session);
   }catch(err){
@@ -289,7 +295,7 @@ function frame(now){
   if(sound.enabled){sound.scene?.update(session,dt);sound.tape?.update(session);sound.receiver?.update(session);}
   if(!redraw||now-redraw>55){
     TideHud.update(session,padSlots);
-    showStatus((session.stage===0&&session.fenders?.subtitle)||(session.signal?.voice&&TideTransitSpeech[session.signal.voice].line)||session.swing?.subtitle||session.cistern?.subtitle||session.glass?.subtitle||(!session.lastPass?.occupied&&session.lastPass?.subtitle)||session.pilotHorn?.subtitle||session.fog?.subtitle||session.survey?.subtitle||session.relay?.subtitle||session.cable?.subtitle||session.cable?.warp.subtitle||(session.noticeUntil>session.time?session.notice.replace(/\n/g,'　'):(TideFenders.active(session)?'护舷井登岸':session.cable?TideCableQuay.title(session):session.landfall?'防潮门值班间':session.spec.title)+'　·　靠近角色颜色的目标'));
+    showStatus((session.stage===0&&session.fenders?.subtitle)||(session.archive?.memory?.voice&&TideTinLines[session.archive.memory.voice].line)||(session.signal?.voice&&TideTransitSpeech[session.signal.voice].line)||session.swing?.subtitle||session.cistern?.subtitle||session.glass?.subtitle||(!session.lastPass?.occupied&&session.lastPass?.subtitle)||session.pilotHorn?.subtitle||session.fog?.subtitle||session.survey?.subtitle||session.relay?.subtitle||session.cable?.subtitle||session.cable?.warp.subtitle||(session.noticeUntil>session.time?session.notice.replace(/\n/g,'　'):(TideFenders.active(session)?'护舷井登岸':session.cable?TideCableQuay.title(session):session.landfall?'防潮门值班间':session.spec.title)+'　·　靠近角色颜色的目标'));
     $('elapsed').textContent=timeLabel(session.time)+'　/　'+(session.stage+1)+' of 3';
     redraw=now;
   }
