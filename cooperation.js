@@ -99,6 +99,7 @@ const TideCoop = (() => {
       if(cart)this.near[1-this.spec.driver]=TideDrawbridge.onCart(this,1-this.spec.driver,{use:true});
       if(section.tram&&!transfer)this.near=this.near.map((v,i)=>v&&this.players[i].ground===section.tram.deck);
       this.engaged=this.near.map((ok,i)=>this.cable?TideCableQuay.working(this,i,inputs[i]):ok&&inputs[i].use);
+      if(TideTransit.active(this))this.engaged[1]=true;
       if(this.signal)TideSignal.step(this,dt);
       const prevStaff=section.span?.lower?TideDrawbridge.coordinates(section.span,this.players[1-this.spec.driver]):null;
       for(let side=0;side<2;side++){

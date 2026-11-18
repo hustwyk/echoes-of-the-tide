@@ -216,7 +216,8 @@ const TideSignalHouse=(()=>{
       equipment.drive(clutch,r.trim,g.time);equipment.drive(cutout,r.shutter,g.time);equipment.drive(radio,r.mic==='sending'?1:0,g.time);
       tach.rotation.z=1.98-r.rpm*3.96;needle.rotation.z=1.98-r.trim*3.96;
       pilot.emissiveIntensity=r.linked?2.8:Math.max(0,r.rpm-.25)*.38;
-      glass.emissiveIntensity=.025+r.glow*4.1;glowMaterial.opacity=r.glow*.86;lampLight.intensity=r.glow*4;
+      const lens=g.cues.rangeGreen||0;
+      glass.emissiveIntensity=.025+lens*4.1;glowMaterial.opacity=lens*.86;lampLight.intensity=lens*4;
       slats.forEach((v,j)=>v.rotation.y=j*TAU/12+r.shutter*1.52);
       stair.rotation.x=r.angle;drum.rotation.z=r.angle*2.8;
       b.set(.67,h.y+Math.sin(r.angle)*(l-.21),h.z-Math.cos(r.angle)*(l-.21));d.subVectors(b,a);

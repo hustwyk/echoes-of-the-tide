@@ -67,7 +67,7 @@ const TideHud=(()=>{
       const riding=s.type==='ride' && (s.driver!==i||q.latch);
       v.querySelector('.reticle').hidden=!(TideLookout.active(g)&&g.watch.task.watcher===i&&g.engaged[i]||g.relay?.top&&!i&&g.engaged[i]||g.survey&&i===1&&g.engaged[i]||g.fog?.mode==='spot'&&i===1&&g.engaged[i]);
       const here=TideFenders.active(g)||TideSwing.active(g)||!!g.cistern||!!g.glass||!!g.fog||!!g.survey||!!g.relay||!!g.cable||close||g.signal&&g.stage===2&&i===0&&!g.signal.pinned||riding||!!g.section.tram,tag=TideHarbor.targetFor(g,i).name;
-      const task=TideFenders.active(g)?'护舷井登岸':TideSwing.active(g)?(g.swing.phase==='report'?'桥头寄件柜':g.swing.phase==='stow'?'把尺交进吊篮':'桥下横移吊环'):g.cable?TideCableQuay.title(g):g.landfall?(g.landfall.pinned?'值班间收听':'防潮门'):g.rig?.belay?'浪沟接应':s.title;
+      const task=TideTransit.active(g)?'岸灯试光与船上报位':TideFenders.active(g)?'护舷井登岸':TideSwing.active(g)?(g.swing.phase==='report'?'桥头寄件柜':g.swing.phase==='stow'?'把尺交进吊篮':'桥下横移吊环'):g.cable?TideCableQuay.title(g):g.landfall?(g.landfall.pinned?'值班间收听':'防潮门'):g.rig?.belay?'浪沟接应':s.title;
       const title=g.state.doneAt!==null?'已完成 · '+task:(g.stage+1)+' / '+g.world.sections.length+'　'+task;
       set(v.querySelector('.tool'),title);
       set(v.querySelector('.instruction'),here?r.text||'靠近设备开始操作':g.archive?'前往'+tag:g.signal?'前往'+tag:g.optic?'沿塔顶外环前往'+tag:'前往'+tag+'，沿灯带通过栈桥');
@@ -75,14 +75,14 @@ const TideHud=(()=>{
       m.hidden=!here||!r.vis;reading.hidden=!here||!r.caption;
       if(!m.hidden)meter(m,r,i,g.time);
       set(reading,r.caption||'');
-      const role=v.querySelector('.pname').lastChild,roleName=g.lastPass&&i&&g.state.mode&&g.near[1]?(g.lastPass.turned?'海雁号 · 回望船尾':'阿棠 · 后甲板视角'):g.fog&&i===1&&['bridge','spot'].includes(g.fog.mode)?'梁青 · 驾驶台视角':g.survey&&i===1&&g.stage===2&&g.engaged[i]?'阿棠 · 船尾视角':roles[i];
+      const role=v.querySelector('.pname').lastChild,roleName=TideTransit.active(g)&&i===1?'梁青 · 驾驶台左舷':g.lastPass&&i&&g.state.mode&&g.near[1]?(g.lastPass.turned?'海雁号 · 回望船尾':'阿棠 · 后甲板视角'):g.fog&&i===1&&['bridge','spot'].includes(g.fog.mode)?'梁青 · 驾驶台视角':g.survey&&i===1&&g.stage===2&&g.engaged[i]?'阿棠 · 船尾视角':roles[i];
       if(role.textContent!==roleName)role.textContent=roleName;
       const tips=pads[i]!=null?'左摇杆移动　A 跳跃/确认　RT 操作　右摇杆视角':k.use+' 操作　'+k.jump+' 跳跃 / 操作中确认　'+k.trim+' 微调';
       const work=g.archive&&here&&g.archive.sourceLoaded&&g.archive.review===null;
       const bindings=pads[i]!=null?(i?'RT 操作　上下走带　左右调谐　A 压针':'RT 操作　左右快拨　前推慢放　后拉刹带　A 压针'):
         (i?'Enter 操作　↑ 前进 / ↓ 倒带　← → 调谐　/ 压针':'E 操作　A / D 快拨　W 慢放　S 刹带　空格压针');
       const rack=g.archive?.keys&&here;
-      set(v.querySelector('.control-hint'),rack?(i?'向前重听　操作中确认登记':'左右选列，前后选层　操作中确认提起 / 放回'):work?bindings:tips);
+      set(v.querySelector('.control-hint'),TideTransit.active(g)&&i===1?(pads[1]!=null?'左摇杆转镜　A 报位':'方向键转镜　/ 报位'):rack?(i?'向前重听　操作中确认登记':'左右选列，前后选层　操作中确认提起 / 放回'):work?bindings:tips);
     }
   }
   return {build,update};
