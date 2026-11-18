@@ -12,6 +12,12 @@ let wantsAudio=true;try{wantsAudio=localStorage.getItem('tide-audio')!=='off';}c
 const keys=new Set(),jumps=[false,false],gamepadDown=[false,false];
 let session=null,view=null,index=0,mode='menu',last=0,remainder=0,redraw=0,voice=false;
 const padSlots=[null,null];
+let menuPadState=new Set(),padApiAvailable=true;
+function gamepads(){
+  if(!padApiAvailable)return [];
+  try{return Array.from(navigator.getGamepads?.()||[]).filter(p=>p?.connected);}
+  catch{padApiAvailable=false;return [];}
+}
 TideHud.build($('split'));
 function showInfo(html) {
   $('info-content').innerHTML = html;
@@ -114,7 +120,10 @@ function openLevel(n,stage=0){
   overlay.querySelector('button').focus();view.draw(session,0,false);
 }
 function startPlaying(announce){
-  clearInput();overlay.replaceChildren();$('split').hidden=false;mode='playing';$('pause').disabled=false;$('pause').textContent='暂停';canvas.focus();
+  clearInput();
+  const connected=gamepads();
+  for(let i=0;i<2;i++)gamepadDown[i]=!!(connected.find(p=>p.index===padSlots[i])||connected[i])?.buttons[0]?.pressed;
+  overlay.replaceChildren();$('split').hidden=false;mode='playing';$('pause').disabled=false;$('pause').textContent='暂停';canvas.focus();
   if(wantsAudio&&!sound.enabled)sound.enable(true).then(updateAudio);
   if(announce)radio(session.spec.radio,6);
   TideHud.update(session,padSlots);redraw=0;
@@ -173,8 +182,7 @@ async function toggleAudio(){
   await sound.enable(wantsAudio);updateAudio();
   if(sound.enabled)sound.tone(440);else window.speechSynthesis?.cancel();
 }
-function pollInputs(now){
-  const connected=Array.from(navigator.getGamepads?.()||[]).filter(p=>p?.connected);
+function pollInputs(now,connected){
   for(let i=0;i<2;i++)if(!connected.some(p=>p.index===padSlots[i]))padSlots[i]=null;
   for(const pad of connected)if(!padSlots.includes(pad.index)){
     const slot=padSlots.indexOf(null);if(slot>=0)padSlots[slot]=pad.index;
@@ -191,8 +199,37 @@ function pollInputs(now){
       use:keys.has(i?'Enter':'KeyE')||!!pad?.buttons[7]?.pressed,jump};
   });
 }
+function padMenus(pads){
+  const pressed=new Set();
+  for(const pad of pads){
+    for(const n of [0,1,9,12,13,14,15])if(pad.buttons[n]?.pressed)pressed.add(n);
+  }
+  const tapped=n=>pressed.has(n)&&!menuPadState.has(n);
+  const back=tapped(1),start=tapped(9),accept=tapped(0);
+  const direction=tapped(13)||tapped(15)?1:tapped(12)||tapped(14)?-1:0;
+  menuPadState=pressed;
+  if(start&&game.open&&(mode==='playing'||mode==='paused')){pause();return;}
+  if(game.open&&mode==='playing')return;
+  if(back){
+    if(info.open)info.close();
+    else if(mode==='paused')startPlaying(false);
+    else if(mode==='cinema')$('skip').click();
+    else if(game.open)game.close();
+    return;
+  }
+  if(!direction&&!accept&&!start)return;
+  const root=game.open?game:info.open?info:document;
+  const choices=[...root.querySelectorAll('button:not(:disabled),a[href]')].filter(n=>n.getClientRects().length);
+  const selected=choices.indexOf(document.activeElement);
+  if(direction&&choices.length){choices[(Math.max(selected,0)+direction+choices.length)%choices.length].focus();return;}
+  const fallback=game.open?(mode==='cinema'?$('skip'):overlay.querySelector('button')):info.open?choices[0]:$('start');
+  (choices[selected]||fallback)?.click();
+}
 function frame(now){
   requestAnimationFrame(frame);
+  if(document.hidden)return;
+  const pads=gamepads();
+  if(pads.length||menuPadState.size)padMenus(pads);
   if(!game.open||document.hidden||!session||!view||mode==='error')return;
   const dt=last?Math.min((now-last)/1000,.10):0;last=now;
   if(mode==='cinema'){drawFilm(dt);return;}
@@ -202,7 +239,7 @@ function frame(now){
   }
   remainder+=dt;
   if(remainder>=1/60){
-    const inputs=pollInputs(dt);jumps.fill(false);
+    const inputs=pollInputs(dt,pads);jumps.fill(false);
     while(remainder>=1/60 && mode==='playing'){
       session.tick(1/60,inputs,view.yaws);remainder-=1/60;
       for(const input of inputs)input.jump=false;
@@ -224,8 +261,8 @@ $('start').onclick=()=>openLevel(progress===12?0:progress,resume?.index===progre
 $('skip').onclick=()=>{if(mode==='cinema'){view.cinema.skip();showDebrief(session);}};
 $('pause').onclick=pause;$('sound').onclick=$('field-audio').onclick=toggleAudio;
 $('expand').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else if(game.requestFullscreen)await game.requestFullscreen();}catch{showStatus('当前窗口已使用可用的最大画面');}};
-$('brief').onclick=()=>{showInfo('<h2>北岬灯塔 · 紧急任务</h2><p>海雁号失去动力。机修员林澈和信号员沈遥必须在潮水吞没北礁前恢复电台，找出灯塔旧档案里的误判，重新校准光束。</p><p>十二关贯穿四幕。两人各自操作一名角色，共用同一个三维世界。</p>');addJournal($('info-content'),levels.slice(0,progress).map((l,i)=>'第 '+(i+1)+' 关　'+l.name+'　'+l.after));};
-$('help').onclick=()=>showInfo('<h2>双人操作指南</h2><p>林澈用 WASD 移动、空格跳跃，按住 E 操作。沈遥用方向键移动、斜杠 / 或右 Shift 跳跃，按住 Enter 操作。</p><p>跟随各自画面内的设备标记。在光圈里按住操作键，左右键调节仪器，跳跃键确认读数或发送信号。站在移动甲板上会随甲板运动，可从边缘跃向对岸。</p><p>拖动半屏可转动该玩家的镜头，双击回正。标准手柄使用左摇杆移动、A 跳跃、RT 操作、右摇杆转动视角，按接入顺序分配给两位玩家。Esc 暂停，章节与段落检查点保存在此浏览器。</p>');
+$('brief').onclick=()=>{showInfo('<h2>北岬灯塔 · 紧急任务</h2><p>海雁号失去动力。机修员林澈和信号员沈遥必须在潮水吞没北礁前恢复电台，找出灯塔旧档案里的误判，重新校准光束。</p><p>十二关贯穿四幕。两人各自操作一名角色，共用同一个三维世界。</p><p><a href="story.html" target="_blank" rel="noopener">阅读原作调研、原创故事与十二关设计（含剧透）</a></p>');addJournal($('info-content'),levels.slice(0,progress).map((l,i)=>'第 '+(i+1)+' 关　'+l.name+'　'+l.after));};
+$('help').onclick=()=>showInfo('<h2>双人操作指南</h2><p>林澈用 WASD 移动、空格跳跃，按住 E 操作。沈遥用方向键移动、斜杠 / 或右 Shift 跳跃，按住 Enter 操作。</p><p>跟随各自画面内的设备标记。在光圈里按住操作键，左右键调节仪器，跳跃键确认读数或发送信号。站在移动甲板上会随甲板运动，可从边缘跃向对岸。</p><p>拖动半屏可转动该玩家的镜头，双击回正。标准手柄使用左摇杆移动、A 跳跃、RT 操作、右摇杆转动视角，按接入顺序分配给两位玩家。方向键选菜单，A 确认，B 返回，Start 或 Esc 暂停，章节与段落检查点保存在此浏览器。</p>');
 const moveCodes=new Set(['KeyW','KeyA','KeyS','KeyD','KeyE','Space','ArrowUp','ArrowLeft','ArrowDown','ArrowRight','Enter','Slash','ShiftRight']);
 document.addEventListener('keydown',e=>{
   if(!game.open)return;

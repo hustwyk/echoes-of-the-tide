@@ -4,7 +4,7 @@ window.TideCinema = (() => {
   'use strict';
   const T = window.THREE;
   const TAU = Math.PI * 2;
-  const durations = {2:6.2,3:5.4,4:6.1,6:7.1,7:6.0,11:15.3};
+  const durations = {2:6.2,3:5.4,4:6.1,5:8.6,6:7.1,7:6.0,11:15.3};
   const clamp = T.MathUtils.clamp;
   const lerp = T.MathUtils.lerp;
   const smooth = n => {n=clamp(n,0,1);return n*n*(3-2*n);};
@@ -20,6 +20,7 @@ window.TideCinema = (() => {
     // Beside the last instrument, beyond the operator's normal standing space.
     const at=hub.sites[idx===7?1:0];
     shelf.position.set(at.x+.98,at.y+.85,at.z-1.15);
+    if(idx===5){shelf.position.x+=2.15;shelf.position.y+=.23;}
     let clock=0, duration=0, playing=false, disposed=false;
     let cupboard, cup, tape, tin, screw, sheet, packet, green, marker;
     let tender, cable, workroom, paperStrip, hand, newLabel, voiceCoils;
@@ -190,7 +191,7 @@ window.TideCinema = (() => {
       return q;
     }
 
-    if([3,4,6,7].includes(idx)){
+    if([3,4,5,6,7].includes(idx)){
       makeDesk(shelf,1.52,1.03);
       if(idx===3){
         cup=enamel(shelf);cup.position.set(-.16,.022,0);
@@ -202,6 +203,24 @@ window.TideCinema = (() => {
         disc(shelf,.27,.10,.08,.036,.035,metal);
         label(shelf,.05,.092,-.139,.35,.066,printed('双轨监听','01  ◼   02  ◼   ◀◀','#60746d','#dde1c9'));
         cup=enamel(shelf);cup.position.set(-.55,.02,-.12);
+      }else if(idx===5){
+        // The photocopy physically covers the original survey's pencil annotation.
+        box(shelf,0,.021,0,1.15,.034,.78,rail);
+        label(shelf,0,.048,0,1.10,.72,(c,w,h)=>{
+          c.fillStyle='#d6d1ae';c.fillRect(0,0,w,h);c.strokeStyle='#8b9e91';c.lineWidth=1;
+          for(let x=0;x<w;x+=26){c.beginPath();c.moveTo(x,0);c.lineTo(x,h);c.stroke();}
+          for(let y=0;y<h;y+=26){c.beginPath();c.moveTo(0,y);c.lineTo(w,y);c.stroke();}
+          for(let n=0;n<5;n++){
+            c.strokeStyle=n===2?'#547a78':'#92977e';c.lineWidth=n===2?3:1.3;c.beginPath();
+            for(let x=0;x<w;x+=3){const y=h*.40+n*13+27*Math.sin(x*.012)+5*Math.sin(x*.06);x?c.lineTo(x,y):c.moveTo(x,y);}c.stroke();
+          }
+          c.fillStyle='#384e49';c.font='bold 23px sans-serif';c.fillText('北岬　当潮实测草图',30,42);
+          c.save();c.translate(w*.42,h*.78);c.rotate(-.06);c.fillStyle='#913d35';c.font='bold 26px serif';c.fillText('北线待测',0,0);c.restore();
+          c.fillStyle='#474c3f';for(const x of [42,66]){c.beginPath();c.arc(x,64,4,0,Math.PI*2);c.fill();}
+        });
+        sheet=group(shelf,0,.009,0);
+        label(sheet,.055,.045,.12,.79,.45,printed('灯机回转正常','六天前　/　设备交接联　　签收　林澈','#bebca6','#394d4b'));
+        packet=group(shelf);label(packet,-.40,.067,.20,.17,.18,printed('06','档　案','#81887a','#293a39'));
       }else if(idx===6){
         tin=biscuitTin(shelf);tin.position.set(-.16,.024,.04);
         screw=makeScrew(tin);tape=cassette(shelf,'十秒钟北岬');tape.position.set(.34,.022,-.01);
@@ -449,6 +468,10 @@ window.TideCinema = (() => {
           screw.position.set(roll,.055,.025+.04*Math.cos(t*1.4));
           screw.rotation.set(t*3.4,Math.sin(t*.81)*.6,Math.PI*.04);
         }
+      }else if(idx===5){
+        const lift=playing?smooth((clock-.9)/3.4):0;
+        sheet.position.set(-.46*lift,.009+Math.sin(lift*Math.PI)*.13,-.15*lift);
+        sheet.rotation.set(-.14*Math.sin(lift*Math.PI),.12*lift,.018*lift);
       }else if(idx===7){
         sheet.rotation.set(-.06+.055*Math.sin(t*5.2),.15+.031*Math.sin(t*2.1),.014*Math.sin(t*3.1));
         sheet.position.y=.066+.018*Math.abs(Math.sin(t*3.4));
@@ -475,6 +498,8 @@ window.TideCinema = (() => {
         subject(shelf,[.58,.50,.40],[.22,.07,-.035]);
       if(idx===4)return !i?subject(shelf,[-.30+f*.22,.55,.41],[.06,.10,-.014]):
         subject(shelf,[.42-f*.11,.35,-.43],[.085,.12,.017]);
+      if(idx===5)return !i?subject(shelf,[sheet.position.x*.90,1.1,.54],[sheet.position.x+.055,.06,.10]):
+        subject(shelf,[.28-f*.07,.76,.41],[.12,.05,.13]);
       if(idx===6)return !i?subject(tin,[-.22+f*.17,.36,.34],[.008,.055,.03]):
         subject(shelf,[.41,.48,.36-f*.10],[.22,.038,.018]);
       if(idx===7)return !i?subject(shelf,[-.40,.76,.10+f*.22],[0,.046,-.02]):
@@ -499,6 +524,7 @@ window.TideCinema = (() => {
       if(idx===2)return t<2.8?'梁青　灯灭了，我看见了。':'沈遥　她已经漂进内流。我们得找到另一条路。';
       if(idx===3)return t<2.7?'林澈　杯底还有两个名字。':'沈遥　柜顶上，那是值班带。';
       if(idx===4)return t<2.8?'灯机房　回转正常。':'测潮员　北线……还要复测。';
+      if(idx===5)return t<2.7?'林澈　我看见备注没印出来。还在这儿划了一下。':t<5.65?'沈遥　我替我们两个人，按了那个确认。':'梁青　要是还不知道，就告诉我不知道。我可以给你们报浪。';
       if(idx===6)return t<3.4?'林澈　那次你猜的是雷声。':'沈遥　铁皮饼干盒。想再听一遍才故意猜错的。';
       if(idx===7)return t<2.8?'林澈　我只验过灯机。':'梁青　两句都收到了。阿棠，你从船尾报。';
       if(idx===11){

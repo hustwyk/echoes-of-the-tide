@@ -135,15 +135,17 @@ window.TideCoast = (() => {
       vec3 normal=normalize(vec3(-dx+(noiseA.r+noiseB.g-1.)*.59*fine,1.,-dz+(noiseB.r+noiseA.g-1.)*.59*fine));
       vec3 r=reflect(-eye,normal);r.y=max(r.y,.025);
       vec3 sky=mix(vec3(.30,.42,.47),texture2D(uSky,envUV(r)).rgb,uHasSky);
-      float fresnel=.13+.72*pow(1.-max(dot(normal,eye),0.),3.);
+      float fresnel=.09+.70*pow(1.-max(dot(normal,eye),0.),3.);
       vec3 deep=mix(vec3(.019,.045,.054),vec3(.040,.094,.102),noiseA.r);
-      vec3 lit=mix(deep,sky*1.13,fresnel);
+      vec3 lit=mix(deep,sky*.99,fresnel);
+      float shaft=smoothstep(.13,.80,vHeight)*max(0.,dot(-uSun,eye));
+      lit+=vec3(.016,.047,.039)*shaft;
       float shine=pow(max(dot(reflect(-uSun,normal),eye),0.),77.);
       lit+=vec3(1.,.61,.30)*shine*.8;
       // Choppy crests break first; turbulence erodes each crest into filaments.
-      float crest=smoothstep(.35,.95,vHeight+.32*noiseA.r);
+      float crest=smoothstep(.49,1.02,vHeight+.26*noiseA.r);
       float foam=crest*smoothstep(.45,.68,noiseA.g*.48+noiseB.r*.52);
-      lit=mix(lit,vec3(.49,.55,.53),foam*.66);
+      lit=mix(lit,vec3(.49,.55,.53),foam*.55);
       float ledX=14.+(p.y+85.)*tan(clamp(uBearing,-.7,.7));
       float streak=exp(-abs(p.x-ledX)*.38)*(noiseB.r*.8+.1);
       lit+=vec3(.68,.43,.15)*streak*uSignal*.45;
@@ -372,10 +374,11 @@ window.TideCoast = (() => {
     }
     for(let i=0;i<56;i++){
       const side=i%2?1:-1, r=rng(), z=9-rng()*124, x=side*(29+rng()*51);
-      rock(x,-5.1+rng(),z,2+r*10,2+r*r*9,2+rng()*9,i);
+      const drawX=x<0&&z< -77&&x> -57?x-45:x;
+      rock(drawX,-5.1+rng(),z,2+r*10,2+r*r*9,2+rng()*9,i);
     }
     for(let i=0;i<11;i++){
-      rock(14+(rng()-.5)*25,-3+rng()*3,-94+(rng()-.5)*17,5+rng()*8,4+rng()*3,7+rng()*6,i);
+      rock(14+(rng()-.5)*25,-3+rng()*3,-103+(rng()-.5)*14,5+rng()*8,4+rng()*3,7+rng()*6,i);
     }
 
     function lighthouse(){
@@ -452,9 +455,10 @@ window.TideCoast = (() => {
       strut.position.copy(lo).lerp(hi,.5);strut.scale.set(.084,hi.distanceTo(lo),.084);
       strut.quaternion.setFromUnitVectors(yAxis,hi.sub(lo).normalize());
     }
-    const stump=mesh(shapes.round,iron,-6.7,-2.51,-72);
+    const marks=TideLookout.marks;
+    const stump=mesh(shapes.round,iron,marks.stump.x,-2.51,marks.stump.z);
     stump.name='断桩';
-    [-.95,-1.25].forEach(h=>{const collar=mesh(shapes.round,copper,-6.7,h,-72);collar.scale.set(.91,.105,.82);collar.rotation.z=.28;});
+    [-.95,-1.25].forEach(h=>{const collar=mesh(shapes.round,copper,marks.stump.x,h,marks.stump.z);collar.scale.set(.91,.105,.82);collar.rotation.z=.28;});
     stump.scale.set(.76,3.1,.71);stump.rotation.z=.28;
 
     function timberPier(){
@@ -690,7 +694,7 @@ window.TideCoast = (() => {
         water.position.y=Number.isFinite(cues.water)?cues.water:-4;
         mistMaterial.uniforms.t.value=t;
         mistMaterial.uniforms.baseY.value=water.position.y;
-        marker.position.set(-9.8,water.position.y+.27*Math.sin(t*1.1)+.21*Math.sin(t*.72),-79);
+        marker.position.set(marks.buoy.x,water.position.y+TideLookout.swell(marks.buoy.x,marks.buoy.z,t),marks.buoy.z);
         marker.rotation.set(.08*Math.sin(t*.79),.5,.095*Math.sin(t*.88));
         const angle=Number.isFinite(cues.angle)?cues.angle:Math.sin(t*.14)*.32;
         beam.rotation.y=angle;
