@@ -65,8 +65,8 @@ const TideHud=(()=>{
     for(let i=0;i<2;i++){
       const v=views[i],r=g.station[i],close=g.near[i],s=g.spec,q=g.state,k=TideCoop.roleKeys[i];
       const riding=s.type==='ride' && (s.driver!==i||q.latch);
-      v.querySelector('.reticle').hidden=!(TideLookout.active(g)&&g.watch.task.watcher===i&&g.engaged[i]||g.relay?.top&&!i&&g.engaged[i]||g.survey&&i===1&&g.engaged[i]);
-      const here=!!g.survey||!!g.relay||!!g.cable||close||g.signal&&g.stage===2&&i===0&&!g.signal.pinned||riding||!!g.section.tram,tag=TideHarbor.targetFor(g,i).name;
+      v.querySelector('.reticle').hidden=!(TideLookout.active(g)&&g.watch.task.watcher===i&&g.engaged[i]||g.relay?.top&&!i&&g.engaged[i]||g.survey&&i===1&&g.engaged[i]||g.fog?.mode==='spot'&&i===1&&g.engaged[i]);
+      const here=!!g.fog||!!g.survey||!!g.relay||!!g.cable||close||g.signal&&g.stage===2&&i===0&&!g.signal.pinned||riding||!!g.section.tram,tag=TideHarbor.targetFor(g,i).name;
       const task=g.cable?TideCableQuay.title(g):g.landfall?(g.landfall.pinned?'值班间收听':'防潮门'):g.rig?.belay?'浪沟接应':s.title;
       const title=g.state.doneAt!==null?'已完成 · '+task:(g.stage+1)+' / '+g.world.sections.length+'　'+task;
       set(v.querySelector('.tool'),title);
@@ -75,7 +75,7 @@ const TideHud=(()=>{
       m.hidden=!here||!r.vis;reading.hidden=!here||!r.caption;
       if(!m.hidden)meter(m,r,i,g.time);
       set(reading,r.caption||'');
-      const role=v.querySelector('.pname').lastChild,roleName=g.survey&&i===1&&g.stage===2&&g.engaged[i]?'阿棠 · 船尾视角':roles[i];
+      const role=v.querySelector('.pname').lastChild,roleName=g.fog&&i===1&&['bridge','spot'].includes(g.fog.mode)?'梁青 · 驾驶台视角':g.survey&&i===1&&g.stage===2&&g.engaged[i]?'阿棠 · 船尾视角':roles[i];
       if(role.textContent!==roleName)role.textContent=roleName;
       const tips=pads[i]!=null?'左摇杆移动　A 跳跃/确认　RT 操作　右摇杆视角':k.use+' 操作　'+k.jump+' 跳跃 / 操作中确认　'+k.trim+' 微调';
       const work=g.archive&&here&&g.archive.sourceLoaded&&g.archive.review===null;

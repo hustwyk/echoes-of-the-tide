@@ -5,7 +5,7 @@ const journal=[];
 try {
   progress=Math.max(0,Math.min(levels.length,Math.floor(Number(localStorage.getItem('tide-progress'))||0)));
   const save=JSON.parse(localStorage.getItem('tide-3d-checkpoint'));
-  if(save && Number.isInteger(save.index) && save.index===progress && Number.isInteger(save.stage) && (save.stage>0||save.stage===0&&(save.index===8&&save.survey?.taken||save.index===7&&save.relay?.low||save.index===1&&save.cable?.signalled===true||save.index===9&&save.lantern?.far===true||save.index===4&&save.archive?.count>0)) && save.stage<TideMissions.chapters[save.index]?.length)resume=save;
+  if(save && Number.isInteger(save.index) && save.index===progress && Number.isInteger(save.stage) && (save.stage>0||save.stage===0&&(save.index===10&&save.fog?.key||save.index===8&&save.survey?.taken||save.index===7&&save.relay?.low||save.index===1&&save.cable?.signalled===true||save.index===9&&save.lantern?.far===true||save.index===4&&save.archive?.count>0)) && save.stage<TideMissions.chapters[save.index]?.length)resume=save;
 } catch {}
 const sound=new HarborSound();
 let wantsAudio=true;try{wantsAudio=localStorage.getItem('tide-audio')!=='off';}catch{}
@@ -50,9 +50,9 @@ function campaign() {
 function savePoint(g){
   if(g.index!==progress)return;
   const landfall=TideLandfall.checkpoint(g),mark=TideLantern.checkpoint(g),signal=TideSignal.checkpoint(g),archive=TideArchive.checkpoint(g);
-  const cable=TideCableQuay.checkpoint(g),relay=TideRelay.checkpoint(g),survey=TideSoundings.checkpoint(g);
-  if(!g.stage&&!mark&&!archive&&!cable&&!relay&&!survey)return;
-  resume={index:g.index,stage:g.stage,...(survey?{survey}:{}),...(relay?{relay}:{}),...(cable?{cable}:{}),...(landfall?{landfall}:{}),...(mark?{lantern:mark}:{}),...(signal?{signal}:{}),...(archive?{archive}:{})};
+  const cable=TideCableQuay.checkpoint(g),relay=TideRelay.checkpoint(g),survey=TideSoundings.checkpoint(g),fog=TideFogSignal.checkpoint(g);
+  if(!g.stage&&!mark&&!archive&&!cable&&!relay&&!survey&&!fog)return;
+  resume={index:g.index,stage:g.stage,...(fog?{fog}:{}),...(survey?{survey}:{}),...(relay?{relay}:{}),...(cable?{cable}:{}),...(landfall?{landfall}:{}),...(mark?{lantern:mark}:{}),...(signal?{signal}:{}),...(archive?{archive}:{})};
   try{localStorage.setItem('tide-3d-checkpoint',JSON.stringify(resume));}catch{}
 }
 function clearInput(){
@@ -97,6 +97,7 @@ function openLevel(n,stage=0,mark=null){
   overlay.innerHTML='<div class="story"><h3>正在进入北岬</h3></div>';
   try{
     view??=new TideHarbor.WorldView(canvas);
+    if(n===10)TideReceiverAudio.loadFog();
     if(n===8)TideReceiverAudio.loadSoundings();
     if(n===7)TideReceiverAudio.loadRelay();
     if(n===1)TideReceiverAudio.loadQuay();
@@ -116,7 +117,7 @@ function openLevel(n,stage=0,mark=null){
         deck.active=true;if(deck.hinge!==undefined){deck.unlocked=true;deck.hinge=1;}
       }
     }
-    if(mark){if(session.survey)TideSoundings.restore(session,mark);else if(session.relay)TideRelay.restore(session,mark);else if(session.cable)TideCableQuay.restore(session,mark);else if(session.world.landfall)TideLandfall.restore(session,mark);else if(session.archive)TideArchive.restore(session,mark);else if(session.signal)TideSignal.restore(session,mark);else TideLantern.restore(session,mark);savePoint(session);}
+    if(mark){if(session.fog)TideFogSignal.restore(session,mark);else if(session.survey)TideSoundings.restore(session,mark);else if(session.relay)TideRelay.restore(session,mark);else if(session.cable)TideCableQuay.restore(session,mark);else if(session.world.landfall)TideLandfall.restore(session,mark);else if(session.archive)TideArchive.restore(session,mark);else if(session.signal)TideSignal.restore(session,mark);else TideLantern.restore(session,mark);savePoint(session);}
     view.load(session);
   }catch(err){
     console.error(err);mode='error';
@@ -187,7 +188,7 @@ function pause(){
   $('pause').textContent='继续';
   overlay.innerHTML='<div class="story"><h3>行动暂停</h3><p>'+levels[index].name+'　/　'+(session.cable?TideCableQuay.title(session):session.spec.title)+'</p><p class="hint">站到彩色光圈内，按住操作键使用设备。操作时可左右微调，按跳跃键确认。拖动各自的画面调整视角，双击可回正。</p><div class="pause-options"><button id="unpause">继续行动</button><button id="retry">重试此段</button><button id="quit">返回档案</button><button id="voice"></button><button id="quality"></button></div></div>';
   addJournal(overlay.querySelector('.story'),journal);
-  $('unpause').onclick=()=>startPlaying(false);$('quit').onclick=()=>game.close();$('retry').onclick=()=>openLevel(index,session.stage,TideSoundings.checkpoint(session)||TideRelay.checkpoint(session)||TideCableQuay.checkpoint(session)||TideLandfall.checkpoint(session));
+  $('unpause').onclick=()=>startPlaying(false);$('quit').onclick=()=>game.close();$('retry').onclick=()=>openLevel(index,session.stage,TideFogSignal.checkpoint(session)||TideSoundings.checkpoint(session)||TideRelay.checkpoint(session)||TideCableQuay.checkpoint(session)||TideLandfall.checkpoint(session));
   const update=()=>{$('voice').textContent='设备语音　'+(voice?'开':'关');$('quality').textContent='画质　'+(view.quality===1?'高':'流畅');};update();
   $('voice').onclick=()=>{voice=!voice;if(voice&&!sound.enabled)toggleAudio();update();};
   $('quality').onclick=()=>{view.quality=view.quality===1?.72:1;update();};$('unpause').focus();
@@ -269,14 +270,14 @@ function frame(now){
   if(sound.enabled){sound.scene?.update(session,dt);sound.tape?.update(session);sound.receiver?.update(session);}
   if(!redraw||now-redraw>55){
     TideHud.update(session,padSlots);
-    showStatus(session.survey?.subtitle||session.relay?.subtitle||session.cable?.subtitle||(session.noticeUntil>session.time?session.notice.replace(/\n/g,'　'):(session.cable?TideCableQuay.title(session):session.landfall?'防潮门值班间':session.spec.title)+'　·　靠近角色颜色的目标'));
+    showStatus(session.fog?.subtitle||session.survey?.subtitle||session.relay?.subtitle||session.cable?.subtitle||(session.noticeUntil>session.time?session.notice.replace(/\n/g,'　'):(session.cable?TideCableQuay.title(session):session.landfall?'防潮门值班间':session.spec.title)+'　·　靠近角色颜色的目标'));
     $('elapsed').textContent=timeLabel(session.time)+'　/　'+(session.stage+1)+' of 3';
     redraw=now;
   }
 }
 requestAnimationFrame(frame);
 
-$('start').onclick=()=>openLevel(progress===12?0:progress,resume?.index===progress?resume.stage:0,resume?.index===progress?resume.survey||resume.relay||resume.cable||resume.landfall||resume.lantern||resume.signal||resume.archive:null);
+$('start').onclick=()=>openLevel(progress===12?0:progress,resume?.index===progress?resume.stage:0,resume?.index===progress?resume.fog||resume.survey||resume.relay||resume.cable||resume.landfall||resume.lantern||resume.signal||resume.archive:null);
 $('skip').onclick=()=>{if(mode==='cinema'){view.cinema.skip();showDebrief(session);}};
 $('pause').onclick=pause;$('sound').onclick=$('field-audio').onclick=toggleAudio;
 $('expand').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else if(game.requestFullscreen)await game.requestFullscreen();}catch{showStatus('当前窗口已使用可用的最大画面');}};
