@@ -25,7 +25,7 @@ const TideFogSignal=(()=>{
   const notch=[.26,.69];
   function fresh(){
     return {key:'rack',marks:[false,false],travel:.19,clutch:0,spin:.08,speed:nominal,balance:0,
-      mode:'transport',service:.07,gaps:[.54,.54],locks:[false,false],stud:0,turn:null,down:false,
+      mode:'transport',haul:null,haulCue:'',haulCueAt:0,haulSerial:0,service:.07,gaps:[.54,.54],locks:[false,false],stud:0,turn:null,down:false,
       valve:0,pressure:1,opened:0,pulseOrigin:0,oldPull:false,trace:trace(),paper:trace(),packets:[],listensAfter:[-8,-8],
       showAft:false,showBridge:false,ready:false,voice:'',clock:0,subtitle:'',line:-1,spoken:false,
       sightYaw:-.12,sightPitch:.065,fix:0,seen:false,storm:0};
@@ -41,7 +41,7 @@ const TideFogSignal=(()=>{
   }
   function begin(g){
     const r=g.fog;if(!r)return;
-    r.voice='';r.clock=0;r.line=-1;r.subtitle='';r.turn=null;r.down=false;r.oldPull=false;r.valve=0;r.ready=false;
+    r.haul=null;r.voice='';r.clock=0;r.line=-1;r.subtitle='';r.turn=null;r.down=false;r.oldPull=false;r.valve=0;r.ready=false;
     r.trace=trace();r.packets=[];r.listensAfter=[-8,-8];r.showAft=r.showBridge=false;
     if(g.stage){
       r.key='seated';r.marks=[true,true];r.spoken=true;r.travel=1;
@@ -54,6 +54,7 @@ const TideFogSignal=(()=>{
   }
   function target(g,i){
     const r=g.fog,w=g.world.foghouse;
+    if(!i&&r.haul)return {...TideFogRecovery.rung(w.wheels[r.haul.wheel]),kind:'rescueRing',label:r.haul.wheel?'乙轮黄环':'甲轮黄环'};
     if(!i&&r.key==='rack')return w.rack;
     if(!i&&r.key==='carry'){
       const slot=r.marks.indexOf(false);
@@ -63,6 +64,7 @@ const TideFogSignal=(()=>{
   }
   function near(g,i){
     const s=target(g,i),p=g.players[i],w=g.world.foghouse;
+    if(s.kind==='rescueRing')return g.fog.haul.phase==='climb'||g.fog.haul.phase==='wait'&&g.fog.haul.gap<.36;
     if(s.kind==='shoe')return p.ground===w.wheels[s.index]&&Math.hypot(p.x-s.x,p.z-s.z)<.82;
     if(s===w.drive&&p.ground!==w.outer)return false;
     return p.grounded&&Math.abs(p.y-s.y)<.31&&Math.hypot(p.x-s.x,p.z-s.z)<1.02&&p.z>=s.z-.25;
@@ -115,11 +117,12 @@ const TideFogSignal=(()=>{
   }
   function narrate(g,dt){
     const r=instrument(g);if(!r.voice)return;
-    const c=TideFogSpeech[r.voice];r.clock+=dt;const j=c.lines.findLastIndex(l=>l[0]<=r.clock);
+    const c=TideHaulSpeech[r.voice]||TideFogSpeech[r.voice];r.clock+=dt;const j=c.lines.findLastIndex(l=>l[0]<=r.clock);
     if(j>=0&&r.line!==j){r.line=j;r.subtitle=c.lines[j][1];g.events.log?.(r.subtitle);}
     if(r.clock<c.duration)return;
     const id=r.voice;r.voice='';r.clock=0;r.subtitle='';r.line=-1;
-    if(id==='aft'){
+    if(id==='fall'&&r.haul&&['catch','wait'].includes(r.haul.phase))say(r,'answer');
+    else if(id==='aft'){
       r.showBridge=true;r.mode='bridge';const second=r.trace.bridge[1]===r.trace.source[1];
       say(r,['one','one',second?'last':'two','three'][r.trace.bridge.length]);
     }else if(id==='two'||id==='last'||id==='one'||id==='three'){
@@ -130,9 +133,10 @@ const TideFogSignal=(()=>{
   }
   function transport(g,input,dt){
     const r=g.fog,w=g.world.foghouse,s=target(g,0);
-    if(g.engaged[1]){
+    if(g.engaged[1]&&r.haul?.phase!=='climb'&&r.haul?.phase!=='rewind'){
       r.clutch=input[1].x;r.travel=clamp(r.travel+r.clutch*dt*.17,0,1);
     }else r.clutch=0;
+    if(r.haul){TideFogRecovery.step(g,input,dt);return;}
     const p=g.players[0],slot=r.marks.indexOf(false),stop=slot===0?.25:.75;
     g.set(1,'握住离合柄，左右盘车。先把甲踏板倒到岸边，再向前转，让同伴换到乙轮。停手会抱闸。',{
       caption:'盘车 '+Math.round(r.travel*360)+'°　·　'+(w.wheels.includes(p.ground)?(p.ground.index?'乙轮':'甲轮')+'承重':'等待上轮')});
@@ -280,7 +284,7 @@ const TideFogSignal=(()=>{
   }
   function restore(g,s){
     if(!s||!['carry','seated'].includes(s.key)||!g.fog)return;
-    g.fog.voice='';g.fog.subtitle='';g.fog.clock=0;
+    g.fog.haul=null;g.fog.haulCue='';g.fog.voice='';g.fog.subtitle='';g.fog.clock=0;
     const r=g.fog,w=g.world.foghouse;r.key=g.stage?'seated':s.key;
     r.marks=[0,1].map(i=>r.key==='seated'||s.marks?.[i]===true);
     if(s.gaps?.length===2&&s.gaps.every(Number.isFinite))r.gaps=s.gaps.map(n=>clamp(n,.48,1.22));

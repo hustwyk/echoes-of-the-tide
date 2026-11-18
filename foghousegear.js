@@ -425,7 +425,10 @@ const TideFoghouseGear=(()=>{
         else if(state==='seated'){cam.g.add(key.g);key.g.position.set(0,0,.218);key.g.rotation.set(0,0,0);}
         else{keyCarrier.add(key.g);key.g.position.set(.170,1.077,-.240);key.g.rotation.set(-.36,-.32,.17);}
       }
-      if(state==='carry'&&s.carrier){keyCarrier.position.set(s.carrier[0],s.carrier[1],s.carrier[2]);keyCarrier.rotation.y=number(s.carrier[3]);}
+      if(state==='carry'&&s.carrier){
+        if(s.haul){key.g.position.set(.19,.91,.03);key.g.rotation.set(.22,0,-1.27);}
+        else{key.g.position.set(.170,1.077,-.240);key.g.rotation.set(-.36,-.32,.17);}
+        keyCarrier.position.set(s.carrier[0],s.carrier[1],s.carrier[2]);keyCarrier.rotation.y=number(s.carrier[3]);}
       const engaged=typeof s.clutch==='boolean'?Number(s.clutch):clamp(number(s.clutch));
       const travel=Number.isFinite(s.travel)?clamp(s.travel):phase;
       free.g.rotation.z=travel*TAU*3;pack.g.rotation.z=free.g.rotation.z;pack.g.position.z=.112-engaged*.042;
