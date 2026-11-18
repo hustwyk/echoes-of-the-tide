@@ -53,9 +53,9 @@ const TideMissions = (() => {
       step('optic','锁住侧槽光带',['wheel','lens'],'梁青：现在只剩一道光。再往安全带里收一点。',{v:[.56,.79],rough:1})
     ],
     [
-      step('rhythm','空载演练',['wheel','horn'],'沈遥：预备灯一亮，我就敲。',{period:6.3}),
-      step('rhythm','等待驾驶台复述',['wheel','horn'],'梁青：我只收到两声。再来一轮，把间隔拉开。',{period:6.9,rough:1}),
-      step('rhythm','变速试灯',['wheel','horn'],'阿棠：船尾就位。驾驶台请独立确认。',{period:6.4,irregular:true})
+      step('diaphone','轮缘对印与空载演练',['wheel','horn'],'林澈：把甲轮接到廊边，我带方头钥过去。'),
+      step('diaphone','给回声留出间隔',['wheel','horn'],'沈遥：我拿到了两张船上回条。先比一比，哪儿少了一响。'),
+      step('diaphone','雨窗目视复核',['wheel','horn'],'梁青：这次把风也算进去。三声过后，我自己抬头。')
     ],
     [
       step('optic','守住安全光带',['wheel','lens'],'梁青：海雁就要遮住基准了，看我的船首。',{v:[.65,.38],rough:2}),

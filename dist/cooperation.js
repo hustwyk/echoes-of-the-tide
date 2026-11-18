@@ -30,12 +30,12 @@ const TideCoop = (() => {
   }
   class Session {
     constructor(index,events={}) {
-      this.index=index;this.world=index===8?TideSoundings.layout():index===7?TideRelay.layout():index===1?TideCableQuay.layout():index===2?TideSignal.layout():index===4?TideArchive.layout():index===9?TideLantern.layout():TideTraversal.build(index);this.events=events;
+      this.index=index;this.world=index===10?TideFogSignal.layout():index===8?TideSoundings.layout():index===7?TideRelay.layout():index===1?TideCableQuay.layout():index===2?TideSignal.layout():index===4?TideArchive.layout():index===9?TideLantern.layout():TideTraversal.build(index);this.events=events;
       if(index===0)TideLandfall.build(this.world);
-      TideRigging.build(this.world);TideDrawbridge.build(this.world);if(!this.world.soundings&&!this.world.relay&&!this.world.cableQuay&&!this.world.lantern&&!this.world.signal&&!this.world.archive)TideFieldWork.build(this.world,index);
+      TideRigging.build(this.world);TideDrawbridge.build(this.world);if(!this.world.foghouse&&!this.world.soundings&&!this.world.relay&&!this.world.cableQuay&&!this.world.lantern&&!this.world.signal&&!this.world.archive)TideFieldWork.build(this.world,index);
       this.time=0;this.stage=0;this.setbacks=0;this.complete=false;this.notice='';this.noticeUntil=0;
       this.cues={light:0,angle:0,water:-4,rescue:0,ghost:0};
-      this.survey=TideSoundings.create(this);this.relay=TideRelay.create(this);this.cable=TideCableQuay.create(this);this.signal=TideSignal.create(this);
+      this.fog=TideFogSignal.create(this);this.survey=TideSoundings.create(this);this.relay=TideRelay.create(this);this.cable=TideCableQuay.create(this);this.signal=TideSignal.create(this);
       this.players=this.world.sections[0].starts.map(TideTraversal.spawn);
       this.checkpoints=this.world.sections[0].starts.slice();TidePassage.build(this);
       this.begin();
@@ -50,7 +50,7 @@ const TideCoop = (() => {
         returnGate:0,balance:0,warnUntil:0,buttonCooldown:0,releaseHeld:false,catchup:0};
       if(this.spec.type==='ride')this.state.dials[this.spec.driver]=.50;
       this.rig=TideRigging.reset(this);this.paper=TidePaper.create(this);this.optic=TideLantern.create(this);
-      if(this.optic){this.cues.light=.97;this.cues.rays=TideLantern.viewData(this).images;}TideFieldWork.reset(this);TideCableQuay.begin(this);TideLookout.reset(this);TideRelay.begin(this);TideSoundings.begin(this);TideSignal.begin(this);TideArchive.begin(this);
+      if(this.optic){this.cues.light=.97;this.cues.rays=TideLantern.viewData(this).images;}TideFieldWork.reset(this);TideCableQuay.begin(this);TideLookout.reset(this);TideRelay.begin(this);TideSoundings.begin(this);TideFogSignal.begin(this);TideSignal.begin(this);TideArchive.begin(this);
       this.events.stage?.(this);
     }
     alert(text,seconds=2.5) {
@@ -83,11 +83,12 @@ const TideCoop = (() => {
         if(this.stage+1===this.world.sections.length) {this.complete=true;this.events.finish?.(this);return;}
         this.checkpoints=section.ends.slice();this.stage++;this.begin();return;
       }
+      if(this.fog)TideFogSignal.step(this,dt);
       if(this.survey)TideSoundings.step(this,dt);
       if(this.relay)TideRelay.step(this,dt);
       if(this.cable)TideCableQuay.update(this,dt);
       const activeSites=this.field.done?section.sites:section.field.sites;
-      this.near=this.players.map((p,i)=>this.survey?TideSoundings.near(this,i):this.relay?TideRelay.near(this,i):this.cable?TideCableQuay.near(this,i):this.landfall?TideLandfall.near(this,i):this.archive?TideArchive.near(this,i):near(p,activeSites[i]));
+      this.near=this.players.map((p,i)=>this.fog?TideFogSignal.near(this,i):this.survey?TideSoundings.near(this,i):this.relay?TideRelay.near(this,i):this.cable?TideCableQuay.near(this,i):this.landfall?TideLandfall.near(this,i):this.archive?TideArchive.near(this,i):near(p,activeSites[i]));
       if(this.signal&&this.stage===2)this.near[0]&&=this.players[0].ground===this.world.signal.head;
       const cart=this.spec.mode==='bridge'&&!section.span.seated;
       if(cart)this.near[1-this.spec.driver]=TideDrawbridge.onCart(this,1-this.spec.driver,{use:true});
@@ -102,7 +103,8 @@ const TideCoop = (() => {
         TideTraversal.move(p,inputs[side],dt,this.world,yaws[side],this.engaged[side]||TideRigging.lighting(this,side,inputs[side]));
         TidePassage.collide(this,p);
         if(this.world.landfall)TideLandfall.collide(this,p,oldZ);
-        if(this.survey){TideSoundings.collide(this,p);if(this.engaged[side])TideSoundings.stance(this,side,dt);}
+        if(this.fog){TideFogSignal.collide(this,p);if(this.engaged[side])TideFogSignal.stance(this,side,dt);}
+        else if(this.survey){TideSoundings.collide(this,p);if(this.engaged[side])TideSoundings.stance(this,side,dt);}
         else if(this.relay){
           TideRelay.collision(this,p);if(this.engaged[side])TideRelay.stance(this,side,dt);
           if(!side&&this.relay.top&&p.y<this.world.relay.upper.y-1.40)this.resetPerson(0,'桅顶安全索接住了你');
@@ -113,7 +115,11 @@ const TideCoop = (() => {
         else if(this.optic){TideLantern.collide(p);if(this.engaged[side])TideLantern.stance(this,side,dt);}
         else if(this.engaged[side]&&!(cart&&side!==this.spec.driver))approachInstrument(this,side,activeSites[side],dt);
         if(this.rig&&side!==this.spec.driver)TideRigging.catchLine(this);
-        if(this.survey&&!p.grounded&&p.vy<0&&p.y<TideSoundings.surface(p.x,p.z,this.time)-.22){
+        if(this.fog&&!p.grounded&&p.vy<0&&p.y<this.world.foghouse.rear.y-1.65){
+          this.resetPerson(side,'轮坑救生索接住了你');
+          const c=this.checkpoints[side];
+          if(this.world.foghouse.wheels.includes(c))Object.assign(p,{x:c.x,y:c.y,z:c.z,ground:c,grounded:true});
+        }else if(this.survey&&!p.grounded&&p.vy<0&&p.y<TideSoundings.surface(p.x,p.z,this.time)-.22){
           this.resetPerson(side,'系在救生索上的尺和人一起回到检修台');
         }else if(this.cable&&!p.grounded&&p.vy<0&&p.y<this.cable.water+TideLookout.swell(p.x,p.z,this.time)-.34){
           this.resetPerson(side,'落水后，安全索把你拉了回来');
@@ -125,6 +131,7 @@ const TideCoop = (() => {
       }
       if(prevStaff)TideDrawbridge.carry(this,inputs,dt,prevStaff);
       if(q.doneAt!==null)return;
+      if(this.fog){TideFogSignal.interact(this,inputs,dt);return;}
       if(this.survey){TideSoundings.interact(this,inputs,dt);return;}
       if(this.relay){TideRelay.interact(this,inputs,dt);return;}
       if(this.cable){TideCableQuay.interact(this,inputs,dt);return;}
@@ -209,15 +216,15 @@ const TideCoop = (() => {
     const q=g.state,s=g.spec;
     if(q.nextShot===2){
       const replied=g.time-q.mark>1.35;
-      const short=g.index===10&&g.stage===0;
+
       g.set(0,'保持光标，听驾驶台独立复述',{caption:'塔上指示灯 ●●●'});
-      g.set(1,replied?'收到复述，按跳跃键确认':'闭合电台，等待船上回话',{caption:replied?(short?'梁青：我只听到两声。':'梁青：我数到三声。'):'阿棠：我在后甲板，三声都到了。'});
+      g.set(1,replied?'收到复述，按跳跃键确认':'闭合电台，等待船上回话',{caption:replied?'梁青：我数到三声。':'阿棠：我在后甲板，三声都到了。'});
       if(replied&&g.commit(1,input))g.advance();
       return;
     }
     const clock=q.age+(s.irregular?.30*Math.sin(q.age*.9):0);
     const f=(clock%s.period)/s.period;
-    const interval=g.index===10&&g.stage===0?.5:.72;
+    const interval=.72;
     const expected=q.pulseAt+.6+q.received*interval;
     const prepared=q.nextShot===1;
     g.set(0,'刻口进入亮区时按跳跃键发预备灯',{vis:'dial',value:f,target:.24,band:.14,caption:prepared?'预备灯已发':'旋转刻口'});

@@ -3,10 +3,10 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const box=vm.createContext({});
-for(const name of ['missions','traversal','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','lookout','paper','lantern','signal','archive','relay-speech','relay','soundings-speech','soundings','cooperation']){
+for(const name of ['missions','traversal','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','lookout','paper','lantern','signal','archive','relay-speech','relay','soundings-speech','soundings','fog-speech','fogsignal','cooperation']){
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../dist',name+'.js'),'utf8'),box);
 }
-const {Session,near,surface,lookout,ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings})',box);
+const {Session,near,surface,lookout,ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal})',box);
 const empty=()=>({x:0,z:0,use:false,jump:false});
 function steer(g,i,target,keys){
   const p=g.players[i],dx=target.x-p.x,dz=target.z-p.z,dist=Math.hypot(dx,dz);
@@ -260,8 +260,70 @@ function surveyInputs(g,out){
   }
   return out;
 }
+function fogInputs(g,out){
+  const r=g.fog,w=g.world.foghouse,p=g.players[0],clamp=n=>Math.max(-1,Math.min(1,n));
+  function walk(i,site){
+    const person=g.players[i];
+    // Give the back of the cabinet room when walking from the seaward side.
+    if(person.z<site.z-.28&&Math.abs(person.x-site.x)<1.32){
+      out[i].x=1;return;
+    }
+    if(person.z<site.z+.08&&person.x>site.x+1.22){out[i].z=1;return;}
+    steer(g,i,site,out[i]);
+  }
+  function jumpTo(q){
+    const d=Math.hypot(q.x-p.x,q.z-p.z);
+    out[0].x=(q.x-p.x)/Math.max(.75,d);out[0].z=(q.z-p.z)/Math.max(.75,d);
+    out[0].jump=p.grounded&&p.ground!==q;
+  }
+  const right=TideFogSignal.target(g,1),left=TideFogSignal.target(g,0);
+  if(TideFogSignal.near(g,1))out[1].use=true;else walk(1,right);
+  if(r.mode==='transport'){
+    const [a,b]=w.wheels,aboard=p.ground===a,bboard=p.ground===b;
+    let stop=0;
+    if(r.marks[1])stop=1;
+    else if(r.marks[0])stop=bboard?.75:.50;
+    else if(aboard)stop=.25;
+    if(out[1].use)out[1].x=clamp((stop-r.travel)*14);
+    if(r.key==='rack'){if(TideFogSignal.near(g,0))out[0].jump=out[0].use=true;else walk(0,w.rack);}
+    else if(!r.marks[0]&&aboard||r.marks[0]&&!r.marks[1]&&bboard){
+      out[0].use=true;out[0].jump=Math.abs(r.travel-stop)<.004&&Math.abs(out[1].x)<.08;
+    }else if(r.marks[1]&&p.ground===w.outer){
+      if(TideFogSignal.near(g,0))out[0].jump=out[0].use=true;else steer(g,0,w.drive,out[0]);
+    }else if(r.marks[1]){if(r.travel>.982)jumpTo(w.outer);}
+    else if(r.marks[0]){if(Math.abs(r.travel-.5)<.018)jumpTo(b);}
+    else if(p.grounded&&p.z>w.rear.z-1.78){steer(g,0,{x:a.pivot.x,z:w.rear.z-1.84,y:w.rear.y},out[0]);}
+    else if(r.travel<.032)jumpTo(a);
+    return out;
+  }
+  if(TideFogSignal.near(g,0))out[0].use=true;else walk(0,left);
+  if(r.mode==='edit'){
+    const notch=r.stud?.69:.26;
+    if(out[0].use)out[0].x=clamp((notch-r.service)*12);
+    if(out[1].use){
+      out[1].x=clamp((.98-r.gaps[r.stud])*12);
+      out[1].jump=out[0].use&&Math.abs(notch-r.service)<.03&&r.gaps[r.stud]>.967;
+    }
+  }else{
+    if(g.stage===2&&out[0].use)out[0].x=clamp((TideFogSignal.load(g)-r.balance)*11);
+    if(r.mode==='ready')out[0].jump=out[0].use&&out[1].use&&!r.voice&&Math.abs(r.spin%1-.30)<.038&&TideFogSignal.wind(g)>.42;
+    if(r.mode==='sending'&&out[1].use){
+      const t=TideFogSignal.camTime(r),mark=TideFogSignal.slots(r)[r.trace.source.length];
+      out[1].z=(r.down?g.time-r.opened<.212:Math.abs(t-mark)<.042)?-1:0;
+    }
+    if(['drain','aft','bridge'].includes(r.mode))out[1].use=false;
+    if(r.mode==='ack')out[1].jump=out[1].use;
+    if(r.mode==='spot'&&out[1].use){
+      const c=TideFogSignal.cabin(g);
+      out[1].x=clamp((c.base-c.yaw)*17);out[1].z=clamp((c.pitch-c.elev)*19);
+      out[1].jump=r.fix>=1&&!r.voice;
+    }
+  }
+  return out;
+}
 function control(g){
   const out=[empty(),empty()],sec=g.section,s=g.spec,q=g.state;
+  if(g.fog)return fogInputs(g,out);
   if(g.survey)return surveyInputs(g,out);
   if(g.relay)return relayInputs(g,out);
   if(g.cable)return quayInputs(g,out);
@@ -442,6 +504,52 @@ if(require.main===module){
   function reach(g,condition){
     for(let j=0;j<60*120&&!condition()&&!g.complete;j++)g.tick(step,control(g));
     assert.ok(condition(),'Did not reach checkpoint in chapter '+(g.index+1)+' stage '+g.stage);
+  }
+  {
+    const g=new Session(10),r=g.fog,w=g.world.foghouse;
+    reach(g,()=>g.players[0].ground===w.wheels[0]&&Math.abs(r.travel-.25)<.04);
+    for(let j=0;j<25;j++){
+      const k=control(g);k[0].use=k[0].jump=true;k[1].use=false;
+      g.tick(step,k);assert.equal(r.marks[0],false);
+    }
+    reach(g,()=>r.marks[0]);const travelSave=TideFogSignal.checkpoint(g);
+    const back=new Session(10);TideFogSignal.restore(back,travelSave);
+    assert.equal(back.players[0].ground,back.world.foghouse.wheels[0]);
+    for(let j=0;j<240&&!g.setbacks;j++)g.tick(step,[{...empty(),x:-1},empty()]);
+    assert.equal(g.setbacks,1);assert.equal(g.players[0].ground,w.wheels[0]);
+    reach(g,()=>r.mode==='sending'&&r.down);
+    g.tick(step,[{...empty(),use:true},{...empty(),use:true}]);
+    assert.equal(r.mode,'ready');assert.equal(r.trace.source.length,0);
+    reach(g,()=>r.mode==='sending'&&r.down);
+    for(let j=0;j<32;j++)g.tick(step,[{...empty(),use:true},{...empty(),use:true,z:-1}]);
+    assert.equal(r.mode,'ready');
+    reach(g,()=>r.mode==='drain');
+    for(let j=0;j<150;j++)g.tick(step,[{...empty(),use:true},{...empty(),use:true}]);
+    assert.equal(r.mode,'drain');assert.equal(r.showAft,false);assert.equal(r.showBridge,false);
+    assert.deepEqual(Array.from(r.trace.aft),Array.from(r.trace.source));
+    assert.deepEqual(Array.from(r.trace.bridge),[r.trace.source[0],r.trace.source[2]]);
+    reach(g,()=>r.mode==='ack');
+    const received=TideFogSignal.checkpoint(g),again=new Session(10);
+    TideFogSignal.restore(again,received);assert.equal(again.fog.trace.bridge.length,2);
+    reach(g,()=>g.stage===1&&r.stud===1);
+    const change=TideFogSignal.checkpoint(g),editor=new Session(10);editor.stage=1;editor.begin();
+    TideFogSignal.restore(editor,change);assert.ok(editor.fog.locks[0]&&!editor.fog.locks[1]);
+    assert.equal(editor.fog.gaps[0],r.gaps[0]);
+    // Keep the old spacing on the third tooth, then send once with that assembly.
+    for(let j=0;j<2000&&r.mode!=='ack';j++){
+      const k=control(g);
+      if(r.mode==='edit'&&r.stud===1&&TideFogSignal.near(g,1)){k[1].x=0;k[1].jump=Math.abs(r.service-.69)<.03;}
+      g.tick(step,k);
+    }
+    assert.equal(r.mode,'ack');assert.equal(r.trace.bridge.length,2);
+    reach(g,()=>r.mode==='edit');assert.equal(r.paper.bridge.length,2);
+    reach(g,()=>g.stage===2&&r.mode==='spot'&&!r.voice);
+    for(let j=0;j<180;j++){
+      g.tick(step,[empty(),{...empty(),use:true,jump:true}]);assert.equal(r.seen,false);
+    }
+    reach(g,()=>r.fix>.90);assert.ok(r.storm<.23);
+    reach(g,()=>r.seen);const last=TideFogSignal.checkpoint(g),look=new Session(10);look.stage=2;look.begin();
+    TideFogSignal.restore(look,last);assert.equal(look.fog.voice,'seen');reach(look,()=>look.complete);
   }
   // A wave is identified at two different positions. A matching-looking trough one period later
   // must be rejected. The value recorded on the log sheet is the player's actual brass slider.
@@ -835,5 +943,5 @@ if(require.main===module){
     quiet.tick(1/60,inputs);
   }
   assert.ok(quiet.complete&&quiet.skipTin);
-  console.log('Verified matching travelling troughs, a lost tide window, real staff readings, submerged stump, shallow-channel rejection, stern readback, mast climb, transfer car, wrong file, lost negative, individual signatures, both roles, short–long keying, cable drop and preserved saddle, unlit crane window, shore return loop, ferry readback, swinging belay, floodgate collision and pin, emergency radio reception, basket mark, hydraulic sill, two drawbridge catches, folding staff, shared cable car, lantern shutters, optical carriage and saved guide positions, tape transport, wrong splices, cabinet keys, paper registration, final radio release and optional recording.');
+  console.log('Verified rotating inspection shoes, foghorn valve duration, separate ship receivers, a failed cam repair, visual reacquisition, matching travelling troughs, a lost tide window, real staff readings, submerged stump, shallow-channel rejection, stern readback, mast climb, transfer car, wrong file, lost negative, individual signatures, both roles, short–long keying, cable drop and preserved saddle, unlit crane window, shore return loop, ferry readback, swinging belay, floodgate collision and pin, emergency radio reception, basket mark, hydraulic sill, two drawbridge catches, folding staff, shared cable car, lantern shutters, optical carriage and saved guide positions, tape transport, wrong splices, cabinet keys, paper registration, final radio release and optional recording.');
 }
