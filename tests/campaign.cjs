@@ -3,10 +3,10 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const box=vm.createContext({});
-for(const name of ['missions','traversal','passage','landfall-message','landfall','rigging','drawbridge','fieldwork','lookout','paper','lantern','signal','archive','cooperation']){
+for(const name of ['missions','traversal','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','lookout','paper','lantern','signal','archive','cooperation']){
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../dist',name+'.js'),'utf8'),box);
 }
-const {Session,near,surface,lookout,ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall})',box);
+const {Session,near,surface,lookout,ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay})',box);
 const empty=()=>({x:0,z:0,use:false,jump:false});
 function steer(g,i,target,keys){
   const p=g.players[i],dx=target.x-p.x,dz=target.z-p.z,dist=Math.hypot(dx,dz);
@@ -140,8 +140,45 @@ function landfallInputs(g,out){
   }
   return out;
 }
+function quayInputs(g,out){
+  const a=g.cable,w=g.world.cableQuay,axis=x=>Math.max(-1,Math.min(1,x));
+  const sites=g.stage===0?[w.key,w.posts[1]]:g.stage===1?[TideCableQuay.target(g,0),w.drum]:
+    a.patched<0?[w.lamp,w.windows[2]]:[w.breaker,a.backTest?w.mic:w.windows[2]];
+  for(let i=0;i<2;i++){
+    const p=g.players[i],s=sites[i],k=out[i];
+    if(TideCableQuay.near(g,i)&&TideCableQuay.target(g,i)===s){k.use=true;continue;}
+    let goal=s;
+    if(!i&&p.z>-16.48&&s.z<-16.7&&p.z<-13.1){
+      goal=p.z>w.float.z+.12?w.float:s;
+    }
+    for(const [fx,fy,fz,r] of w.fixtures){
+      if(Math.abs(p.y-fy)>.9||p.z<fz-.24||p.z>fz+1.75||s.z>fz-.38)continue;
+      if(Math.abs(p.x-fx)<r+.38)goal={x:fx+(i?.96:-.89),y:fy,z:fz-.35};
+    }
+    steer(g,i,goal,k);
+  }
+  if(g.stage===0){
+    if(out[0].use)out[0].use=!a.signalled&&(!a.down||g.time-a.downAt<(a.presses.length?.62:.19));
+    if(out[1].use)out[1].jump=a.survey[1];
+  }else if(g.stage===1){
+    if(out[1].use)out[1].z=axis((TideCableQuay.length(g)+.66-a.payout)*2.7);
+    if(a.carried&&TideCableQuay.near(g,0)){out[0].use=true;out[0].jump=a.slack>.26&&a.slack<.95;}
+  }else if(a.patched<0){
+    if(out[0].use){out[0].x=axis((-28.9-a.scanZ)*4);out[0].z=axis((a.scanY-3.85)*4);}
+    if(out[1].use)out[1].jump=a.exposed>=1;
+  }else{
+    if(!a.backTest){
+      if(out[1].use)out[1].use=out[0].use&&(!a.returnDown||g.time-a.returnAt<(a.received.length?.64:.18));
+      return out;
+    }
+    if(out[0].use)out[0].jump=!a.power;
+    if(out[1].use){out[1].jump=a.radio==='idle'&&a.power;out[1].use=!['sent','reply'].includes(a.radio);}
+  }
+  return out;
+}
 function control(g){
   const out=[empty(),empty()],sec=g.section,s=g.spec,q=g.state;
+  if(g.cable)return quayInputs(g,out);
   if(g.landfall)return landfallInputs(g,out);
   if(g.archive)return archiveInputs(g,out);
   if(g.signal)return signalInputs(g,out);
@@ -184,7 +221,6 @@ function control(g){
     if(out.every(o=>o.use)){
       const move=(i,v)=>{out[i].x=Math.max(-1,Math.min(1,(v-f.values[i])*25));};
       switch(s.type){
-        case 'cable':move(1,.74-.13*step);break;
         case 'paper':move(0,.28+.16*step);out[1].jump=true;break;
         case 'radio':out[0].jump=true;move(1,(step+.5)/3);out[1].jump=true;break;
         case 'tide':out[1].jump=true;break;
@@ -264,7 +300,6 @@ function control(g){
     return out;
   }
   switch(s.type){
-    case 'cable':trim(1,(s.code+.5)/3);out[0].jump=g.time-q.pulseAt>2;out[1].jump=Math.min(2,Math.floor(q.dials[1]*3))===s.code;break;
     case 'paper':{
       const p=g.paper,h=p.holder,r=1-h,[x,y]=p.pin;
       const dx=p.offset[0]+Math.cos(p.angle)*x-Math.sin(p.angle)*y-x,dy=p.offset[1]+Math.sin(p.angle)*x+Math.cos(p.angle)*y-y;
@@ -412,6 +447,52 @@ if(require.main===module){
   assert.ok(basket.rig.wrong>=0&&!basket.rig.lit);
   assert.ok(basket.state.ferry>.36&&basket.state.ferry<=.42);
   reach(basket,()=>basket.stage===2);
+
+  function verifyCableQuay(){
+    const g=new Session(1),a=g.cable,w=g.world.cableQuay;
+    const tick=(left,right)=>g.tick(step,[{...empty(),...left},{...empty(),...right}]);
+    const run=(frames,left,right)=>{for(let n=0;n<frames;n++)tick(left,right);};
+    reach(g,()=>TideCableQuay.near(g,0)&&a.down);
+    run(48,{use:true},{});tick({},{});run(9,{use:true},{});tick({},{});
+    assert.equal(a.signalled,false,'A reversed test pattern must leave the dry loop open');
+    reach(g,()=>a.signalled);
+    for(let n=0;n<500&&(!near(g.players[1],w.posts[0])||!a.survey[0]);n++){
+      const k=empty();if(TideCableQuay.near(g,1)&&TideCableQuay.target(g,1).index===0)k.use=true;
+      else{
+        const p=g.players[1],post=w.posts[0];
+        steer(g,1,p.z<post.z-.10?{x:post.x+.88,y:post.y,z:post.z+.16}:post,k);
+      }
+      tick({},k);
+    }
+    assert.equal(a.survey[0],true);tick({},{use:true,jump:true});
+    assert.ok(a.blown>0&&g.stage===0&&a.route===-1);
+    reach(g,()=>g.stage===1&&a.carried&&a.hooks===1&&g.players[0].z<-14.0);
+    const checkpoint=TideCableQuay.checkpoint(g);
+    for(let n=0;n<600&&a.carried;n++)tick({},{use:true,z:1});
+    assert.ok(!a.carried&&a.hooks===1,'Sinking the free cable must preserve the last seated saddle');
+    const again=new Session(1);again.stage=1;again.begin();TideCableQuay.restore(again,checkpoint);
+    assert.ok(again.cable.hooks===1&&!again.cable.carried);
+    reach(again,()=>again.stage===2&&again.players[1].grounded&&TideCableQuay.target(again,1).index===2&&TideCableQuay.near(again,1));
+    for(let n=0;n<120;n++)again.tick(step,[empty(),{...empty(),use:true,jump:true}]);
+    assert.equal(again.cable.patched,-1,'The unlit back of the glass cannot identify a return sleeve');
+    reach(again,()=>again.cable.patched===2);
+    for(let n=0;n<300;n++){
+      const k=control(again);k[1]=empty();k[0].jump=true;again.tick(step,k);
+    }
+    assert.ok(!again.cable.power&&!again.cable.backTest,'No live shore breaker before the two-way return test');
+    reach(again,()=>again.cable.radio==='sending');
+    again.tick(step,[empty(),empty()]);
+    assert.equal(again.cable.radio,'idle');
+    reach(again,()=>again.cable.radio==='sent');
+    for(let n=0;n<100;n++)again.tick(step,[empty(),{...empty(),use:true}]);
+    assert.equal(again.cable.radio,'sent','The ship needs the shore microphone to be released');
+    again.tick(step,[empty(),empty()]);assert.equal(again.cable.radio,'reply');
+    const receipt=TideCableQuay.checkpoint(again),restored=new Session(1);
+    restored.stage=2;restored.begin();TideCableQuay.restore(restored,receipt);
+    assert.ok(restored.cable.power&&restored.cable.radio==='reply');
+    reach(restored,()=>restored.complete);
+  }
+  verifyCableQuay();
 
   function verifyBreakwater(){
     // Walk off the actual moving basket. Both players must get the hanging rider back to the beam.
@@ -594,5 +675,5 @@ if(require.main===module){
     quiet.tick(1/60,inputs);
   }
   assert.ok(quiet.complete&&quiet.skipTin);
-  console.log('Verified both roles, swinging belay, floodgate collision and pin, emergency radio reception, basket mark, hydraulic sill, two drawbridge catches, folding staff, shared cable car, lantern shutters, optical carriage and saved guide positions, tape transport, wrong splices, cabinet keys, paper registration, final radio release and optional recording.');
+  console.log('Verified both roles, short–long keying, cable drop and preserved saddle, unlit crane window, shore return loop, ferry readback, swinging belay, floodgate collision and pin, emergency radio reception, basket mark, hydraulic sill, two drawbridge catches, folding staff, shared cable car, lantern shutters, optical carriage and saved guide positions, tape transport, wrong splices, cabinet keys, paper registration, final radio release and optional recording.');
 }
