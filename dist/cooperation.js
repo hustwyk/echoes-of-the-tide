@@ -13,7 +13,7 @@ const TideCoop = (() => {
   class Session {
     constructor(index,events={}) {
       this.index=index;this.world=TideTraversal.build(index);this.events=events;
-      TideFieldWork.build(this.world,index);
+      TideRigging.build(this.world);TideFieldWork.build(this.world,index);
       this.time=0;this.stage=0;this.setbacks=0;this.complete=false;this.notice='';this.noticeUntil=0;
       this.cues={light:0,angle:0,water:-4,rescue:0,ghost:0};
       this.players=this.world.sections[0].starts.map(TideTraversal.spawn);
@@ -29,7 +29,7 @@ const TideCoop = (() => {
         pulse:0,pulseAt:-10,nextShot:0,received:0,choice:0,word:null,mode:0,mark:-8,readAt:-8,
         returnGate:0,balance:0,warnUntil:0,buttonCooldown:0,releaseHeld:false,catchup:0};
       if(this.spec.type==='ride')this.state.dials[this.spec.driver]=.50;
-      TideFieldWork.reset(this);TideLookout.reset(this);
+      this.rig=TideRigging.reset(this);this.paper=TidePaper.create(this);TideFieldWork.reset(this);TideLookout.reset(this);
       this.events.stage?.(this);
     }
     alert(text,seconds=2.5) {
@@ -41,7 +41,8 @@ const TideCoop = (() => {
       Object.assign(this.players[side],TideTraversal.spawn(this.checkpoints[side]));
       this.setbacks++;this.events.reset?.(side);this.alert(cause+' · 已回到安全台');
       if(this.spec.type==='ride'&&!this.state.latch && side!==this.spec.driver) {
-        this.state.ferry=0;TideTraversal.setFerry(this.section,0,this.time,this.players);
+        if(this.rig)TideRigging.fall(this);
+        else{this.state.ferry=0;TideTraversal.setFerry(this.section,0,this.time,this.players);}
       }
     }
     advance() {
@@ -52,7 +53,7 @@ const TideCoop = (() => {
       if(this.complete)return;
       this.time+=dt;
       const q=this.state, section=this.section;
-      q.age+=dt;TidePassage.update(this);
+      q.age+=dt;TidePassage.update(this);TideRigging.updateLadders(section,dt);
       if(q.doneAt!==null && this.time-q.doneAt>1.15){
         if(this.stage+1===this.world.sections.length) {this.complete=true;this.events.finish?.(this);return;}
         this.checkpoints=section.ends.slice();this.stage++;this.begin();return;
@@ -62,7 +63,7 @@ const TideCoop = (() => {
       this.engaged=this.near.map((ok,i)=>ok&&inputs[i].use);
       for(let side=0;side<2;side++){
         const p=this.players[side];
-        TideTraversal.move(p,inputs[side],dt,this.world,yaws[side],this.engaged[side]);
+        TideTraversal.move(p,inputs[side],dt,this.world,yaws[side],this.engaged[side]||TideRigging.lighting(this,side,inputs[side]));
         TidePassage.collide(this,p);
         if(this.engaged[side]){const a=-p.yaw;p.yaw+=Math.atan2(Math.sin(a),Math.cos(a))*Math.min(1,dt*12);}
         if(p.y<Math.min(...section.starts.map(d=>d.y),...section.ends.map(d=>d.y))-4.2) {
@@ -102,48 +103,38 @@ const TideCoop = (() => {
           g.alert(q.returnGate===1?'第一截落稳。到中间铆板再给同伴信号。':'第二截已锁住，可以过桥。');
         }
         const amount=q.returnGate===0?0:q.returnGate===1?Math.ceil(sc.returnDecks.length/2):sc.returnDecks.length;
-        sc.returnDecks.forEach((slab,j)=>slab.active=j<amount);
+        sc.returnDecks.slice(0,amount).forEach(TideRigging.lower);
         g.set(d,!q.returnGate?'回话给对岸同伴，等第一截桥面落下':'走到中间铆板，向对岸报出位置');
         g.set(r,!q.returnGate?'守住远端操作台，按跳跃键降下第一截桥面':who.z>halfway+1?'等同伴走到中间铆板':'再按一次跳跃键放下第二截桥面',{caption:'回程闸 '+q.returnGate+' / 2'});
       }else{
-        for(const slab of sc.returnDecks)slab.active=true;
+        sc.returnDecks.forEach(TideRigging.lower);
         g.set(d,'通道已展开，穿过桥面去找同伴');
         g.set(r,'在亮灯的平台接应同伴');
       }
-      if(near(g.players[d],sc.ends[d])&&near(rider,sc.ends[r])&&(!activeRelay||q.returnGate===2))g.advance();
+      if(near(g.players[d],sc.ends[d])&&(near(rider,sc.ends[r])||near(rider,sc.sites[r]))&&(!activeRelay||q.returnGate===2))g.advance();
       return;
     }
-    const offcenter=Math.abs(rider.x-platform.x);
-    const desired=s.mode==='bridge' && q.ferry>.08 && q.ferry<.94 ? Math.sin(q.ferry*9.8+(s.driver?1:0))*.77 : 0;
-    const lean=rider.x-platform.x-desired;
-    const balanced=s.mode!=='bridge'||Math.abs(lean)<.52;
-    const started=q.ferry>.005;
-    const needsLine=s.mode==='raft' && !q.yes[r];
-    if(needsLine && aboard && input[r].use){q.yes[r]=true;g.sound(450,.13);g.alert('导索锁住，可以调节水位',2);}
-    if(s.mode==='raft')g.cues.water=platform.y-.68;
-    if(s.mode==='basket' && aboard && input[r].use && !q.yes[r]){q.yes[r]=true;g.sound(620,.09);g.alert('沈遥：看到横梁，落点已标出。',2);}
-    const regulated=g.index!==0||g.stage!==0;
-    const target=ridePressure(s,q.ferry);
-    const pressure=g.tune(d,input,dt,.55);
-    const onCourse=!regulated||Math.abs(pressure-target)<(s.mode==='basket'?.18:.14);
-    if(g.engaged[d]&&(aboard||started)&&balanced&&!needsLine){
-      // The reverse lever is mechanical, and works even after a bad pressure setting.
-      const velocity=input[d].z>.45?-.19:onCourse?.16:0;
-      q.ferry=clamp(q.ferry+dt*velocity,0,1);
+    if(s.mode==='basket'){
+      const target=ridePressure(s,q.ferry),pressure=g.tune(d,input,dt,.55);
+      TideRigging.basket(g,input,dt,pressure,target,g.stage===0||Math.abs(pressure-target)<.18);
+    }else if(s.mode==='raft'){
+      TideRigging.pump(g,input,dt);
+    }else{
+      const desired=q.ferry>.08&&q.ferry<.94?Math.sin(q.ferry*9.8+(d?1:0))*.77:0;
+      const lean=rider.x-platform.x-desired,balanced=Math.abs(lean)<.52;
+      const target=ridePressure(s,q.ferry),pressure=g.tune(d,input,dt,.55);
+      if(g.engaged[d]&&(aboard||q.ferry>.005)&&balanced){
+        const v=input[d].z>.45?-.19:Math.abs(pressure-target)<.14?.16:0;
+        q.ferry=clamp(q.ferry+dt*v,0,1);
+      }
+      TideTraversal.setFerry(sc,q.ferry,g.time,g.players);
+      g.set(d,!aboard&&q.ferry<.005?'等同伴登桥':balanced?'按住操作键，左右调节制动压力，后拉可退回':'等同伴把配重移回标线',{
+        vis:'dial',value:pressure,caption:'制动压力 '+percent(pressure)+'　·　行程 '+percent(q.ferry)});
+      g.set(r,q.ferry>.81?'跳上对岸平台，解锁回程通道':!aboard?'走到前方，跳上桥面':balanced?'保持平衡，向同伴报制动压力':lean<0?'配重向右移':'配重向左移',{
+        vis:'dial',value:pressure,target,band:.14,caption:'请调至 '+percent(target)+'　·　配重偏差 '+Math.round(lean*100)+' cm'});
     }
-    if(!balanced&&aboard&&g.engaged[d])g.alert(lean<0?'配重向右移，桥面才能继续下降':'配重向左移，桥面才能继续下降',1);
-    TideTraversal.setFerry(sc,q.ferry,g.time,g.players);
-    const name=s.mode==='basket'?'卷筒张力':s.mode==='raft'?'旁通水压':'制动压力';
-    const driving=!started&&!aboard?'等同伴登上移动平台':needsLine?'等导索锁住':!balanced?'等同伴调整配重':regulated?
-      '按住操作键，左右调节'+name+'，向后拉可退回':'按住操作键驱动绞盘，向后拉可返回';
-    g.set(d,driving,{vis:'dial',value:regulated?pressure:q.ferry,target:regulated?null:1,
-      caption:regulated?name+' '+percent(pressure)+'　·　行程 '+percent(q.ferry):'平台行程 '+percent(q.ferry)});
-    const riding=needsLine&&aboard?'按住操作键把导索锁到浮架上':q.ferry>.81?'跳上对岸平台，按住操作键解锁回程通道':aboard?(s.mode==='bridge'?
-      (!balanced?(lean<0?'向右移动配重':'向左移动配重'):'保持配重平衡，向同伴报出制动压力'):regulated?'观察载荷表，告诉同伴所需读数':'站稳，观察对面的落点'):'走到前方平台，跳入移动甲板';
-    g.set(r,riding,{vis:aboard?'dial':'',value:regulated?pressure:q.ferry,target:regulated?target:1,band:.14,
-      caption:aboard&&regulated?'报给同伴 '+percent(target)+(s.mode==='bridge'?'　·　配重偏差 '+Math.round(lean*100)+' cm':''):'距离靠岸'});
-    if(q.ferry>.78 && g.engaged[r]){
-      q.hold+=dt;if(q.hold>.4){q.latch=true;g.checkpoints[r]=sc.ends[r];g.sound(510,.2);g.alert('棘爪已锁 · 回程通道展开');}
+    if(q.ferry>.78&&g.engaged[r]&&(!g.rig||g.rig.landed)){
+      q.hold+=dt;if(q.hold>.4){q.latch=true;if(g.rig)g.rig.flow=0;g.checkpoints[r]=sc.ends[r];g.sound(510,.2);g.alert('棘爪已锁 · 回程通道展开');}
     } else q.hold=0;
   }
   function cable(g,input,dt) {
@@ -178,19 +169,18 @@ const TideCoop = (() => {
   }
   function alignment(g,input,dt){
     const q=g.state,s=g.spec,mode=s.type;
-    const tolerance=mode==='paper'?.055:mode==='optic'?.052:.072;
+    const tolerance=mode==='optic'?.052:.072;
     const strict=mode==='optic' && g.index===11;
     const targets=s.v.map((v,i)=>clamp(v+(strict?.095*Math.sin(g.time*.49+i):0),0,1));
     const vals=[g.tune(0,input,dt),g.tune(1,input,dt)];
     const ok=vals.map((v,i)=>Math.abs(v-targets[i])<tolerance);
     const two=g.engaged.every(Boolean);
     if(mode==='optic'){g.cues.light=.95;g.cues.angle=(vals[0]-.5)*.9;g.cues.ghost=Math.abs(vals[1]-targets[1])*.48;}
-    const instructions=mode==='paper'?['转动验收联，把纸孔对准同伴的印记','移动透明潮图，用侧光看折痕']:mode==='tape'?['左右倒带，找到继电器闭合处','微调接收频率，让回话显形']:['转动手轮，按同伴读数调光','调整焦距，观察光束落点'];
+    const instructions=mode==='tape'?['左右倒带，找到继电器闭合处','微调接收频率，让回话显形']:['转动手轮，按同伴读数调光','调整焦距，观察光束落点'];
     for(let i=0;i<2;i++){
       const peer=1-i;
-      const readout=mode==='tape'?'接收':mode==='paper'?'印记':'刻线';
-      g.set(i,instructions[i],{vis:mode==='paper'?'chart':mode==='tape'?'wave':'optic',
-        value:vals[i],target:mode==='paper'?targets[i]:null,band:tolerance,
+      g.set(i,instructions[i],{vis:mode==='tape'?'wave':'optic',
+        value:vals[i],target:null,band:tolerance,
         peer:vals[peer],peerTarget:targets[peer],caption:'本端 '+percent(vals[i])+'　·　同伴应调至 '+percent(targets[peer]),ok:ok[i]});
     }
     q.hold=two&&ok.every(Boolean)?q.hold+dt:0;
@@ -324,6 +314,6 @@ const TideCoop = (() => {
       if(g.cues.rescue===1 && g.commit(0,input))g.advance();
     }
   }
-  const handlers={ride,cable,power,blackout,tape:alignment,paper:alignment,optic:alignment,radio,tide,post,rhythm,quiet,release};
+  const handlers={ride,cable,power,blackout,tape:alignment,paper:TidePaper.interact,optic:alignment,radio,tide,post,rhythm,quiet,release};
   return {Session,roleKeys,near,ridePressure};
 })();

@@ -13,6 +13,7 @@ const TideHarbor = (() => {
         if(i!==s.driver&&q.returnGate<2&&(s.mode!=='basket'||(g.index===0&&g.stage===1)))return {p:sec.sites[i],name:'回程闸'};
         return {p:sec.ends[i],name:'会合点'};
       }
+      if(g.rig && i!==s.driver && !g.rig.landed && q.ferry>.78)return {p:sec.rig.ledge,name:s.mode==='raft'?'水窗窗沿':'着陆横梁'};
       if(i!==s.driver && q.ferry<.78)return {p:sec.ferry.deck,name:s.mode==='raft'?'登上浮架':s.mode==='bridge'?'移动桥面':'登上吊篮'};
     }
     return {p:sec.sites[i],name:TideMissions.names[sec.sites[i].kind]};
@@ -72,7 +73,9 @@ const TideHarbor = (() => {
       for(const section of g.world.sections) {
         section.devices=section.sites.map((site,i)=>{
           const obj=this.equipment.device(site.kind,i);
-          obj.position.set(site.x,site.y,site.z-.95);return add(obj);
+          obj.position.set(site.x,site.y,site.z-.95);
+          if(section.spec.type==='paper')obj.visible=false;
+          return add(obj);
         });
         if(section.field)section.field.devices=section.field.sites.map((site,i)=>{
           const obj=this.equipment.device(site.kind,i);obj.scale.setScalar(.88);obj.position.set(site.x,site.y,site.z-.95);return add(obj);
@@ -134,6 +137,12 @@ const TideHarbor = (() => {
       this.ship.rotation.set(.028*Math.sin(t*.78),1.12+g.cues.rescue*.7,.034*Math.sin(t*.91));
       for(const [d,obj] of this.floors){
         obj.visible=d.active;
+        if(d.hinge!==undefined){
+          const angle=(1-d.hinge)*1.34;
+          obj.visible=true;obj.rotation.x=d.hingeDirection*angle;
+          obj.position.set(T.MathUtils.lerp(d.hingeX,d.x,d.hinge),d.y-Math.sin(angle)*d.d*.5,
+            T.MathUtils.lerp(d.hingeZ+d.hingeDirection*d.d*.5*Math.cos(angle),d.z,d.hinge));
+        }
         if(d.dynamic)obj.position.set(d.x,d.y,d.z);
       }
       for(const {deck,h,ropes} of this.rigs)for(const {m,s} of ropes){
@@ -170,8 +179,15 @@ const TideHarbor = (() => {
         vector.set(p.x-Math.sin(yaw)*2,p.y+1.6,p.z-Math.cos(yaw)*2);
         this.look[i].lerp(vector,blend);cam.lookAt(this.look[i]);
         const scoped=ready&&TideLookout.active(g)&&g.watch.task.watcher===i&&g.engaged[i];
-        const shot=this.cinema.shot(g,i)||(scoped?TideLookout.camera(g):null);
-        cam.fov=scoped?31:57;
+        const lighting=ready&&g.rig?.lightOn&&!g.rig.lit&&g.spec.driver!==i;
+        const beam=lighting?TideRigging.ray(g):null;
+        if(beam){
+          // Look over the lamp housing, clear of the occupant and the basket rail.
+          beam.eye[1]+=.23;beam.eye[2]-=.35;
+        }
+        const paperView=ready&&g.paper&&g.field.done&&g.engaged[i];
+        const shot=this.cinema.shot(g,i)||(scoped?TideLookout.camera(g):paperView?TidePaper.camera(g,i):beam);
+        cam.fov=scoped?31:lighting?39:paperView?Math.max(54,2*Math.atan(1.19*height/(1.75*vw))*180/Math.PI):57;
         if(shot){cam.position.fromArray(shot.eye);cam.lookAt(vector.fromArray(shot.at));}
         cam.aspect=vw/height;cam.updateProjectionMatrix();
         e.setViewport(start,0,vw,height);e.setScissor(start,0,vw,height);e.render(this.scene,cam);
@@ -189,7 +205,7 @@ const TideHarbor = (() => {
       node.style.top=clamp(behind?.36:(1-vector.y)/2,.16,.70)*100+'%';
       const label=(behind?'↶ ':vector.x>1?'→ ':vector.x< -1?'← ':'◇ ')+name+'　'+Math.round(dist)+'m';
       if(node.textContent!==label)node.textContent=label;
-      node.hidden=g.engaged[i] || dist<1.6;
+      node.hidden=g.engaged[i] || dist<1.6 || (g.rig?.lightOn&&!g.rig.lit&&g.spec.driver!==i);
     }
   }
   return {WorldView,targetFor};

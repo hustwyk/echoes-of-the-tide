@@ -450,10 +450,10 @@ window.TideCinema = (() => {
         ship.position.x-=drift*3.3;
       }else if(idx===3){
         const float=g.stage===0 && !playing;
-        cup.position.set(float?.15*Math.sin(t*.44):-.16,float?Math.max(.05,g.cues.water-shelf.position.y+.11):.024,float?.12*Math.cos(t*.36):.07);
+        cup.position.set(float?.15*Math.sin(t*.44):-.16,float?Math.max(.05,(g.cues.basin??g.cues.water)-shelf.position.y+.11):.024,float?.12*Math.cos(t*.36):.07);
         if(float){
           const water=g.section.ferry?.deck;
-          if(water)cup.position.set(water.x-shelf.position.x+1.43,g.cues.water-shelf.position.y+.05,water.z-shelf.position.z-.44);
+          if(water)cup.position.set(water.x-shelf.position.x+1.43,(g.cues.basin??g.cues.water)-shelf.position.y+.05,water.z-shelf.position.z-.44);
         }
         cup.rotation.set(float?.095*Math.sin(t):0,1.2+.11*Math.sin(t*.32),float?.115*Math.sin(t*.82):0);
         if(playing){

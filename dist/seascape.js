@@ -113,13 +113,14 @@ window.TideCoast = (() => {
   const waterFragment = `
     uniform sampler2D uNoise,uSky;
     uniform float uTime,uHasSky,uSignal,uBearing,uInside;
-    uniform vec3 uSun,uFog;
+    uniform vec3 uSun,uFog;uniform vec4 basin;
     varying vec3 vSea;
     varying float vHeight;
     const float PI=3.14159265;
     vec2 envUV(vec3 d){return vec2(.5+atan(d.z,d.x)/(2.*PI),.5+asin(clamp(d.y,-1.,1.))/PI);}
     void main(){
       vec2 p=vSea.xz;
+      if(basin.z > 0. && all(lessThan(abs(p-basin.xy),basin.zw)))discard;
       float t=uTime;
       vec3 eye=cameraPosition-vSea;
       float dist=length(eye);
@@ -174,7 +175,7 @@ window.TideCoast = (() => {
     scene.fog=fog;
     scene.background=fogColor;
     const noise=tex(makeNoise(T));
-    const paint=tex(surfaceTexture(T,'paint')),block=tex(surfaceTexture(T,'block'));
+    const paint=tex(surfaceTexture(T,'paint'));
     const sky=tex(new T.Texture());
     sky.mapping=T.EquirectangularReflectionMapping;
     sky.colorSpace=T.SRGBColorSpace;
@@ -201,7 +202,7 @@ window.TideCoast = (() => {
       vertices.setZ(i,270*Math.sign(z)*Math.pow(Math.abs(z),1.45));
     }
     const uniforms={uTime:{value:0},uNoise:{value:noise},uSky:{value:noise},uHasSky:{value:0},uSignal:{value:0},
-      uBearing:{value:0},uInside:{value:act===1?.9:0},uSun:{value:new T.Vector3(-.42,.40,-.82).normalize()},uFog:{value:fogColor}};
+      basin:{value:new T.Vector4()},uBearing:{value:0},uInside:{value:act===1?.9:0},uSun:{value:new T.Vector3(-.42,.40,-.82).normalize()},uFog:{value:fogColor}};
     const water=new T.Mesh(oceanGeo,mat(new T.ShaderMaterial({uniforms,vertexShader:waterVertex,fragmentShader:waterFragment})));
     water.name='潮汐海面';water.position.set(0,-4,-52);group.add(water);
     readSky().then(img=>{
@@ -228,28 +229,7 @@ window.TideCoast = (() => {
     const black=standard(0x242c2d,.57,.55,paint);
     const iron=standard(0x83654d,.53,.58,paint);
     const amber=standard(0xa97635,.57,.48,paint);
-    const masonry=standard(0x999a8b,.93,.03,block);
-    const stone=standard(0x667073,.96,.045,block);
-    // Set masonry in world metres, including on long instanced seawalls.
-    for(const material of [masonry,stone]){
-      material.onBeforeCompile=shader=>{
-        shader.uniforms.uDampNoise={value:noise};
-        shader.vertexShader=shader.vertexShader.replace('#include <common>',
-          '#include <common>\nvarying vec3 vBlockPos,vBlockFace;')
-          .replace('#include <worldpos_vertex>',`#include <worldpos_vertex>
-            vBlockPos=(instanceMatrix*vec4(position,1.)).xyz;
-            vBlockFace=mat3(instanceMatrix)*normal;`);
-        shader.fragmentShader=shader.fragmentShader.replace('#include <common>',
-          '#include <common>\nvarying vec3 vBlockPos,vBlockFace;uniform sampler2D uDampNoise;')
-          .replace('#include <map_fragment>',`vec3 axis=abs(normalize(vBlockFace));
-            vec2 metric=axis.y>.76?vBlockPos.xz:(axis.x>axis.z?vBlockPos.zy:vBlockPos.xy);
-            vec3 mortar=texture2D(map,metric*.29).rgb;
-            float streak=texture2D(uDampNoise,metric*vec2(.042,.011)).r;
-            float wet=1.-smoothstep(-1.0,.7+2.*streak,vBlockPos.y);
-            diffuseColor.rgb*=mortar*(.75+.39*streak);
-            diffuseColor.rgb=mix(diffuseColor.rgb,diffuseColor.rgb*vec3(.35,.48,.40),wet*.84);`);
-      };
-    }
+    const masonry=mat(TideConcrete.material(0xdedacf)),stone=mat(TideConcrete.material(0xa0aca7));
     const white=standard(0xd6d2b5,.76,.11,paint);
     const red=standard(0x9b5143,.69,.17,paint);
     const copper=standard(0x688479,.47,.75,paint);
@@ -689,6 +669,7 @@ window.TideCoast = (() => {
       marker,
       update(t,cues={}){
         uniforms.uTime.value=t;
+        if(cues.basinBounds)uniforms.basin.value.fromArray(cues.basinBounds);
         rainMat.uniforms.uTime.value=t;
         const strength=T.MathUtils.clamp(cues.light||0,0,1);
         water.position.y=Number.isFinite(cues.water)?cues.water:-4;

@@ -3,7 +3,7 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const box=vm.createContext({});
-for(const name of ['missions','traversal','passage','fieldwork','lookout','cooperation']){
+for(const name of ['missions','traversal','passage','rigging','fieldwork','lookout','paper','cooperation']){
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../dist',name+'.js'),'utf8'),box);
 }
 const {Session,near,surface,lookout,ridePressure}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure})',box);
@@ -73,9 +73,24 @@ function control(g){
       if(near(g.players[r],sec.sites[r])){out[r].use=true;out[r].jump=true;}else steer(g,r,sec.sites[r],out[r]);
     }else{
       if(!near(g.players[d],sec.sites[d]))steer(g,d,sec.sites[d],out[d]);else{out[d].use=true;out[d].x=Math.max(-1,Math.min(1,(ridePressure(s,q.ferry)-q.dials[d])*22));}
-      if(q.ferry>.96){
-        steer(g,r,sec.sites[r],out[r]);if(g.players[r].ground===carrier)out[r].jump=true;
-        if(near(g.players[r],sec.sites[r]))out[r].use=true;
+      if(s.mode==='raft'&&out[d].use){
+        const delta=sec.rig.ledge.y-carrier.y;
+        out[d].x=Math.max(-1,Math.min(1,delta*3.5));
+      }
+      if(s.mode==='basket'&&q.ferry>.52 && out[d].use){
+        out[d].z=Math.max(-1,Math.min(1,(carrier.y-sec.rig.ledge.y)*3));
+      }
+      if(s.mode==='basket'&&!g.rig.lit&&g.players[r].ground===carrier){
+        out[r].use=true;out[r].x=Math.max(-1,Math.min(1,((sec.rig.slot-1)*1.55-g.rig.aim)*9));
+        out[r].jump=Math.abs((sec.rig.slot-1)*1.55-g.rig.aim)<.16;
+      }else if(q.ferry>.96){
+        if(g.rig&&!g.rig.landed){
+          steer(g,r,sec.rig.ledge,out[r]);
+          if(g.players[r].ground===carrier)out[r].jump=Math.abs(sec.rig.ledge.y-carrier.y)<.80;
+        }else{
+          steer(g,r,sec.sites[r],out[r]);if(g.players[r].ground===carrier)out[r].jump=true;
+          if(near(g.players[r],sec.sites[r]))out[r].use=true;
+        }
       }else {const lean=s.mode==='bridge' && q.ferry>.08 && q.ferry<.94 ? Math.sin(q.ferry*9.8+(s.driver?1:0))*.77 : 0;
         steer(g,r,{...carrier,x:carrier.x+lean},out[r]);if(s.mode==='raft'&&g.players[r].ground===carrier)out[r].use=true;}
     }
@@ -100,7 +115,15 @@ function control(g){
   switch(s.type){
     case 'cable':trim(1,(s.code+.5)/3);out[0].jump=g.time-q.pulseAt>2;out[1].jump=Math.min(2,Math.floor(q.dials[1]*3))===s.code;break;
     case 'power':trim(0,s.value+.012);break;
-    case 'tape':case 'paper':case 'optic':
+    case 'paper':{
+      const p=g.paper,h=p.holder,r=1-h,[x,y]=p.pin;
+      const dx=p.offset[0]+Math.cos(p.angle)*x-Math.sin(p.angle)*y-x,dy=p.offset[1]+Math.sin(p.angle)*x+Math.cos(p.angle)*y-y;
+      const axis=n=>Math.max(-1,Math.min(1,n*16));
+      if(!p.pinned){out[h].x=axis(-dx);out[h].z=axis(dy);out[h].jump=Math.hypot(dx,dy)<.037;}
+      else{out[r].x=axis(p.angle);out[r].z=axis(p.light-p.lightTarget);out[r].jump=p.revealed;}
+      break;
+    }
+    case 'tape':case 'optic':
       for(let i=0;i<2;i++)trim(i,s.v[i]+(g.index===11?.095*Math.sin(g.time*.49+i):0));break;
     case 'radio':out[0].jump=q.received>0;trim(0,s.v[0]+Math.sin(g.time*.42)*.105);trim(1,(s.answer+.5)/3);
       out[1].jump=Math.floor(q.dials[1]*3)===s.answer && Math.abs(q.dials[0]-s.v[0]-Math.sin(g.time*.42)*.105)<.075;break;
@@ -143,6 +166,52 @@ if(require.main===module){
     }
     assert.equal(g.stage,0,'One operator cleared the introduction in '+(n+1));
   }
+  // The rider's mark and basin height are real stops, including on a retry.
+  const step=1/60;
+  function reach(g,condition){
+    for(let j=0;j<60*120&&!condition()&&!g.complete;j++)g.tick(step,control(g));
+    assert.ok(condition(),'Did not reach checkpoint in chapter '+(g.index+1)+' stage '+g.stage);
+  }
+  const basket=new Session(0);
+  reach(basket,()=>basket.stage===1&&basket.players[1].ground===basket.section.ferry.deck);
+  assert.equal(basket.section.rig.slot,2);
+  for(let j=0;j<360;j++){
+    const inputs=control(basket);
+    inputs[1]={...empty(),use:true,jump:j===2};
+    basket.tick(step,inputs);
+  }
+  assert.ok(basket.rig.wrong>=0&&!basket.rig.lit);
+  assert.ok(basket.state.ferry>.36&&basket.state.ferry<=.42);
+  reach(basket,()=>basket.stage===2);
+
+  const pump=new Session(3);
+  reach(pump,()=>pump.rig.guider);
+  const startLevel=pump.rig.water;
+  for(let j=0;j<300;j++){
+    const inputs=control(pump);inputs[pump.spec.driver].x=1;
+    pump.tick(step,inputs);
+  }
+  assert.ok(pump.rig.water>startLevel+.70);
+  assert.ok(!pump.rig.opened&&pump.state.ferry<=.50);
+  const sea=pump.cues.water;
+  reach(pump,()=>pump.stage===1);
+  assert.equal(pump.cues.water,sea);
+
+  const chart=new Session(5);
+  reach(chart,()=>chart.paper.pinned);
+  const h=chart.paper.holder,r=1-h;
+  for(let j=0;j<80;j++){
+    const inputs=control(chart);inputs[r].x=j<40?1:-1;inputs[r].jump=false;
+    chart.tick(step,inputs);
+    const p=chart.paper,[x,y]=p.pin;
+    assert.ok(Math.hypot(p.offset[0]+Math.cos(p.angle)*x-Math.sin(p.angle)*y-x,
+      p.offset[1]+Math.sin(p.angle)*x+Math.cos(p.angle)*y-y)<1e-9);
+  }
+  reach(chart,()=>chart.paper.revealed);
+  const letGo=control(chart);letGo[h].use=false;letGo[r].jump=true;
+  chart.tick(step,letGo);assert.equal(chart.state.doneAt,null);
+  reach(chart,()=>chart.stage===1);
+
   // The final radio remains occupied until the signal operator releases it.
   const final=new Session(11);
   let held=0;
@@ -163,5 +232,5 @@ if(require.main===module){
     quiet.tick(1/60,inputs);
   }
   assert.ok(quiet.complete&&quiet.skipTin);
-  console.log('Verified both roles, final radio release and the optional recording.');
+  console.log('Verified both roles, basket mark, hydraulic sill, paper registration, final radio release and optional recording.');
 }
