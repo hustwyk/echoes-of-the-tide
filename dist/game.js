@@ -104,6 +104,7 @@ function openLevel(n,stage=0){
     });
     if(stage){
       session.stage=stage;const sec=session.section;session.checkpoints=sec.starts.slice();session.players=sec.starts.map(TideTraversal.spawn);session.begin();
+      for(let k=0;k<stage;k++)TideDrawbridge.restore(session.world.sections[k]);
       for(let k=0;k<stage;k++)for(const deck of session.world.sections[k].returnDecks){
         deck.active=true;if(deck.hinge!==undefined){deck.unlocked=true;deck.hinge=1;}
       }

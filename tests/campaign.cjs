@@ -3,7 +3,7 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const box=vm.createContext({});
-for(const name of ['missions','traversal','passage','rigging','fieldwork','lookout','paper','cooperation']){
+for(const name of ['missions','traversal','passage','rigging','drawbridge','fieldwork','lookout','paper','cooperation']){
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../dist',name+'.js'),'utf8'),box);
 }
 const {Session,near,surface,lookout,ridePressure}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure})',box);
@@ -71,6 +71,24 @@ function control(g){
       if(q.returnGate||s.mode==='basket'&&!(g.index===0&&g.stage===1))routeTo(g,d,sec.ends[d],out[d]);
       if(q.returnGate===1 && g.players[d].z<=(sec.starts[d].z+sec.ends[d].z)/2+.65)out[d]=empty();
       if(near(g.players[r],sec.sites[r])){out[r].use=true;out[r].jump=true;}else steer(g,r,sec.sites[r],out[r]);
+    }else if(sec.span){
+      const b=sec.span;
+      if(near(g.players[d],sec.sites[d]))out[d].use=true;
+      else steer(g,d,sec.sites[d],out[d]);
+      if(b.seated){
+        if(b.landed&&near(g.players[r],sec.sites[r]))out[r].use=true;
+        else {
+          steer(g,r,b.landed?sec.sites[r]:b.lip,out[r]);
+          if(b.lower&&!b.landed)out[r].use=true;
+        }
+      }else{
+        const p=g.players[r],to=b.grip;
+        if(p.ground===carrier&&Math.hypot(p.x-to.x,p.z-to.z)<.94){
+          out[r].use=true;out[r].x=Math.max(-1,Math.min(1,(b.error||0)*1.6));out[r].jump=!!b.aligned;
+        }else{
+          const dx=to.x-p.x,dz=to.z-p.z,k=Math.max(.7,Math.hypot(dx,dz));out[r].x=dx/k;out[r].z=dz/k;if(b.lower&&p.ground===carrier)out[r].use=true;
+        }
+      }
     }else{
       if(!near(g.players[d],sec.sites[d]))steer(g,d,sec.sites[d],out[d]);else{out[d].use=true;out[d].x=Math.max(-1,Math.min(1,(ridePressure(s,q.ferry)-q.dials[d])*22));}
       if(s.mode==='raft'&&out[d].use){
@@ -91,12 +109,23 @@ function control(g){
           steer(g,r,sec.sites[r],out[r]);if(g.players[r].ground===carrier)out[r].jump=true;
           if(near(g.players[r],sec.sites[r]))out[r].use=true;
         }
-      }else {const lean=s.mode==='bridge' && q.ferry>.08 && q.ferry<.94 ? Math.sin(q.ferry*9.8+(s.driver?1:0))*.77 : 0;
-        steer(g,r,{...carrier,x:carrier.x+lean},out[r]);if(s.mode==='raft'&&g.players[r].ground===carrier)out[r].use=true;}
+      }else {
+        steer(g,r,carrier,out[r]);if(s.mode==='raft'&&g.players[r].ground===carrier)out[r].use=true;}
     }
     return out;
   }
-  for(let i=0;i<2;i++){
+  if(sec.tram){
+    for(let i=0;i<2;i++){
+      const p=g.players[i],site=sec.sites[i],c=sec.tram;
+      if(p.ground!==c.deck){
+        if(Math.abs(p.x-site.x)>1.6&&p.z>c.from.z+1.75)steer(g,i,{x:site.x,z:sec.starts[i].z,y:p.y},out[i]);
+        else steer(g,i,site,out[i]);
+      }else if(near(p,site))out[i].use=true;
+      else steer(g,i,site,out[i]);
+    }
+    if(!out.every(k=>k.use))return out;
+  }
+  if(!sec.tram)for(let i=0;i<2;i++){
     if(!near(g.players[i],sec.sites[i]))routeTo(g,i,sec.sites[i],out[i]);
     else out[i].use=true;
   }
@@ -200,6 +229,48 @@ if(require.main===module){
   reach(pump,()=>pump.stage===1);
   assert.equal(pump.cues.water,sea);
 
+  const bridge=new Session(6),upper=bridge.section.span;
+  reach(bridge,()=>bridge.engaged.every(Boolean));
+  for(let j=0;j<300;j++){
+    const a=[{...empty(),use:true,z:-1},{...empty(),use:true,x:1,jump:j%20===0}];
+    bridge.tick(step,a);
+  }
+  assert.ok(upper.impact>0,'Fast payout must recoil at the upper tooth.');
+  assert.equal(upper.notch,0,'A rider cannot insert the pin while the bridge nose is out of register.');
+  reach(bridge,()=>upper.notch===1);
+  bridge.resetPerson(1,'失足');
+  assert.ok(bridge.players[1].ground===upper.deck&&upper.notch===1);
+  reach(bridge,()=>bridge.stage===1);
+  const lower=bridge.section.span,math=vm.runInContext('TideDrawbridge',box);
+  for(let j=0;j<240;j++){
+    const a=control(bridge);a[0].use=false;bridge.tick(step,a);
+  }
+  assert.ok(bridge.time-lower.blockedAt<.2,'An upright staff cannot pass through the first overhead brace.');
+  const hole=math.point(lower,0,0,lower.length*.69);
+  assert.equal(surface(bridge.world,hole.x,hole.z,hole.y+.04),null,'The missing middle panel has no collision surface.');
+  reach(bridge,()=>bridge.stage===2);
+  const tram=bridge.section.tram;
+  for(let j=0;j<300;j++){
+    const a=control(bridge);a[0]=empty();bridge.tick(step,a);
+  }
+  assert.ok(!tram.departed&&bridge.players[1].ground===tram.deck);
+  reach(bridge,()=>tram.travel>.12);
+  const seats=bridge.players.map(p=>p.x-tram.deck.x),origin=tram.deck.z;
+  for(let j=0;j<220;j++)bridge.tick(step,[empty(),empty()]);
+  assert.ok(tram.deck.z<origin-1);
+  bridge.players.forEach((p,i)=>assert.ok(p.ground===tram.deck&&Math.abs(p.x-tram.deck.x-seats[i])<.15));
+  for(let j=0;j<1100&&!tram.arrived;j++)bridge.tick(step,[empty(),empty()]);
+  assert.ok(tram.arrived&&!bridge.complete);
+  for(let j=0;j<240&&!bridge.complete;j++){
+    const input=bridge.players.map((p,i)=>{
+      const key=empty(),x=tram.to.x+(i?1.56:-1.56);
+      steer(bridge,i,{x,y:tram.to.y,z:Math.abs(p.x-x)>.25?p.z:bridge.section.mid.z},key);
+      return key;
+    });
+    bridge.tick(step,input);
+  }
+  assert.ok(bridge.complete&&bridge.skipTin,'Both passengers may walk off together without making a recording.');
+
   const chart=new Session(5);
   reach(chart,()=>chart.paper.pinned);
   const h=chart.paper.holder,r=1-h;
@@ -235,5 +306,5 @@ if(require.main===module){
     quiet.tick(1/60,inputs);
   }
   assert.ok(quiet.complete&&quiet.skipTin);
-  console.log('Verified both roles, basket mark, hydraulic sill, paper registration, final radio release and optional recording.');
+  console.log('Verified both roles, basket mark, hydraulic sill, two drawbridge catches, folding staff, shared cable car, paper registration, final radio release and optional recording.');
 }

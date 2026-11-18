@@ -461,6 +461,7 @@ window.TideCinema = (() => {
           cup.position.y=.024+lift*.28;cup.rotation.x=-lift*(Math.PI*.74);
         }
       }else if(idx===4 || idx===6){
+        if(hub.tram){const d=hub.tram.deck;shelf.position.set(d.x,d.y+.85,d.z-.88);}
         const spin=(playing?1:Math.max(.16,g.state.dials[0]||0))*(t*2.7);
         tape.userData.spools.forEach(r=>r.rotation.y=spin);
         if(screw){
@@ -489,7 +490,7 @@ window.TideCinema = (() => {
     // The active game keeps ownership of both actors and resumes from its checkpoints.
     function performance(side){
       if(!playing||![5,6,7].includes(idx))return null;
-      const t=clock,mid=hub.mid,hand=side?1:-1;
+      const t=clock,mid=hub.tram?.deck||hub.mid,hand=side?1:-1;
       const speaking=idx===5?(side===0?t<2.67:t>=2.74&&t<5.53):
         idx===6?(side===0?t<3.23:t>=3.42&&t<6.65):(side===0&&t<2.65);
       const listening=t>=(idx===5?5.65:idx===7?2.8:7);

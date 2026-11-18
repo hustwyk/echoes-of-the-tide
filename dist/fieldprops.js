@@ -248,15 +248,7 @@ window.TideFieldProps=(()=>{
       });
       if(g.spec.mode==='basket')landingLights(g);
       if(g.spec.mode==='raft'){pumpWell(g);waterWindow(g);}
-      if(g.spec.mode==='bridge'){
-        for(const t of [-1,1]){
-          const end=offset(destination,t*1.28,.36,1.9);
-          tube(end,.065,.78,brass);
-          rim(offset(end,0,.22,.01),.095,steelColor());
-        }
-        const strip=mesh(cube,solid('#d9b576'),v(deck.x,deck.y+.027,deck.z),.11,.017,2.50);
-        animation.push(()=>strip.position.set(deck.x,deck.y+.027,deck.z));
-      }
+
     }
     function steelColor(){return '#788483';}
     function pumpWell(g) {
@@ -617,21 +609,6 @@ window.TideFieldProps=(()=>{
       });
     }
     function accentColor(side){return side?'#90d4c6':'#e9ab65';}
-    function keepsake(g){
-      const p=offset(g.section.sites[0],.71,.83,-1.05);
-      block(offset(p,0,-.39,0),.44,.73,.36,iron);
-      block(offset(p,0,-.017,0),.48,.033,.33,worn);
-      for(const x of [-.235,.235])block(offset(p,x,.04,0),.022,.095,.33,'#a88a64');
-      for(const z of [-.155,.155])block(offset(p,0,.04,z),.48,.095,.02,'#af9676');
-      block(offset(p,0,.187,-.234),.46,.34,.016,'#89978a',-.40);
-      const screw=new T.Group();section.add(screw);
-      mesh(cylinder,solid(steelColor()),v(0,0,0),.020,.11,.020,screw).rotation.z=Math.PI/2;
-      mesh(cylinder,solid(brass),v(.052,0,0),.039,.014,.039,screw).rotation.z=Math.PI/2;
-      animation.push(s=>{
-        screw.position.copy(offset(p,s.state.yes[0]?Math.sin(s.time*4.9)*.13:0,.035,0));
-        screw.rotation.x=s.state.yes[0]?Math.sin(s.time*4.9)*4.4:0;
-      });
-    }
     function fieldStation(g) {
       const job=g.section.field;
       if(!job)return;
@@ -748,7 +725,7 @@ window.TideFieldProps=(()=>{
       }
     }
     const builders={ride:tug,cable:harborsideCable,power:powerPlant,blackout:powerPlant,
-      tape:archiveStrip,paper:lightTable,radio:relay,tide:soundings,post:soundings,optic:optics,rhythm:signals,release:signals,quiet:keepsake};
+      tape:archiveStrip,paper:lightTable,radio:relay,tide:soundings,post:soundings,optic:optics,rhythm:signals,release:signals};
     function clearSection(){
       animation.length=0;
       if(section){section.removeFromParent();section.clear();}
@@ -758,7 +735,7 @@ window.TideFieldProps=(()=>{
       clearSection();
       stage=s.stage;section=new T.Group();root.add(section);staticParts=new Map();
       const buildProps=builders[s.spec.type];
-      if(buildProps)buildProps(s);
+      if(buildProps&&!s.section.span)buildProps(s);
       fieldStation(s);
       for(const [geometry,data] of staticParts){
         const instances=local(new T.InstancedMesh(geometry,metal,data.length));

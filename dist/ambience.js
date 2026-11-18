@@ -146,7 +146,7 @@ window.TideAudioScene = (() => {
       placeVoice(bufferSource(color), shape, envelope(when, attack, release, level), pan, wet, when, attack + release);
     }
     function foot(when, pan, surface, weight, heel) {
-      const metal = ['bridge','lens','basket'].includes(surface);
+      const metal = ['bridge','leaf','tram','ladder','lens','basket'].includes(surface);
       const wood = surface === 'dock' || surface === 'raft';
       const pitch = range(.93,1.07) * (heel ? .96 : 1.03);
       const body = (wood ? 128 : metal ? 159 : 101) * pitch;
@@ -338,7 +338,7 @@ window.TideAudioScene = (() => {
       }
     }
     function snapshot(g) {
-      return {game:g, section:g.state,
+      return {game:g, section:g.state, notch:g.section.span?.notch, impact:g.section.span?.impact, cableBay:0,
         walkers:g.players.map(p => ({ground:p.grounded, fall:0, distance:0, heel:false})),
         dials:g.state.dials.slice(), traveled:[0,0], engaged:[false,false], ratchetAt:[0,0],
         ferry:g.state.ferry, latch:g.state.latch, received:g.state.received, yes:g.state.yes[0],
@@ -386,6 +386,23 @@ window.TideAudioScene = (() => {
     }
     function changes(g, now) {
       const q = g.state, spec = g.spec, type = spec.type;
+      const b=g.section.span,c=g.section.tram;
+      if(b){
+        const pan=panFor(1-spec.driver);
+        if(b.impact>previous.impact){
+          brush(now,'pink','bandpass',640,1.2,.01,.45,.37,-pan,.57,180);
+          ring(now+.045,108,.65,.25,pan,{end:84});
+        }
+        if(b.notch>previous.notch){
+          click(now,pan,1.15);ring(now+.063,b.seated?248:354,.40,.17,pan);
+        }
+        previous.impact=b.impact;previous.notch=b.notch;
+      }
+      if(c){
+        const bay=Math.floor(c.travel*7);
+        if(bay>previous.cableBay){wheel(now,-.14,.58);wheel(now+.19,.14,.38);}
+        previous.cableBay=bay;
+      }
       if (type === 'rhythm') {
         if (q.pulseAt > previous.pulse) click(now,panFor(0));
         if (q.received > previous.received) horn(now,.22);

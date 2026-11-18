@@ -33,9 +33,9 @@ const TideMissions = (() => {
       step('paper','换边检查',['chart','chart'],'沈遥：你来照，我去看你刚才指的压痕。',{v:[.76,.55],cross:true})
     ],
     [
-      step('ride','吊桥制动',['brake','gauge'],'林澈：我松制动。站到桥面亮线中间。',{driver:0,mode:'bridge',length:14,rise:1.0,swing:1.2}),
-      step('ride','桥腹接力',['gauge','brake'],'沈遥：棘轮我接住了。带潮尺从下层走。',{driver:1,mode:'bridge',length:15,rise:-1.6,swing:1.55}),
-      step('quiet','背风的吊篮',['tape','tape'],'林澈：这段没风。你还记得最后一道题吗？')
+      step('ride','吊桥制动',['brake','gauge'],'林澈：我坐制动。你在配重车上看桥鼻。到线了跟我说。',{driver:0,mode:'bridge',length:21,rise:1.0,swing:1.2}),
+      step('ride','桥腹接力',['gauge','brake'],'沈遥：棘轮我接住了。带潮尺从下层走。',{driver:1,mode:'bridge',length:24,rise:-1.6,swing:1.55}),
+      step('quiet','背风的吊篮',['tape','tape'],'林澈：这段没风。你还记得最后一道题吗？',{length:25})
     ],
     [
       step('radio','呼叫海雁号',['antenna','radio'],'梁青：这里是海雁，请报呼号。',{v:[.29,.65],answers:['北岬','东堤','南港'],answer:0}),
