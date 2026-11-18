@@ -191,6 +191,9 @@ if(require.main===module){
     const inputs=control(pump);inputs[pump.spec.driver].x=1;
     pump.tick(step,inputs);
   }
+  const keeper=pump.players[pump.spec.driver],valve=pump.section.sites[pump.spec.driver];
+  assert.ok(Math.abs(keeper.x-(valve.x+.22))<.05&&Math.abs(keeper.z-(valve.z-.512))<.05);
+  assert.ok(keeper.grounded,'The pump operator needs a solid footing throughout a valve change.');
   assert.ok(pump.rig.water>startLevel+.70);
   assert.ok(!pump.rig.opened&&pump.state.ferry<=.50);
   const sea=pump.cues.water;

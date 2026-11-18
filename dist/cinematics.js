@@ -485,6 +485,23 @@ window.TideCinema = (() => {
     }
     function subject(node,eye,at){return {eye:relative(node,eye),at:relative(node,at)};}
     function deckview(eye,at){return subject(ship,eye,at);}
+    // Mark the partners on the shared landing for the short exchange after a task.
+    // The active game keeps ownership of both actors and resumes from its checkpoints.
+    function performance(side){
+      if(!playing||![5,6,7].includes(idx))return null;
+      const t=clock,mid=hub.mid,hand=side?1:-1;
+      const speaking=idx===5?(side===0?t<2.67:t>=2.74&&t<5.53):
+        idx===6?(side===0?t<3.23:t>=3.42&&t<6.65):(side===0&&t<2.65);
+      const listening=t>=(idx===5?5.65:idx===7?2.8:7);
+      return {x:mid.x+hand*.58,y:mid.y,z:mid.z+.29+side*.04,yaw:hand*.48,
+        talking:speaking,gaze:hand*(listening?-.12:.29),incline:listening?.045:.085+.045*Math.sin(t*.92+side)};
+    }
+    function portrait(side,t){
+      const a=assets.actors[side],s=side?1:-1;
+      const shot=subject(a,[s*(.19+.035*Math.sin(t*.46)),1.67,-.55-.035*Math.cos(t*.35)],[0,1.605,-.012]);
+      const eyeLine=relative(a,[0,1.636,-.068]);
+      shot.focus=Math.hypot(...eyeLine.map((v,i)=>v-shot.eye[i]));return shot;
+    }
     function shot(g,side) {
       if(!playing || disposed)return null;
       const t=clock,f=t/duration,i=side?1:0;
@@ -498,12 +515,14 @@ window.TideCinema = (() => {
         subject(shelf,[.58,.50,.40],[.22,.07,-.035]);
       if(idx===4)return !i?subject(shelf,[-.30+f*.22,.55,.41],[.06,.10,-.014]):
         subject(shelf,[.42-f*.11,.35,-.43],[.085,.12,.017]);
-      if(idx===5)return !i?subject(shelf,[sheet.position.x*.90,1.1,.54],[sheet.position.x+.055,.06,.10]):
-        subject(shelf,[.28-f*.07,.76,.41],[.12,.05,.13]);
-      if(idx===6)return !i?subject(tin,[-.22+f*.17,.36,.34],[.008,.055,.03]):
-        subject(shelf,[.41,.48,.36-f*.10],[.22,.038,.018]);
-      if(idx===7)return !i?subject(shelf,[-.40,.76,.10+f*.22],[0,.046,-.02]):
-        subject(shelf,[.46,.59,.26],[.15,.04,-.074]);
+      if(idx===5){
+        if(!i&&t>=2.7)return portrait(1,t);
+        if(i&&t<2.7)return portrait(0,t);
+        return !i?subject(shelf,[sheet.position.x*.90,1.1,.54],[sheet.position.x+.055,.06,.10]):
+          subject(shelf,[.28-f*.07,.76,.41],[.12,.05,.13]);
+      }
+      if(idx===6)return i?portrait(t<3.36?0:1,t):subject(tin,[-.22+f*.17,.36,.34],[.008,.055,.03]);
+      if(idx===7)return i?portrait(t<2.8?0:1,t):subject(shelf,[-.40,.76,.10+f*.22],[0,.046,-.02]);
       if(idx===11){
         if(t<2.55)return i?deckview([3.8,2.6,6.7],[8.2,1.05,4.8]):deckview([-10,4.6,-15],[0,1.55,-2.5]);
         if(t<5.2)return i?subject(tender,[2.22,2.22,4.18],[.60,1.08,2.2]):deckview([3.05,2.66,8.89],[2.29,1.38,6.41]);
@@ -560,7 +579,7 @@ window.TideCinema = (() => {
       for(const obj of geos.values())obj.dispose();
       root.clear();
     }
-    return {begin,step,update,shot,subtitle,skip,dispose,get ended(){return !playing;},
+    return {begin,step,update,shot,performance,subtitle,skip,dispose,get ended(){return !playing;},
       get shared(){return playing&&idx===11&&clock>=7.72;},
       get duration(){return duration;},get time(){return clock;}};
   }
