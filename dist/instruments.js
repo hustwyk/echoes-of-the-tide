@@ -85,7 +85,9 @@ const TideHud=(()=>{
       const childSends=g.archive?.memory&&(g.archive.memory.dir===1?i===0:i===1);
       const childhood=pads[i]!=null?(childSends?'RT 扶板　左摇杆倾斜　A 放手':'RT 托盒　左摇杆移盒'):
         (i?'Enter ':'E ')+(childSends?'扶板　'+(i?'方向键倾斜　/':'WASD 倾斜　空格')+'放手':'托盒　'+(i?'方向键':'WASD')+'移盒');
-      const arrivalHint=i?(pads[i]!=null?'左摇杆操舵与进退　RT 停机':'↑ 进车　↓ 倒车　← → 操舵　Enter 停机'):
+      const atPlate=i&&g.arrival&&g.arrival.radio!=='line';
+      const arrivalHint=i&&atPlate?(pads[i]!=null?'RT 看铜牌　按住时左右擦　前后进退车':'Enter 看铜牌　按住时 ← → 擦拭　↑ ↓ 进退车'):
+        i?(pads[i]!=null?'左摇杆操舵与进退　RT 停机':'↑ 进车　↓ 倒车　← → 操舵　Enter 停机'):
         (g.arrival?.radio==='line'?(pads[i]!=null?'左摇杆移动落点　RT 抛缆 / 收缆':'WASD 移动落点　E 抛缆 / 收缆'):(pads[i]!=null?'左摇杆左右调台　RT 发话':'A / D 调台　E 发话'));
       const rescueHint=i?(pads[i]!=null?'RT 握柄　左摇杆左右盘车　回中抱闸':'Enter 握柄　← → 盘车　松开方向键抱闸'):
         (pads[i]!=null?'RT 抓环　左摇杆前推翻上　松开 RT 后 A 回收':'E 抓环　W 翻上　松开 E 后空格回收');

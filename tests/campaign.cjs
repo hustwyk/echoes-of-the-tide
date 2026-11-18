@@ -3,7 +3,7 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const box=vm.createContext({});
-for(const name of ['missions','traversal','floating','warp-speech','warping','fender-speech','fenders','arrival-speech','arrival','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','lookout','cistern-speech','cistern','glass-speech','chartroom','paper','lantern','gallery-speech','gallery','transit-speech','transit','signal','tin-lines','tin-memory','archive','relay-speech','relay','soundings-speech','soundings','fog-speech','haul-speech','fog-recovery','fogsignal','pass-speech','lastpass','swing-speech','swing','cooperation']){
+for(const name of ['missions','traversal','floating','warp-speech','warping','fender-speech','fenders','plate-speech','arrival-speech','arrival','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','lookout','cistern-speech','cistern','glass-speech','chartroom','paper','lantern','gallery-speech','gallery','transit-speech','transit','signal','tin-lines','tin-memory','archive','relay-speech','relay','soundings-speech','soundings','fog-speech','haul-speech','fog-recovery','fogsignal','pass-speech','lastpass','swing-speech','swing','cooperation']){
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../dist',name+'.js'),'utf8'),box);
 }
 const {Session,near,surface,lookout,ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideSwing,TideCistern,TideGlass,TidePaper}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideSwing,TideCistern,TideGlass,TidePaper})',box);
@@ -846,6 +846,26 @@ if(require.main===module){
       for(let j=0;j<frames;j++)g.tick(step,inputs());
     }
     function withoutPilot(){const input=control(g);input[1]=empty();return input;}
+    // Two isolated swipes expose different areas. Merely leaning in, or moving the other player's controls, leaves the salt intact.
+    const inspect=new Session(0),spoken=[];TideArrival.begin(inspect);const ip=inspect.arrival.plate;
+    const rub=(frames,left,right)=>{
+      for(let n=0;n<frames;n++){
+        inspect.tick(step,[{...empty(),...left},{...empty(),...right}]);
+        const voice=inspect.arrival.voice;if(voice&&spoken.at(-1)!==voice)spoken.push(voice);
+      }
+    };
+    assert.ok(!inspect.station[1].caption.includes('12'));
+    rub(38,{}, {use:true});assert.equal(ip.look,1);assert.ok(ip.coverage.every(v=>v===0));
+    rub(24,{}, {use:true,x:1,z:-1});const salt=Array.from(ip.coverage);
+    assert.ok(!ip.read&&salt[2]>.65&&salt[9]===0&&inspect.arrival.speed>.4);
+    const rudder=inspect.arrival.rudder;rub(35,{},{});assert.equal(ip.look,0);assert.deepEqual(Array.from(ip.coverage),salt);
+    rub(40,{x:-1}, {use:true});assert.deepEqual(Array.from(ip.coverage),salt);
+    rub(60,{}, {use:true,x:1});assert.ok(ip.read&&ip.reported);assert.ok(Math.abs(inspect.arrival.rudder-rudder)<.001);
+    rub(27,{}, {x:-1,z:-1});assert.ok(inspect.arrival.rudder<-.5);
+    for(let n=0;n<1000&&inspect.arrival.radio!=='wait';n++)
+      rub(1,{x:Math.sign(12-inspect.arrival.channel)},{});
+    assert.deepEqual(spoken,['read','captain','tuned','captain','heard','button']);
+    assert.equal(inspect.arrival.radio,'wait');
     // The pilot can reach the quay before anyone hears the distress call.
     const solo=new Session(0);TideArrival.begin(solo);
     for(let j=0;j<60*16;j++){const input=control(solo);input[0]=empty();solo.tick(step,input);}

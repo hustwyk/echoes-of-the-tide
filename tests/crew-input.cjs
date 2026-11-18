@@ -1,0 +1,20 @@
+// Device slots survive unplugging the other controller and manual swaps in a shared menu.
+const {strict:assert}=require('node:assert'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
+const source=fs.readFileSync(path.join(__dirname,'../dist/crew-input.js'),'utf8');
+let remembered=null;
+const localStorage={getItem:()=>remembered,setItem:(_,v)=>{remembered=v;}};
+const boot=()=>vm.runInNewContext(source+'\nTideCrewInput',{localStorage});
+const a={index:2},b={index:5},c={index:7},check=(map,left,right)=>assert.deepEqual(Array.from(map.slots),[left,right]);
+const seats=boot();
+seats.assign([a]);check(seats,2,null);
+seats.swap([a]);check(seats,null,2);
+seats.assign([a,b,c]);check(seats,5,2);
+seats.assign([a,c]);check(seats,7,2);
+seats.assign([c]);check(seats,7,null);
+seats.assign([a,c]);check(seats,7,2);
+seats.swap([a,c]);check(seats,2,7);
+seats.assign([]);check(seats,null,null);
+const afterReload=boot();afterReload.assign([a,c]);check(afterReload,2,7);
+afterReload.swap([a,c]);const mixed=boot();mixed.assign([c]);check(mixed,null,7);
+mixed.assign([a,c]);check(mixed,2,7);
+console.log('Keyboard and pad, two pads, a standby pad, disconnect, reconnect and saved seat order passed.');

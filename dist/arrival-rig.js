@@ -19,14 +19,7 @@ const TideArrivalRig=(()=>{
       mesh(station,cyl,bronze,x,1.036,z,.009,.006,.009);
     }
     const radio=TidePocketSet.create(station);radio.root.position.y=1.037;
-    const nav=track(new T.CanvasTexture((()=>{
-      const c=document.createElement('canvas');c.width=512;c.height=128;const a=c.getContext('2d');
-      a.fillStyle='#cdc8a6';a.fillRect(0,0,512,128);a.strokeStyle='#536057';a.lineWidth=4;a.strokeRect(7,7,498,114);
-      a.fillStyle='#344840';a.font='bold 53px serif';a.textAlign='center';a.fillText('外港值班　12',256,81);return c;
-    })()));nav.colorSpace=T.SRGBColorSpace;
-    const plaque=new T.Mesh(track(new T.PlaneGeometry(.39,.098)),track(new T.MeshStandardMaterial({map:nav,roughness:.6,side:T.DoubleSide})));
-    plaque.position.copy(boat.helmWheel.position);plaque.position.add(new T.Vector3(.125,.138,.21));plaque.rotation.y=-Math.PI*.5;boat.root.add(plaque);
-
+    const plate=TideHelmPlate.create(boat);
     const board=new T.Group(),post=TideArrival.cleat(g);board.position.set(post.x+.07,post.y-.14,post.z-.65);board.rotation.y=-.40;scene.add(board);
     const paintOff=track(new T.MeshStandardMaterial({color:0xd6c7a2,roughness:.72})),red=track(new T.MeshStandardMaterial({color:0x8e4c3b,roughness:.62}));
     mesh(board,cube,iron,0,.015,0,.23,.04,.19);
@@ -67,7 +60,7 @@ const TideArrivalRig=(()=>{
     const ghost=new T.Mesh(track(new T.TorusGeometry(.28,.009,6,40)),track(new T.MeshBasicMaterial({color:0xf3df9e,transparent:true,opacity:.73,depthWrite:false})));
     ghost.rotation.x=-Math.PI*.5;root.add(ghost);
     const p=new T.Vector3(),tangent=new T.Vector3(),cross=new T.Vector3(),axis=new T.Vector3();
-    const points=Array.from({length:sections},()=>new T.Vector3()),hands=[new T.Vector3(),new T.Vector3()];
+    const points=Array.from({length:sections},()=>new T.Vector3()),hands=[new T.Vector3(),new T.Vector3()],wipePoint=new T.Vector3();
     function vec(a){return new T.Vector3(a.x,a.y,a.z);}
     function world(x,y,z){return vec(TideArrival.deck(g,x,y,z));}
     function shape(from,end,slack){
@@ -88,7 +81,8 @@ const TideArrivalRig=(()=>{
     function update(t){
       const s=g.arrival,playing=TideArrival.active(g);root.visible=playing&&s.atBow>.6&&!s.moored;
       if(!playing)return;
-      const speech=TideArrivalSpeech[s.voice],level=s.voice==='captain'?(speech.mouth?.levels[Math.floor(s.voiceAt*20)]||0)/100:0;
+      plate.update(s,t);
+      const speech=TideArrival.speech(s.voice),level=s.voice==='captain'?(speech.mouth?.levels[Math.floor(s.voiceAt*20)]||0)/100:0;
       radio.update({tune:(s.dial-6)/10,level,power:true,rx:s.voice==='captain',ptt:s.radio==='test'&&s.use?1:0,tx:false,silent:true},t);
       if(!root.visible)return;
       const target=TideArrival.cleat(g),end=TideArrival.endPoint(g);
@@ -121,9 +115,10 @@ const TideArrivalRig=(()=>{
       hands[0].set(-.004,.072,-.152).applyMatrix4(w.matrixWorld);
       if(Math.abs(s.drive)>.1){boat.throttleLever.updateWorldMatrix(true,false);hands[1].set(-.07,.204,0).applyMatrix4(boat.throttleLever.matrixWorld);}
       else hands[1].set(-.004,.072,.152).applyMatrix4(w.matrixWorld);
+      if(s.plate.look>.01)hands[1].lerp(plate.touch(wipePoint),s.plate.look);
       return hands;
     }
-    function shot(i,yaw,pitch,ready){
+    function shot(i,yaw,pitch,ready,aspect){
       const s=g.arrival;if(!TideArrival.active(g)||s.moored&&s.walking>.60)return null;
       const look=clampPan(yaw),rise=Math.max(-.4,Math.min(.6,pitch));
       let eye,at,fov;
@@ -145,8 +140,14 @@ const TideArrivalRig=(()=>{
         at.lerp(world(-1.60,-1.30,16.05),1-entry);
       }
       if(i)at.lerp(vec(TideArrival.cleat(g)).add(new T.Vector3(0,.55,0)),.23);
+      const glance=i?s.plate.look:0;
+      if(glance>0){
+        const closeup=plate.shot(aspect),blend=glance*glance*(3-2*glance);
+        eye.lerp(new T.Vector3().fromArray(closeup.eye),blend);at.lerp(new T.Vector3().fromArray(closeup.at),blend);
+        fov+=(closeup.fov-fov)*blend;
+      }
       const close=!i&&s.atBow<.65&&entry>.91;
-      return {eye:eye.toArray(),at:at.toArray(),fov,handsOnly:close,focus:close&&s.atBow<.05?eye.distanceTo(at):0};
+      return {eye:eye.toArray(),at:at.toArray(),fov,handsOnly:close||glance>.82,focus:close&&s.atBow<.05?eye.distanceTo(at):0};
     }
     function seat(){
       const s=g.arrival;if(!TideArrival.active(g)||s.walking>.17)return null;
@@ -154,7 +155,7 @@ const TideArrivalRig=(()=>{
         feet:[world(-5.556,-2.486,16.45),world(-5.514,-2.486,16.85)]};
     }
     function clampPan(v){return Math.max(-1,Math.min(1,Math.sin(v)));}
-    return {update,grips,shot,seat,dispose(){radio.dispose();station.removeFromParent();board.removeFromParent();root.removeFromParent();plaque.removeFromParent();for(const o of owned)o.dispose();}};
+    return {update,grips,shot,seat,plate,dispose(){plate.dispose();radio.dispose();station.removeFromParent();board.removeFromParent();root.removeFromParent();for(const o of owned)o.dispose();}};
   }
   return {create};
 })();

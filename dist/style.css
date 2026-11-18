@@ -45,3 +45,12 @@ dialog{width:min(590px,calc(100% - 22px));max-height:94vh;color:var(--text);back
 
 .pin.pin-left{transform:translate(0,-50%)}.pin.pin-right{transform:translate(-100%,-50%)}
 .partner-pin span{white-space:pre;text-align:center}.partner-pin.seen:not(.at-edge) i{border-color:#f5ffeb;box-shadow:0 0 0 2px #1a392e}
+
+.crew-inputs{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:13px 0}
+.crew-inputs .seat{display:grid;gap:3px;padding:8px 10px;border-left:2px solid #c29263;background:#a97d4810;color:#e6bb89}
+.crew-inputs .seat.right{border-color:#68ada7;background:#6faaa810;color:#90ccca}
+.crew-inputs .seat.input-seen{background:#b4833b38;box-shadow:inset 0 0 0 1px #a87b45}
+.crew-inputs .seat.right.input-seen{background:#548e8b3b;box-shadow:inset 0 0 0 1px #548e8b}
+.crew-inputs strong{font-size:13px}.crew-inputs span{font-size:12px;line-height:1.5}.crew-inputs .seat-keys{color:#d4dcda}
+.crew-inputs .swap-pads{grid-column:span 2;justify-self:start;background:transparent;color:#cbd6d2;border:1px solid #4c615f;padding:4px 10px;font-size:12px}
+.crew-inputs .swap-pads[hidden]{display:none}
