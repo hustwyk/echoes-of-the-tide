@@ -58,7 +58,8 @@ const TideHarbor = (() => {
       if(!this.scene)return;
       this.dockside?.dispose();this.cinema?.dispose();this.fieldProps?.dispose();this.coast?.dispose();
       for(const asset of this.custom)asset.dispose();
-      this.custom.clear();this.scene.clear();this.scene=null;
+      this.custom.clear();this.scene.clear();this.scene=null;this.equipment.releaseDecks();
+      this.lens?.dispose();this.lens=null;
     }
     own(asset){this.custom.add(asset);return asset;}
     load(g) {
@@ -100,7 +101,7 @@ const TideHarbor = (() => {
       }
       this.ship.position.fromArray(TideLookout.vessel(g,g.time));add(this.ship);
       this.dockside=TideDockside.create(this.scene,g);
-      this.fieldProps=TideFieldProps.create(this.scene,g);
+      this.fieldProps=TideFieldProps.create(this.scene,g,this.actors);
       this.cinema=TideCinema.create(this.scene,g,{ship:this.ship,actors:this.actors,cameras:this.cameras,marker:this.coast.marker});
       this.yaws.fill(0);this.pitch.fill(0);this.snap=true;
     }
@@ -155,14 +156,19 @@ const TideHarbor = (() => {
         mesh.material.opacity=phase>.78?.87:phase>.55?.3+.4*Math.abs(Math.sin(t*10)):.20;
       }
       for(let i=0;i<2;i++){
-        const p=g.players[i],obj=this.actors[i];
-        obj.position.set(p.x,p.y,p.z);obj.rotation.y=p.yaw;
-        TideActors.animate(obj,{speed:p.speed,grounded:p.grounded,operating:g.engaged[i]},dt,t);
+        const p=g.players[i],obj=this.actors[i],acting=this.cinema.performance(i);
+        const pose=acting||p;
+        obj.position.set(pose.x,pose.y,pose.z);obj.rotation.y=pose.yaw;
         const goal=targetFor(g,i).p;this.halos[i].position.set(goal.x,goal.y+.065,goal.z);
         this.halos[i].scale.setScalar(1+.075*Math.sin(t*3+i));
-        const v=g.spec.type==='ride'?g.state.ferry:g.state.dials[i];
+        const drivingValve=g.spec.mode==='raft'&&i===g.spec.driver;
+        const v=drivingValve ? .5+.45*g.rig.flow : g.spec.type==='ride'?g.state.ferry:g.state.dials[i];
         this.equipment.drive(g.section.devices[i],v,t);
         if(g.section.field)this.equipment.drive(g.section.field.devices[i],g.field.values[i],t);
+        const using=!acting&&g.engaged[i],paper=using&&g.paper&&g.field.done;
+        const device=g.field.done?g.section.devices[i]:g.section.field.devices[i];
+        const grips=!using?null:paper?this.paperGrips(g,i):this.equipment.grips(device);
+        TideActors.animate(obj,{speed:acting?0:p.speed,grounded:p.grounded,operating:using,grips,...acting},dt,t);
       }
       this.dockside.update(g,dt);this.fieldProps.update(g,dt);this.cinema.update(g,dt);
       // Cache the sun's shadow map between the two views.
@@ -183,17 +189,38 @@ const TideHarbor = (() => {
         const beam=lighting?TideRigging.ray(g):null;
         if(beam){
           // Look over the lamp housing, clear of the occupant and the basket rail.
-          beam.eye[1]+=.23;beam.eye[2]-=.35;
+          this.actors[i].userData.rig.bones.headlamp.getWorldPosition(vector);
+          const direction=this.look[i].clone().fromArray(beam.at).sub(vector).normalize();
+          vector.addScaledVector(direction,.16);vector.y+=.035;beam.eye=vector.toArray();
         }
         const paperView=ready&&g.paper&&g.field.done&&g.engaged[i];
         const shot=this.cinema.shot(g,i)||(scoped?TideLookout.camera(g):paperView?TidePaper.camera(g,i):beam);
         cam.fov=scoped?31:lighting?39:paperView?Math.max(54,2*Math.atan(1.19*height/(1.75*vw))*180/Math.PI):57;
         if(shot){cam.position.fromArray(shot.eye);cam.lookAt(vector.fromArray(shot.at));}
         cam.aspect=vw/height;cam.updateProjectionMatrix();
-        e.setViewport(start,0,vw,height);e.setScissor(start,0,vw,height);e.render(this.scene,cam);
+        if(paperView)for(let j=0;j<2;j++)this.actors[j].visible=!g.engaged[j];
+        e.setViewport(start,0,vw,height);e.setScissor(start,0,vw,height);
+        if(shot?.focus&&this.quality>=.85&&e.capabilities.isWebGL2){
+          this.lens ||= TideLens.create(e);this.lens.render(this.scene,cam,start,vw,height,shot.focus);
+        }else e.render(this.scene,cam);
+        if(paperView)for(const actor of this.actors)actor.visible=true;
         if(ready)this.pin(g,i);
       }
       this.snap=false;
+    }
+    paperGrips(g,side){
+      this.paperContacts ||= [[new T.Vector3(),new T.Vector3()],[new T.Vector3(),new T.Vector3()]];
+      const hands=this.paperContacts[side],p=g.paper,b=TidePaper.board(g);
+      const place=(hand,x,y,lift)=>hands[hand].set(b.x+x,b.y+y*.971+lift*.238,b.z-y*.238+lift*.971);
+      if(side===p.holder){
+        const c=Math.cos(p.angle),s=Math.sin(p.angle);
+        const pinX=p.offset[0]+p.pin[0]*c-p.pin[1]*s,pinY=p.offset[1]+p.pin[0]*s+p.pin[1]*c;
+        const pinHand=pinX>0?1:0;
+        place(pinHand,pinX,pinY,.095);place(1-pinHand,pinX+(pinHand?-.26:.26),pinY-.12,.070);
+      }else{
+        place(0,.74,.09,.082);place(1,.94,.15+p.light*.58,.10+p.light*.27);
+      }
+      return hands;
     }
     pin(g,i){
       const {p,name}=targetFor(g,i),player=g.players[i],cam=this.cameras[i];

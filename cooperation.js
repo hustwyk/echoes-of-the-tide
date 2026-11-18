@@ -10,6 +10,25 @@ const TideCoop = (() => {
   function instrument(text,options={}) {
     return {text,vis:'',value:0,target:null,band:.05,caption:'',...options};
   }
+  function approachInstrument(g,side,site,dt){
+    const p=g.players[side];
+    let x=site.x,z=site.z-.42;
+    if(site.kind==='winch'){x+=.65;z-=.19;}
+    if(site.kind==='brake')x-=.21;
+    if(site.kind==='pump'){x+=.22;z-=.092;}
+    if(site.kind==='wheel')z-=.065;
+    if(g.spec.type==='paper'&&g.field.done){
+      const table=TidePaper.board(g);
+      x=table.x+(side===g.paper.holder?clamp(g.paper.pin[0]*.84,-.62,.43):.81);z=table.z+.37;
+    }
+    const k=1-Math.exp(-7*dt);
+    // Walk the last fraction of a metre into the working stance on the same landing.
+    const dx=x-p.x,dz=z-p.z,step=Math.min(k,2.3*dt/(Math.hypot(dx,dz)||1));
+    const nx=p.x+dx*step,nz=p.z+dz*step;
+    const floor=TideTraversal.surface(g.world,nx,nz,p.y+.15);
+    if(floor&&Math.abs(floor.y-p.y)<.16){p.x=nx;p.z=nz;}
+    p.yaw+=Math.atan2(Math.sin(-p.yaw),Math.cos(p.yaw))*Math.min(1,dt*12);
+  }
   class Session {
     constructor(index,events={}) {
       this.index=index;this.world=TideTraversal.build(index);this.events=events;
@@ -65,7 +84,7 @@ const TideCoop = (() => {
         const p=this.players[side];
         TideTraversal.move(p,inputs[side],dt,this.world,yaws[side],this.engaged[side]||TideRigging.lighting(this,side,inputs[side]));
         TidePassage.collide(this,p);
-        if(this.engaged[side]){const a=-p.yaw;p.yaw+=Math.atan2(Math.sin(a),Math.cos(a))*Math.min(1,dt*12);}
+        if(this.engaged[side])approachInstrument(this,side,activeSites[side],dt);
         if(p.y<Math.min(...section.starts.map(d=>d.y),...section.ends.map(d=>d.y))-4.2) {
           this.resetPerson(side,'安全索接住了你');
         } else if(p.ground && section.danger.includes(p.ground) && this.hazardPhase()>.78) {

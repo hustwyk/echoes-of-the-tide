@@ -5,7 +5,7 @@ window.TideFieldProps=(()=>{
   const v=(x,y,z)=>new T.Vector3(x,y,z);
   const hot='#ffd994', cool='#92eece', iron='#405258', worn='#94a6a3', copper='#aa7859', brass='#c3a16a';
   const grease='#252e2f', seal='#43433d';
-  function create(scene,session){
+  function create(scene,session,actors){
     const root=new T.Group();root.name='Mission apparatus';scene.add(root);
     const common=new Set(),temp=new Set(),animation=[];
     const permanent=obj=>(common.add(obj),obj);
@@ -176,7 +176,9 @@ window.TideFieldProps=(()=>{
         });
         if(!live)return;
         const ray=TideRigging.ray(s);
-        origin.fromArray(ray.eye);tip.fromArray(ray.at);delta.subVectors(tip,origin);
+        if(actors)actors[1-s.spec.driver].userData.rig.bones.headlamp.getWorldPosition(origin);
+        else origin.fromArray(ray.eye);
+        tip.fromArray(ray.at);delta.subVectors(tip,origin);
         lamp.position.copy(origin);lamp.target.position.copy(tip);
         const distance=delta.length();cone.position.copy(origin);cone.scale.set(.29,distance,.29);
         cone.quaternion.setFromUnitVectors(axis,delta.normalize());

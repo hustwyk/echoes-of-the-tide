@@ -141,7 +141,7 @@ function finishLevel(g){
   campaign();
   if(!g.skipTin&&view.cinema.begin('chapter-end')){
     mode='cinema';$('split').hidden=true;$('film').hidden=false;$('skip').focus();
-    showStatus('无线电回话');drawFilm(0);return;
+    showStatus('无线电回话');$('subtitle').textContent='';drawFilm(0);return;
   }
   showDebrief(g);
 }
@@ -151,7 +151,11 @@ function drawFilm(dt){
   if(index===11 && before<5.2 && film.time>=5.2)sound.cue('ending');
   view.draw(session,dt,false);
   $('film').classList.toggle('two-shots',!film.shared);
-  $('subtitle').textContent=film.subtitle();
+  const line=film.subtitle();
+  if($('subtitle').textContent!==line){
+    $('subtitle').textContent=line;
+    if(voice&&sound.enabled&&line) say(line.split('　').at(-1));
+  }
 }
 function showDebrief(g){
   mode='won';$('film').hidden=true;$('split').hidden=true;

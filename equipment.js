@@ -248,6 +248,34 @@ window.TideEquipment = (() => {
       const m=own(new T.MeshStandardMaterial({map:canvasMap(c),roughness:.57,emissive:0x272d1c}));
       labels.set('coastal-chart',m);return m;
     }
+    // Locations are on the working parts, in metres relative to their named pivots.
+    // A moving valve or crank carries its contact point around with the actual handle.
+    const contacts={
+      winch:[['',.40,.74,.045],['drum',.70,.22,0]],
+      brake:[['pawl',0,.62,.19],['',.22,.44,.36]],
+      pump:[['valve',-.145,0,.027],['valve',.145,0,.070]],
+      radio:[['',-.27,.68,.35],['',.09,.68,.35]],
+      breaker:[['toggle',-.048,.11,.12],['toggle',.048,.11,.12]],
+      tape:[['',-.23,.59,.27],['',.23,.59,.27]],
+      wheel:[['wheel',-.235,.12,0],['wheel',.235,-.12,0]],
+      chart:[['cursor',0,.018,.23],['',.33,.946,.30]],
+      antenna:[['receiver',-.24,.04,.11],['receiver',.24,.04,.11]],
+      gauge:[['',-.17,.96,.08],['',.15,.89,.09]],
+      lens:[['shutter',-.34,.08,0],['shutter',.34,.08,0]],
+      horn:[['',-.19,.59,.20],['',.19,.59,.20]]
+    };
+    const workHands=new WeakMap();
+    function grips(device){
+      let hands=workHands.get(device);
+      if(!hands){
+        hands={nodes:[0,1].map(i=>device.getObjectByName('grip'+i)),points:[new T.Vector3(),new T.Vector3()]};
+        workHands.set(device,hands);
+      }
+      for(let i=0;i<2;i++)hands.nodes[i].getWorldPosition(hands.points[i]);
+      if((device.name==='wheel'||device.name==='pump')&&hands.points[0].x>hands.points[1].x)
+        return [hands.points[1],hands.points[0]];
+      return hands.points;
+    }
     function device(kind,which=0) {
       if (!instruments[kind]) kind='breaker';
       const side=Number(which)===1?1:0;
@@ -537,6 +565,11 @@ window.TideEquipment = (() => {
           plaque(0,.35,.247);lamp(.22,.49,.25,.022);break;
         }
       }
+      contacts[kind].forEach(([pivot,x,y,z],i)=>{
+        const handle=new T.Object3D();handle.name='grip'+i;handle.position.set(x,y,z);
+        (pivot?g.getObjectByName(pivot):g).add(handle);
+      });
+      if(kind==='horn')for(const x of [-.19,.19])b.bar([x,.55,.20],[x,.65,.20],.023,brass);
       b.mesh(g);
       const lit=lamps.mesh(g,lampMats[side]);
       if(lit){lit.castShadow=false;lit.receiveShadow=false;}
@@ -560,11 +593,20 @@ window.TideEquipment = (() => {
         }
       }
     }
+    function releaseDecks(){
+      for(const [key,model] of models){
+        if(!key.startsWith('deck:'))continue;
+        model.traverse(m=>{
+          if(m.isMesh&&resources.delete(m.geometry))m.geometry.dispose();
+        });
+        models.delete(key);
+      }
+    }
     function dispose() {
       resources.forEach(resource=>resource.dispose());
       resources.clear(); shapes.clear(); models.clear(); labels.clear();
     }
-    return {deck,device,drive,dispose};
+    return {deck,device,drive,grips,releaseDecks,dispose};
   }
   return {create};
 })();
