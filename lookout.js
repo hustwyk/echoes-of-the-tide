@@ -10,7 +10,7 @@ const TideLookout=(()=>{
   };
   function reset(g){
     const task=watch[g.index+'/'+g.stage];
-    g.watch=task?{task,done:false,step:0,yaw:0,pitch:-.13,seen:null,marked:null,settle:0}:null;
+    g.watch=task?{task,done:false,step:0,yaw:0,pitch:-.13,magnification:1,seen:null,marked:null,settle:0}:null;
   }
   const marks={buoy:{x:-42,z:-120},stump:{x:-30,z:-116},ship:{x:-17,z:-110}};
   // Matches the four displacement waves in the ocean vertex shader.
@@ -28,7 +28,7 @@ const TideLookout=(()=>{
   }
   function point(g,id){
     const t=g.time,w=g.cues.water;
-    if(id==='buoy')return [marks.buoy.x,w+(g.survey?TideSoundings.swell:swell)(marks.buoy.x,marks.buoy.z,t)+2.97,marks.buoy.z];
+    if(id==='buoy')return TideBuoyMotion.lamp(g);
     if(id==='stump')return [marks.stump.x,g.survey||g.index===11?-2.52:-1.16,marks.stump.z];
     const position=vessel(g,t);position[1]+=3.7;return position;
   }
@@ -44,9 +44,12 @@ const TideLookout=(()=>{
   function active(g){return !!g.watch&&!g.watch.done&&g.field.done;}
   function observe(g,inputs,dt){
     const w=g.watch,d=w.task.watcher,k=inputs[d];
-    if(g.engaged[d]){
-      w.yaw=clamp(w.yaw+k.x*dt*.53,-1.35,1.35);
-      w.pitch=clamp(w.pitch-k.z*dt*.34,-.54,.21);
+    const lens=g.signal||g.survey,held=g.engaged[d];
+    const targetPower=lens&&held?1+2.5*clamp(k.magnify||0,0,1):1;
+    w.magnification+=(targetPower-w.magnification)*(1-Math.exp(-dt*11));
+    if(held){
+      w.yaw=clamp(w.yaw+k.x*dt*.53/w.magnification,-1.35,1.35);
+      w.pitch=clamp(w.pitch-k.z*dt*.34/w.magnification,-.54,.21);
     }
     const {eye,yaw,pitch}=camera(g);
     w.seen=null;
@@ -61,6 +64,7 @@ const TideLookout=(()=>{
   }
   function interact(g,inputs,dt){
     if(!active(g))return false;
+    if(TideLightRegister.active(g)){TideLightRegister.operate(g,inputs,dt);return true;}
     const w=g.watch,task=w.task,d=task.watcher,rec=1-d;
     const {yaw}=observe(g,inputs,dt);
     const expected=task.targets[w.step];
@@ -77,6 +81,7 @@ const TideLookout=(()=>{
       else if(++w.step===task.targets.length){w.done=true;g.alert(task.caption+'　·　双方已记录');g.sound(650,.16);}
       else g.alert('位置已记入，寻找下一个观测物');
       w.marked=null;
+      if(g.signal&&w.done){g.section.sites[0]=g.world.signal.cutout;g.events.checkpoint?.(g);}
     }
     return true;
   }

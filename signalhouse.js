@@ -77,6 +77,7 @@ const TideSignalHouse=(()=>{
       const pos=TideSignal.local(s),dev=equipment.device(type,i);
       dev.position.set(pos.x,s.y,pos.z-.65);root.add(dev);return dev;
     };
+    const register=TideRegisterDesk.create(root,own);
     const cutout=install(w.cutout,'breaker',0),radio=install(w.radio,'radio',1);
     // Porcelain insulators and rain loops take the restored feed to the seaward light.
     for(const x of [-5.75,-5.0])for(const z of [11.62,7.28]){
@@ -169,6 +170,7 @@ const TideSignalHouse=(()=>{
     }
     function hands(g,i){
       let nodes;
+      if(!i&&g.stage===1&&!g.watch.done)return register.grips();
       if(g.stage===0)return benches[i].hands();
       if(g.stage===2&&i===0)nodes=shadeHands;
       if(g.stage===2&&i===1&&!g.signal.pinned)nodes=chainHands;
@@ -176,7 +178,7 @@ const TideSignalHouse=(()=>{
       return equipment.grips(i?radio:cutout);
     }
     function update(g){
-      const r=g.signal;
+      const r=g.signal;register.update(g);
       for(const bench of benches)bench.update(r,g.time);
       equipment.drive(cutout,r.shutter,g.time);equipment.drive(radio,r.mic==='sending'?1:0,g.time);
       const lens=g.cues.rangeGreen||0;
