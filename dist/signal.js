@@ -23,6 +23,7 @@ const TideSignal=(()=>{
     const pilot=site(3.70,0,12.75,'试灯离合器','breaker');
     const cutout=site(-3.65,.66,7.12,'机房合闸柄','breaker');
     const radio=site(4.32,.66,4.69,'观测窗话筒','radio');
+    const test=site(-5.55,.66,6.12,'弹簧试光柄','brake');
     const chain=site(1.85,.66,6.35,'检修梯手链','winch');
     const shade=site(.05,3.03,.29,'灯头遮光链','brake');
     const entry=[site(-3.7,0,16.82,'入口','wheel'),site(3.7,0,16.82,'入口','breaker')];
@@ -31,14 +32,15 @@ const TideSignal=(()=>{
       sites:[[starter,pilot],[cutout,radio],[{...shade},{...chain}]][k],
       mid:k?gallery:apron,paths:[[],[]],returnDecks:[],danger:[],ferry:null
     }));
-    return {floors,sections,style:'dock',signal:{apron,gallery,head,bridge,starter,pilot,cutout,radio,chain,shade}};
+    return {floors,sections,style:'dock',signal:{apron,gallery,head,bridge,starter,pilot,cutout,radio,test,chain,shade}};
   }
   function create(g){
     if(!g.world.signal)return null;
     return {stroke:0,armed:true,rpm:.13,spin:0,trim:.48,linked:false,glow:0,shutter:0,
       sent:false,heard:false,speech:0,mic:'idle',replyAt:0,turn:0,drift:0,arrest:0,
       angle:-.63,velocity:0,walked:false,onHead:false,pinned:false,closed:false,
-      early:-3,strokes:0};
+      early:-3,strokes:0,voice:'',clock:0,testStroke:0,tripReady:true,tripTime:5,flag:0,strokesTest:0,
+      sightX:.062,sightY:-.041,darkTime:0,observed:false,marked:false,strikeAt:-5};
   }
   function bridgePose(g){
     const r=g.signal,b=g.world.signal.bridge,pitch=r.angle;
@@ -54,13 +56,15 @@ const TideSignal=(()=>{
     const r=g.signal;if(!r)return;
     if(g.stage>=1){r.linked=true;r.rpm=Math.max(.53,r.rpm);}
     if(g.stage===2){
-      r.sent=true;r.heard=true;r.shutter=1;r.glow=1;r.mic='idle';r.speech=0;
+      r.sent=true;r.heard=true;r.flag=0;r.shutter=1;r.glow=1;r.mic='idle';r.speech=0;
       r.turn=Math.max(r.turn,.11);r.drift=Math.max(r.drift,.045);
     }
     bridgePose(g);
   }
   function step(g,dt){
-    const r=g.signal;r.spin+=r.rpm*dt*10.7;
+    const r=g.signal;
+    if(r.voice){r.clock+=dt;if(r.clock>=TideTransitSpeech[r.voice].duration){r.voice='';r.clock=0;}}
+    r.spin+=r.rpm*dt*10.7;
     if(g.stage===0)r.rpm=Math.max(.09,r.rpm-dt*.028);
     else if(r.linked){
       const load=g.stage===1&&r.shutter>0?.055:0;
@@ -68,7 +72,7 @@ const TideSignal=(()=>{
     }
     const power=r.shutter*(r.linked?Math.min(1,r.rpm*1.85):0);
     r.glow+=(power-r.glow)*(1-Math.exp(-dt*5.4));
-    g.cues.rangeGreen=r.glow;g.cues.light=0;
+    g.cues.rangeGreen=r.glow*(1-r.flag);g.cues.light=0;
     if(r.heard){
       const stop=r.mic==='answered';
       if(stop)r.arrest=Math.min(1,r.arrest+dt*.57);
@@ -117,12 +121,12 @@ const TideSignal=(()=>{
     const r=g.signal,active=g.engaged[1],ready=stop?r.closed&&r.glow<.06:r.shutter===1&&r.glow>.85;
     const msg=stop?'立即停止向北线转向':'北线已恢复';
     if(r.mic==='idle'&&g.commit(1,k)){
-      if(ready){r.mic='sending';r.speech=0;g.alert('沈遥：海雁，'+msg+'。',2);g.sound(410,.06);}
+      if(ready){r.mic='sending';r.speech=0;TideTransit.speak(g,stop?'stop':'send');g.sound(410,.06);}
       else if(g.time-r.early>1.5){r.early=g.time;g.alert(stop?'窗外的第二盏绿灯还亮着，等遮光闸落到底':'先看岸上的新灯亮稳，再发报',1.7);}
     }
     if(r.mic==='sending'){
-      if(active)r.speech=Math.min(1,r.speech+dt/(stop?1.50:1.24));
-      else if(r.speech<1){r.mic='idle';g.alert('句尾被截断。握住话筒，再完整发一次。',2);}
+      if(active)r.speech=Math.min(1,r.speech+dt/TideTransitSpeech[stop?'stop':'send'].duration);
+      else if(r.speech<1){r.voice='';r.mic='idle';g.alert('句尾被截断。握住话筒，再完整发一次。',2);}
       else{
         r.mic=stop?'receipt':'listening';r.replyAt=g.time+1.30;
         if(!stop)r.sent=true;g.sound(252,.07);
@@ -131,13 +135,12 @@ const TideSignal=(()=>{
     if(r.mic===(stop?'receipt':'listening')&&g.time>=r.replyAt){
       if(active){r.replyAt=g.time+.45;}
       else if(stop){
-        r.mic='answered';r.replyAt=g.time+2.25;g.alert('梁青：绿灯灭了。舵回中。我们已经进了内流。',3.2);
+        r.mic='answered';r.replyAt=g.time+TideTransitSpeech.steady.duration;TideTransit.speak(g,'steady');
       }else{
-        r.heard=true;r.mic='readback';r.replyAt=g.time+3.85;
-        g.alert('梁青：北线可以进入，收到。阿棠，你看着船头。',3.7);
+        TideTransit.enter(g);
       }
     }
-    if((r.mic==='readback'||r.mic==='answered')&&g.time>=r.replyAt)g.advance();
+    if(r.mic==='answered'&&g.time>=r.replyAt)g.advance();
     g.set(1,r.mic==='idle'?'握住话筒，按确认发出「'+msg+'」':r.mic==='sending'?(r.speech<1?'按住操作键说完整句':'松开操作键，把频道交给船长'):r.mic==='answered'?'驾驶台已确认，船头停止偏转':r.mic==='readback'?'看船头，它正转向两盏绿灯之间':'让话筒保持松开，听船长复述',{
       vis:r.mic==='sending'?'dial':'',value:r.speech,caption:r.mic==='sending'?'发话　'+Math.round(r.speech*100)+'%':r.mic==='readback'?'海雁　北线可以进入':'收听驾驶台'});
   }
@@ -177,13 +180,24 @@ const TideSignal=(()=>{
     radio(g,k,dt,true);
   }
   function interact(g,k,dt){
-    if(g.stage===0)start(g,k,dt);else if(g.stage===1)light(g,k,dt);else blackout(g,k,dt);
+    if(g.stage===0)start(g,k,dt);else if(TideTransit.active(g))TideTransit.operate(g,k,dt);else if(g.stage===1)light(g,k,dt);else blackout(g,k,dt);
   }
   function checkpoint(g){
-    const r=g.signal;return r?.pinned?{pinned:true,closed:r.closed,turn:r.turn,drift:r.drift}:null;
+    const r=g.signal;
+    if(TideTransit.active(g))return {transit:true,turn:r.turn,drift:r.drift};
+    return r?.pinned?{pinned:true,closed:r.closed,turn:r.turn,drift:r.drift}:null;
   }
   function restore(g,m){
-    if(!g.signal||g.stage!==2||m?.pinned!==true)return;
+    if(!g.signal)return;
+    if(g.stage===1&&m?.transit===true){
+      g.watch.done=true;g.field.done=true;g.signal.rpm=g.signal.trim=.66;
+      g.players=[g.world.signal.cutout,g.world.signal.radio].map(s=>({...TideTraversal.spawn(s),x:s.x,z:s.z}));
+      g.checkpoints=[g.world.signal.gallery,g.world.signal.gallery];
+      TideTransit.enter(g,false);
+      for(const key of ['turn','drift'])if(Number.isFinite(m[key]))g.signal[key]=clamp(m[key],0,1);
+      return;
+    }
+    if(g.stage!==2||m?.pinned!==true)return;
     const r=g.signal,w=g.world.signal;r.pinned=r.walked=true;r.closed=m.closed===true;
     r.angle=.51;r.velocity=0;r.shutter=r.closed?0:1;r.glow=r.shutter;
     r.turn=Number.isFinite(m.turn)?clamp(m.turn,0,1):.94;
@@ -214,6 +228,11 @@ const TideSignal=(()=>{
       const a=point(x,y,z),b=point(tx,ty,tz);return {eye:[a.x,a.y,a.z],at:[b.x,b.y,b.z],fov};
     };
     if(g.stage===1&&TideLookout.active(g))return null;
+    if(TideTransit.active(g)){
+      if(side===1)return TideTransit.camera(g);
+      if(g.engaged[0])return cam(-7.60,2.95,9.00,-3.28,1.98,3.00,56);
+      return null;
+    }
     if(side===1&&((g.stage===1&&r.shutter===1||g.stage===2&&r.pinned)&&TideCoop.near(g.players[1],site))){
       return cam(3.25,4.45,11.0,.10,1.68,-8.5,55);
     }

@@ -107,11 +107,12 @@ function openLevel(n,stage=0,mark=null){
     if(n===8)TideReceiverAudio.loadSoundings();
     if(n===7)TideReceiverAudio.loadRelay();
     if(n===1)TideReceiverAudio.loadQuay();
+    if(n===2)TideReceiverAudio.loadTransit();
     if(n===4)TideTapeAudio.load();
     session=new TideCoop.Session(n,{
       stage:onStage,checkpoint:savePoint,log:note,alert:line=>{
         if(/^(林澈|沈遥|阿棠|梁青|海雁复述|值班员|测潮员|哐啷)/.test(line)){
-          note(line);if(voice)say(line);
+          note(line);if(voice&&!session?.signal?.voice)say(line);
         }
       },success:()=>sound.tone(580,.23,'triangle'),sound:(f,d)=>sound.tone(f,d),
       reset:side=>{view.snap=true;sound.cue('reset',side);},finish:finishLevel
@@ -288,7 +289,7 @@ function frame(now){
   if(sound.enabled){sound.scene?.update(session,dt);sound.tape?.update(session);sound.receiver?.update(session);}
   if(!redraw||now-redraw>55){
     TideHud.update(session,padSlots);
-    showStatus((session.stage===0&&session.fenders?.subtitle)||session.swing?.subtitle||session.cistern?.subtitle||session.glass?.subtitle||(!session.lastPass?.occupied&&session.lastPass?.subtitle)||session.pilotHorn?.subtitle||session.fog?.subtitle||session.survey?.subtitle||session.relay?.subtitle||session.cable?.subtitle||session.cable?.warp.subtitle||(session.noticeUntil>session.time?session.notice.replace(/\n/g,'　'):(TideFenders.active(session)?'护舷井登岸':session.cable?TideCableQuay.title(session):session.landfall?'防潮门值班间':session.spec.title)+'　·　靠近角色颜色的目标'));
+    showStatus((session.stage===0&&session.fenders?.subtitle)||(session.signal?.voice&&TideTransitSpeech[session.signal.voice].line)||session.swing?.subtitle||session.cistern?.subtitle||session.glass?.subtitle||(!session.lastPass?.occupied&&session.lastPass?.subtitle)||session.pilotHorn?.subtitle||session.fog?.subtitle||session.survey?.subtitle||session.relay?.subtitle||session.cable?.subtitle||session.cable?.warp.subtitle||(session.noticeUntil>session.time?session.notice.replace(/\n/g,'　'):(TideFenders.active(session)?'护舷井登岸':session.cable?TideCableQuay.title(session):session.landfall?'防潮门值班间':session.spec.title)+'　·　靠近角色颜色的目标'));
     $('elapsed').textContent=timeLabel(session.time)+'　/　'+(session.stage+1)+' of 3';
     redraw=now;
   }

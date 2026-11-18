@@ -3,11 +3,12 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const box=vm.createContext({});
-for(const name of ['missions','traversal','floating','warp-speech','warping','fender-speech','fenders','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','lookout','cistern-speech','cistern','glass-speech','chartroom','paper','lantern','signal','archive','relay-speech','relay','soundings-speech','soundings','fog-speech','fogsignal','pass-speech','lastpass','swing-speech','swing','cooperation']){
+for(const name of ['missions','traversal','floating','warp-speech','warping','fender-speech','fenders','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','lookout','cistern-speech','cistern','glass-speech','chartroom','paper','lantern','transit-speech','transit','signal','archive','relay-speech','relay','soundings-speech','soundings','fog-speech','fogsignal','pass-speech','lastpass','swing-speech','swing','cooperation']){
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../dist',name+'.js'),'utf8'),box);
 }
 const {Session,near,surface,lookout,ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideSwing,TideCistern,TideGlass,TidePaper}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideSwing,TideCistern,TideGlass,TidePaper})',box);
 const {TideFenders,TideWarping,TideFloating}=vm.runInContext('({TideFenders,TideWarping,TideFloating})',box);
+const {TideTransit}=vm.runInContext('({TideTransit})',box);
 const empty=()=>({x:0,z:0,use:false,jump:false});
 function steer(g,i,target,keys){
   const p=g.players[i],dx=target.x-p.x,dz=target.z-p.z,dist=Math.hypot(dx,dz);
@@ -66,6 +67,13 @@ function signalInputs(g,out){
     else steer(g,i,s,out[i]);
   }
   if(lookout.active(g)){if(out.every(k=>k.use))aimScope(g,out);return out;}
+  if(TideTransit.active(g)){
+    const delta=TideTransit.delta(TideTransit.camera(g),TideTransit.sources(g).shore);
+    out[1].x=axis(-delta.x*32);out[1].z=axis(-delta.y*32);
+    out[1].jump=r.observed&&!r.voice;
+    if(out[0].use)out[0].z=r.tripReady?1:-1;
+    return out;
+  }
   if(g.stage===0){
     if(out[0].use)out[0].z=r.rpm<.66?(r.armed?1:-1):0;
     if(out[1].use){out[1].x=axis((r.rpm-r.trim)*8);out[1].jump=r.rpm>.55&&Math.abs(r.trim-r.rpm)<.09;}
@@ -921,6 +929,23 @@ if(require.main===module){
   station.tick(step,[empty(),empty()]);assert.equal(range.mic,'listening');assert.equal(range.heard,false);
   reach(station,()=>range.heard&&range.turn>.16);
   assert.ok(TideSignal.ship(station,station.time).yaw>heading+.15);
+  const evidence=TideSignal.checkpoint(station);
+  assert.ok(evidence.transit);
+  const bridgeWatch=new Session(2);bridgeWatch.stage=1;bridgeWatch.begin();TideSignal.restore(bridgeWatch,evidence);
+  for(let j=0;j<470;j++){
+    const [left,right]=control(bridgeWatch);left.z=0;right.jump=j%40===0;
+    bridgeWatch.tick(step,[left,right]);
+  }
+  assert.equal(bridgeWatch.stage,1);assert.ok(!bridgeWatch.signal.observed&&!bridgeWatch.signal.marked);
+  // A witnessed blink at the wrong buoy must not be accepted as the shore light.
+  for(let j=0;j<360;j++){
+    const [left,right]=control(bridgeWatch);
+    const aim=TideTransit.delta(TideTransit.camera(bridgeWatch),TideTransit.sources(bridgeWatch).buoy);
+    right.x=Math.max(-1,Math.min(1,-aim.x*32));right.z=Math.max(-1,Math.min(1,-aim.y*32));
+    right.jump=j%40===0;bridgeWatch.tick(step,[left,right]);
+  }
+  assert.ok(bridgeWatch.signal.strokesTest>0&&!bridgeWatch.signal.observed&&!bridgeWatch.signal.marked);
+  reach(bridgeWatch,()=>bridgeWatch.signal.marked);
   reach(station,()=>station.stage===2);
   for(let n=0;n<330;n++)station.tick(step,[empty(),control(station)[1]]);
   assert.ok(range.angle>.35&&!range.pinned&&!range.closed&&range.glow>.85);
