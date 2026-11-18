@@ -223,6 +223,10 @@ window.TideCoast = (() => {
       sunTarget.position.set(-56,1,-123);sun.position.set(-84,41,-151);
       Object.assign(sun.shadow.camera,{left:-20,right:20,top:20,bottom:-20,near:24,far:94});
     }
+    if(index===7){
+      sunTarget.position.set(-33,1,-85);sun.position.set(-61,40,-111);
+      Object.assign(sun.shadow.camera,{left:-19,right:19,top:19,bottom:-19,near:20,far:90});
+    }
     if(index===9){
       sunTarget.position.set(14,22,-91);sun.position.set(-17,65,-127);
       Object.assign(sun.shadow.camera,{left:-12,right:12,top:12,bottom:-12,near:25,far:91});
@@ -400,7 +404,7 @@ window.TideCoast = (() => {
       rock(clearPier?drawX-29:drawX,-5.1+rng(),z,2+r*10,2+r*r*9,2+rng()*9,i);
     }
     for(let i=0;i<11;i++){
-      rock(14+(rng()-.5)*25,-3+rng()*3,-103+(rng()-.5)*14,5+rng()*8,4+rng()*3,7+rng()*6,i);
+      rock((index===7?26:14)+(rng()-.5)*25,-3+rng()*3,-103+(rng()-.5)*14,5+rng()*8,4+rng()*3,7+rng()*6,i);
     }
 
     if(index===2){
@@ -641,7 +645,7 @@ window.TideCoast = (() => {
     }
     if(act===0)timberPier();
     if(act===1)pumpHall();
-    if(act===2)craneBridge();
+    if(act===2&&index!==7)craneBridge();
     if(act===3&&index!==9)lampGallery();
 
     batches.forEach(({g,m,items})=>{
