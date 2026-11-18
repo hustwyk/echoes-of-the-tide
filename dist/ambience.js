@@ -326,6 +326,14 @@ window.TideAudioScene = (() => {
       const winding = type === 'ride' && g.engaged[g.spec.driver] && !q.latch;
       setLayer(layers.reel,now,type === 'tape' && both ? .12 : winding ? .10 : 0,620 + (q.ferry + q.dials[0]) * 460);
       run.send.gain.setTargetAtTime(cellar ? .98 : high ? .65 : .51, now,.35);
+      if(g.gallery&&g.gallery.phase!=='done'){
+        const rate=Math.abs(g.gallery.velocity)/.74;
+        setLayer(layers.reel,now,.14*rate,470+520*rate,.09);
+        if(rate>.05&&Math.floor(Math.abs(g.gallery.angle)*66)!==run.galleryTooth){
+          run.galleryTooth=Math.floor(Math.abs(g.gallery.angle)*66);
+          ring(now,210+44*rate,.07,.034*rate,0,{end:120,wet:.25});
+        }
+      }
       if(g.arrival&&!g.arrival.done){
         const a=g.arrival;
         setLayer(layers.radio,now,a.radio==='tune'?(.013+.033*Math.min(1,Math.abs(a.dial-12))):0,1900,.05);

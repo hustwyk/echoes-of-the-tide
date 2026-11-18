@@ -499,6 +499,7 @@ window.TideCoast = (() => {
       cylinder(stone,x,1.9,z,12.6,3.8);
       const towerBase=4;
       for(let i=0;i<5;i++){
+        if(index===9&&i>=3)continue;
         const base=6.15-i*.48;
         const g=geom(new T.CylinderGeometry((base-.48)*.5,base*.5,3.55,36));
         addInstance(g,i===2?red:white,x,towerBase+1.77+i*3.52,z,1,1,1);
@@ -512,7 +513,6 @@ window.TideCoast = (() => {
       }
       const top=towerBase+17.6;
       if(index===9){
-        addInstance(geom(new T.CylinderGeometry(4.8,2.24,2.3,32)),masonry,x,top-1.17,z,1,1,1);
         return new T.Vector3(x,TideLantern.height+2.50,z);
       }
       cylinder(black,x,top,z,5.7,.5);ring(iron,x,top+.99,z,5.46);ring(black,x,top+.46,z,5.46);

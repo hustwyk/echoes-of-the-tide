@@ -43,7 +43,7 @@ const TideLanternRoom=(()=>{
       const t=own(loader.load(v));if(!i)t.colorSpace=T.SRGBColorSpace;t.wrapS=t.wrapT=T.RepeatWrapping;t.repeat.set(2,2);t.anisotropy=8;return t;
     });
     const tread=own(new T.MeshStandardMaterial({map:albedo,normalMap:normal,roughnessMap:arm,roughness:.87,metalness:.64}));
-    for(const d of g.world.floors){
+    for(const d of g.world.floors.filter(f=>f.kind!=='gallery')){
       const at=L.local(d),cols=Math.ceil(d.w/1.21),rows=Math.ceil(d.d/1.15);
       for(let j=0;j<rows;j++)for(let k=0;k<cols;k++){
         const w=d.w/cols,h=d.d/rows,x=at.x+(k+.5)*w-d.w*.5,z=at.z+(j+.5)*h-d.d*.5;
@@ -65,10 +65,10 @@ const TideLanternRoom=(()=>{
     glass.bumpMap=paneMap;glass.bumpScale=.0026;glass.opacity=.10;
     for(let j=0;j<outline.length;j++){
       const [x,z]=outline[j],[ex,ez]=outline[(j+1)%outline.length],length=Math.hypot(ex-x,ez-z),segs=Math.ceil(length/1.43);
-      for(const h of [-.28,1.06,3.72])if(j!==0||h!==1.06)bar(root,[x,h,z],[ex,h,ez],h<0?.27:h>3?.15:.064,shell,h<0?iron:patina,h<0);
+      for(const h of [-.28,1.06,3.72])if((j!==0&&j!==4)||h!==1.06)bar(root,[x,h,z],[ex,h,ez],h<0?.27:h>3?.15:.064,shell,h<0?iron:patina,h<0);
       for(let i=0;i<segs;i++){
         const f=i/segs,px=x+(ex-x)*f,pz=z+(ez-z)*f;
-        if(j===0&&Math.abs(Math.abs(px)-3.55)<.91)continue;
+        if(j===0&&Math.abs(Math.abs(px)-3.55)<.91||j===4&&Math.abs(px-1.73)<1.05)continue;
         cyl(root,px,.51,pz,.044,1.08,brass,copper);
         cyl(root,px,.056,pz,.088,.098,shell,iron);
       }
@@ -79,7 +79,14 @@ const TideLanternRoom=(()=>{
         bar(root,[px,3.81,pz],[px*.10,5.02,pz*.10],.036,brass,copper);
       }cyl(root,x,3.64,z,.145,.15,brass,copper);
       bar(root,[x,3.75,z],[0,5.1,0],.092,shell,patina,true);
-      if(z>-4&&ez>-4){
+      if(j===4){
+        for(const [l,r] of [[-5.08,.77],[2.68,5.08]]){
+          mesh(root,own(new T.PlaneGeometry(r-l,2.30)),glass,(l+r)/2,2.40,z);
+          for(const h of [1.06,1.2])bar(root,[l,h,z],[r,h,z],.064,brass,copper);
+        }
+        for(const x of [.77,2.68])bar(root,[x,.02,z],[x,2.77,z],.085,shell,patina,true);
+        bar(root,[.77,2.77,z],[2.68,2.77,z],.13,shell,patina,true);
+      }else if(z>-4&&ez>-4){
         const panel=mesh(root,own(new T.PlaneGeometry(length-.13,2.30)),glass,(x+ex)/2,2.40,(z+ez)/2);
         panel.rotation.y=-Math.atan2(ez-z,ex-x);
         bar(root,[x,1.2,z],[ex,1.2,ez],.073,brass,copper);
@@ -99,10 +106,7 @@ const TideLanternRoom=(()=>{
     mesh(root,roof,roofMaterial);
     cyl(root,0,5.15,0,.49,.15,brass,patina);
     cyl(root,0,5.30,0,.19,.23,brass,copper);cyl(root,0,5.57,0,.044,.51,brass,patina);
-    for(const x of [-3.65,3.65]){
-      box(root,x,.09,5.4,1.13,.18,.53,shell,iron);
-      for(let j=0;j<5;j++)bar(root,[x-.53,-.30-j*.35,5.46],[x+.53,-.30-j*.35,5.46],.06,brass,copper);
-    }
+
     const horizontal=[Math.PI/2,0,0];
     // Cut a concentric sawtooth profile like a stepped bull's-eye Fresnel panel.
     function fresnel(radius,rings){

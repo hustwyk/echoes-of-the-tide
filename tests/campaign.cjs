@@ -3,13 +3,14 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const box=vm.createContext({});
-for(const name of ['missions','traversal','floating','warp-speech','warping','fender-speech','fenders','arrival-speech','arrival','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','lookout','cistern-speech','cistern','glass-speech','chartroom','paper','lantern','transit-speech','transit','signal','tin-lines','tin-memory','archive','relay-speech','relay','soundings-speech','soundings','fog-speech','fogsignal','pass-speech','lastpass','swing-speech','swing','cooperation']){
+for(const name of ['missions','traversal','floating','warp-speech','warping','fender-speech','fenders','arrival-speech','arrival','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','lookout','cistern-speech','cistern','glass-speech','chartroom','paper','lantern','gallery-speech','gallery','transit-speech','transit','signal','tin-lines','tin-memory','archive','relay-speech','relay','soundings-speech','soundings','fog-speech','fogsignal','pass-speech','lastpass','swing-speech','swing','cooperation']){
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../dist',name+'.js'),'utf8'),box);
 }
 const {Session,near,surface,lookout,ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideSwing,TideCistern,TideGlass,TidePaper}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideSwing,TideCistern,TideGlass,TidePaper})',box);
 const {TideFenders,TideWarping,TideFloating,TideArrival}=vm.runInContext('({TideFenders,TideWarping,TideFloating,TideArrival})',box);
 const {TideTransit}=vm.runInContext('({TideTransit})',box);
 const {TideTinMemory}=vm.runInContext('({TideTinMemory})',box);
+const {TideGallery}=vm.runInContext('({TideGallery})',box);
 const empty=()=>({x:0,z:0,use:false,jump:false});
 function steer(g,i,target,keys){
   const p=g.players[i],dx=target.x-p.x,dz=target.z-p.z,dist=Math.hypot(dx,dz);
@@ -526,8 +527,77 @@ function approachInputs(g,out){
   if(a.attached)radio.use=true;
   return out;
 }
+function galleryInputs(g,out){
+  const a=g.gallery,w=g.world.gallery,A=TideGallery;
+  const on=(i,f)=>g.players[i].ground===f;
+  const distance=(p,t)=>Math.hypot(t.x-p.x,t.z-p.z);
+  function walk(i,to){
+    const p=g.players[i],dx=to.x-p.x,dz=to.z-p.z,dist=Math.hypot(dx,dz);
+    if(dist>.06){out[i].x=dx/Math.max(.36,dist);out[i].z=dz/Math.max(.36,dist);}
+  }
+  function grip(i,spot,direction){
+    if(distance(g.players[i],spot)>.48)walk(i,spot);
+    else {out[i].use=true;out[i].x=direction;}
+  }
+  function jump(i,from,to){
+    const p=g.players[i];
+    walk(i,to);
+    if(on(i,from)){
+      const gap=distance(p,to);
+      out[i].jump=gap<3.58;out[i].jumpHeld=true;
+    }else out[i].jumpHeld=true;
+  }
+  function wheel(i,target){
+    const error=target-a.angle,drive=Math.max(-1,Math.min(1,(error-a.velocity*.20)*3.4));
+    grip(i,w.controls[i],drive);
+  }
+  if(a.phase==='file'){
+    for(let i=0;i<2;i++){
+      if(distance(g.players[i],w.paper[i])>.48)walk(i,w.paper[i]);
+      else out[i].use=i===1||a.insert<.98;
+    }
+    if(out[1].use){
+      if(a.rail<.89)out[1].x=1;else out[1].z=-1;
+    }
+    return out;
+  }
+  if(a.phase==='out'){
+    wheel(0,a.boarded?0:A.westAngle);
+    if(on(1,w.west)&&a.angle<A.westAngle+.12||(!g.players[1].grounded&&a.angle<A.westAngle+.19))jump(1,w.west,w.car);
+    else if(Math.abs(a.angle)<.085)jump(1,w.car,w.middle);
+  }else if(a.phase==='return'||a.phase==='last'){
+    wheel(1,a.phase==='last'?A.eastAngle:A.westAngle);
+    if(on(0,w.east)){grip(0,w.latch,0);}
+    else if(a.phase==='return'&&Math.abs(a.angle-A.westAngle)<.11)jump(0,w.west,w.car);
+    else if(a.phase==='last'&&Math.abs(a.angle-A.eastAngle)<.10)jump(0,w.car,w.east);
+  }else if(a.phase==='stairs'){
+    if(a.opening<1)return out;
+    for(let i=0;i<2;i++){
+      const f=g.players[i].ground,st=w.stairs.indexOf(f);
+      const pos=TideLantern.local(g.players[i]);
+      if(a.arrived[i])continue;
+      if(f===w.middle){
+        const start=A.point(w.bridge[0],0,-w.bridge[0].d*.5);
+        walk(i,distance(g.players[i],start)>.56?start:w.bridge[0]);
+      }else if(f===w.bridge[0]){
+        const end=A.point(w.bridge[0],0,w.bridge[0].d*.5);
+        walk(i,distance(g.players[i],end)>.48?end:w.east);
+      }
+      else if(f===w.east)walk(i,w.stairs[2]);
+      else if(st>=0&&st<9)walk(i,w.stairs[Math.min(9,st+3)]);
+      else if(st===9)walk(i,w.landings[0]);
+      else if(f===w.landings[0])walk(i,w.stairs[12]);
+      else if(st>=10&&st<20)walk(i,w.stairs[Math.min(20,st+3)]);
+      else if(st===20)walk(i,w.upper);
+      else if(f===w.upper)walk(i,w.threshold);
+      else if(f===w.threshold||pos.z<6.0)walk(i,TideLantern.coords(i?2.16:1.30,0,4.7));
+    }
+  }
+  return out;
+}
 function control(g){
   const out=[empty(),empty()],sec=g.section,s=g.spec,q=g.state;
+  if(TideGallery.active(g))return galleryInputs(g,out);
   if(g.arrival&&!g.arrival.done)return approachInputs(g,out);
   if(TideFenders.active(g))return fenderInputs(g,out);
   if(TideSwing.active(g))return swingInputs(g,out);
@@ -723,6 +793,49 @@ if(require.main===module){
   function reach(g,condition){
     for(let j=0;j<60*120&&!condition()&&!g.complete;j++)g.tick(step,control(g));
     assert.ok(condition(),'Did not reach checkpoint in chapter '+(g.index+1)+' stage '+g.stage);
+  }
+  {
+    const readings=[-2.99,-3.18];
+    const g=new Session(9);g.tideTicket=readings;TideGallery.begin(g);
+    const w=g.world.gallery,a=g.gallery;
+    assert.notEqual(a.ticket,readings);assert.deepEqual(Array.from(a.ticket),readings);
+    // From a parked cradle, the rider alone cannot reach the opposite landing.
+    for(let j=0;j<360;j++){const k=control(g);k[0]=empty();g.tick(step,k);}
+    assert.equal(a.phase,'out');assert.equal(a.angle,TideGallery.westAngle);
+    reach(g,()=>a.boarded);
+    for(let j=0;j<16;j++){const k=control(g);k[0].use=true;k[0].x=1;g.tick(step,k);}
+    const u=g.players[1],dx=u.x-w.car.x,dz=u.z-w.car.z;
+    const side=dx*w.car.axes.ux+dz*w.car.axes.uz,across=dx*w.car.axes.vx+dz*w.car.axes.vz;
+    for(let j=0;j<20;j++)g.tick(step,[{...empty(),use:true,x:1},empty()]);
+    const moved=TideGallery.point(w.car,side,across);
+    assert.ok(Math.hypot(u.x-moved.x,u.z-moved.z)<.015,'Rider must travel with the rotating grating');
+    // Running off the outward edge catches this player and keeps the other at the handwheel.
+    for(let j=0;j<180&&!g.setbacks;j++)g.tick(step,[empty(),{...empty(),x:w.car.axes.vx,z:w.car.axes.vz}]);
+    assert.equal(g.setbacks,1);assert.ok(a.arrests[1]&&!u.grounded);
+    for(let j=0;j<150&&a.arrests[1];j++)g.tick(step,[empty(),{...empty(),use:true}]);
+    assert.equal(u.ground,w.west);assert.equal(g.players[0].ground,w.west);
+    reach(g,()=>a.phase==='return');
+    const reverse=TideGallery.checkpoint(g);assert.equal(reverse.gallery,'middle');
+    const back=new Session(9);TideGallery.begin(back,reverse);
+    assert.equal(back.players[1].ground,back.world.gallery.middle);assert.deepEqual(Array.from(back.gallery.ticket),readings);
+    for(let j=0;j<250;j++){const k=control(back);k[1]=empty();back.tick(step,k);}
+    assert.equal(back.gallery.phase,'return');assert.equal(back.gallery.angle,0);
+    reach(g,()=>a.phase==='stairs');assert.ok(!w.bridge[0].active);
+    reach(g,()=>w.bridge[0].active);assert.equal(a.opening,1);
+    reach(g,()=>a.phase==='file');
+    const card=new Session(9);TideGallery.begin(card,TideGallery.checkpoint(g));
+    const s=card.gallery;reach(card,()=>s.grip.every(Boolean));
+    for(let j=0;j<80;j++)card.tick(step,[empty(),{...empty(),use:true,x:-1,z:-1}]);
+    assert.equal(s.insert,0,'Shut clip must prevent insertion');
+    for(let j=0;j<170;j++)card.tick(step,[{...empty(),use:true},{...empty(),use:true,x:-1,z:-1}]);
+    assert.equal(s.insert,1);assert.equal(s.rail,-1);
+    card.tick(step,[empty(),empty()]);assert.ok(s.rejected&&s.phase==='file');
+    for(let j=0;j<130;j++)card.tick(step,[{...empty(),use:true},{...empty(),use:true,z:1}]);
+    assert.equal(s.insert,0);assert.ok(!s.rejected);
+    reach(card,()=>s.phase==='done');assert.equal(s.rail,1);assert.equal(TideGallery.checkpoint(card).gallery,'inside');
+    assert.equal(TideGallery.validTicket([23,null]),null);
+    const old=new Session(9);TideGallery.begin(old,{gallery:'file'});
+    assert.equal(old.gallery.ticket,null);reach(old,()=>old.gallery.phase==='done');
   }
   {
     const g=new Session(0);
