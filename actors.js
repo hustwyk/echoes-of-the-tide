@@ -216,7 +216,7 @@
       let data = this.parts.get(finish);
       if (!data) {
         data = {position:[], normal:[], color:[], uv:[], tailoring:[], backPanel:[], coating:[], index:[]};
-        if(this.glove){data.clench=[];data.clenchNormals=[];}
+        if(this.glove){data.clench=[];data.clenchNormals=[];data.pressed=[];data.pressedNormals=[];}
         this.parts.set(finish,data);
       }
       transform.position.fromArray(at);
@@ -236,6 +236,11 @@
           gloveVertex.copy(v);gloveNormal.copy(n);
           if(this.fingerPose){gloveVertex.applyMatrix4(this.fingerPose);gloveNormal.transformDirection(this.fingerPose);}
           data.clench.push(gloveVertex.x,gloveVertex.y,gloveVertex.z);data.clenchNormals.push(gloveNormal.x,gloveNormal.y,gloveNormal.z);
+          const splay=.10*T.MathUtils.smoothstep(-v.y,.052,.107);
+          const flatten=Math.max(0,-.012-v.z),pressedZ=flatten?-.012-.011*(1-Math.exp(-flatten/.0055)):v.z;
+          data.pressed.push(v.x*(1+splay),v.y,pressedZ-.024*T.MathUtils.smoothstep(-v.y,.012,.046));
+          gloveNormal.copy(n);if(flatten)gloveNormal.z/=Math.max(.12,2*Math.exp(-flatten/.0055));
+          gloveNormal.normalize();data.pressedNormals.push(gloveNormal.x,gloveNormal.y,gloveNormal.z);
         }
         data.color.push(color.r,color.g,color.b);
         const u=a.uv?.getX(i)||0,w=a.uv?.getY(i)||0;
@@ -298,8 +303,8 @@
           shape.setAttribute('coating',new T.Float32BufferAttribute(d.coating,4));
         }
         if(d.clench){
-          shape.morphAttributes.position=[new T.Float32BufferAttribute(d.clench,3)];
-          shape.morphAttributes.normal=[new T.Float32BufferAttribute(d.clenchNormals,3)];
+          shape.morphAttributes.position=[new T.Float32BufferAttribute(d.clench,3),new T.Float32BufferAttribute(d.pressed,3)];
+          shape.morphAttributes.normal=[new T.Float32BufferAttribute(d.clenchNormals,3),new T.Float32BufferAttribute(d.pressedNormals,3)];
         }
         shape.setIndex(d.index);
         shape.computeBoundingSphere();
@@ -768,18 +773,18 @@
 
   const axis=new T.Vector3(),pole=new T.Vector3(),elbowAt=new T.Vector3(),reach=new T.Vector3();
   const palmOffset=new T.Vector3(0,-.263,-.005),armRotation=new T.Quaternion(),foreRotation=new T.Quaternion();
-  function handleArm(chest,arm,fore,goal,side,weight){
+  function handleArm(chest,arm,fore,goal,side,weight,end=palmOffset,maxDistance=Infinity){
     // Solve both hinges against the handle after it has moved. The elbow pole
     // points out and back so a hand crossing the torso takes a natural path.
     reach.copy(goal);chest.worldToLocal(reach);reach.sub(arm.position);
-    const l1=fore.position.length(),l2=palmOffset.length(),dist=T.MathUtils.clamp(reach.length(),.08,l1+l2-.0002);
+    const l1=fore.position.length(),l2=end.length(),dist=T.MathUtils.clamp(reach.length(),.08,Math.min(maxDistance,l1+l2-.0002));
     axis.copy(reach).normalize();pole.set(side?1:-1,-.24,.54);
     pole.addScaledVector(axis,-pole.dot(axis)).normalize();
     const along=(l1*l1-l2*l2+dist*dist)/(2*dist);
     elbowAt.copy(axis).multiplyScalar(along).addScaledVector(pole,Math.sqrt(Math.max(0,l1*l1-along*along)));
     armRotation.setFromUnitVectors(reach.copy(fore.position).normalize(),axis.copy(elbowAt).normalize());
     reach.copy(goal);chest.worldToLocal(reach);reach.sub(arm.position).setLength(dist).sub(elbowAt).normalize().applyQuaternion(foreRotation.copy(armRotation).invert());
-    foreRotation.setFromUnitVectors(elbowAt.copy(palmOffset).normalize(),reach);
+    foreRotation.setFromUnitVectors(elbowAt.copy(end).normalize(),reach);
     arm.quaternion.slerp(armRotation,weight);fore.quaternion.slerp(foreRotation,weight);
   }
 
@@ -793,13 +798,13 @@
   const easeStep=(a,b,x)=>T.MathUtils.smoothstep(x,a,b);
   const wrapAngle=x=>Math.atan2(Math.sin(x),Math.cos(x));
 
-  function placeLeg(b,i,x,y,z,plane,pitch,yaw,roll) {
+  function placeLeg(b,i,x,y,z,plane,pitch,yaw,roll,pole=null,maxDistance=Infinity) {
     const thigh=b['thigh'+i],shin=b['shin'+i],boot=b['boot'+i];
     footGoal.set(x,y,z).applyMatrix4(inversePelvis).sub(thigh.position);
     const upper=-shin.position.y,lower=-boot.position.y;
-    const length=gaitClamp(footGoal.length(),.18,upper+lower-.00005);
+    const length=gaitClamp(footGoal.length(),.18,Math.min(maxDistance,upper+lower-.00005));
     legAxis.copy(footGoal).normalize();
-    kneePole.set(i?.065:-.065,0,-1);
+    if(pole)kneePole.copy(pole);else kneePole.set(i?.065:-.065,0,-1);
     kneePole.addScaledVector(legAxis,-kneePole.dot(legAxis)).normalize();
     const along=(upper*upper-lower*lower+length*length)/(2*length);
     kneePoint.copy(legAxis).multiplyScalar(along).addScaledVector(kneePole,Math.sqrt(Math.max(0,upper*upper-along*along)));
@@ -867,6 +872,157 @@
       if(signalTarget.lengthSq()>.00001)signalFrame.setFromUnitVectors(signalDown,signalTarget.normalize());
       wrist.quaternion.slerp(signalFrame,weight);
     }
+  }
+
+  // A hold stores four contact points in the world. During the first fraction
+  // of the rebound the character moves away from those points and extends the
+  // two leg chains before folding back into the normal airborne animation.
+  const wallRoot=new T.Vector3(),wallNormal=new T.Vector3(),wallTangent=new T.Vector3();
+  const wallLocalNormal=new T.Vector3(),wallLocalUp=new T.Vector3(),wallPoint=new T.Vector3(),wallGoal=new T.Vector3();
+  const wallX=new T.Vector3(),wallY=new T.Vector3(),wallZ=new T.Vector3(),wallOffset=new T.Vector3(),wallPole=new T.Vector3();
+  const wallBasis=new T.Matrix4(),wallTranspose=new T.Matrix3(),wallQuat=new T.Quaternion(),wallEase=new T.Quaternion();
+  const wallEuler=new T.Euler(0,0,0,'YXZ'),savedRotations=Array.from({length:3},()=>new T.Quaternion());
+  const wallLimbs=['arm0','forearm0','wrist0','thigh0','shin0','boot0','arm1','forearm1','wrist1','thigh1','shin1','boot1'];
+  const worldUp=new T.Vector3(0,1,0),gloveDepth=.047;
+
+  function clearWall(rig){
+    if(!rig.wallPose)return;
+    for(const wrist of [rig.bones.wrist0,rig.bones.wrist1]){
+      for(const mesh of wrist.children)if(mesh.morphTargetInfluences)mesh.morphTargetInfluences[1]=0;
+    }
+    rig.wallPose=null;
+  }
+
+  // Orient a glove so its pressed face is parallel to the wall even on the
+  // signal operator's non-uniformly scaled chest. The fingers point upwards.
+  function flatGlove(fore,wrist,n,tangent,sign){
+    fore.updateWorldMatrix(true,false);
+    wallTranspose.setFromMatrix4(fore.matrixWorld).transpose();
+    wallZ.copy(n).applyMatrix3(wallTranspose);
+    const depthScale=wallZ.length();wallZ.normalize();
+    wallX.copy(worldUp).multiplyScalar(-1).addScaledVector(tangent,-sign*.15);
+    wallBasis.copy(fore.matrixWorld).invert();
+    wallY.copy(wallX).transformDirection(wallBasis);
+    wallY.addScaledVector(wallZ,-wallY.dot(wallZ)).normalize();
+    wallX.crossVectors(wallY,wallZ).normalize();
+    wrist.quaternion.setFromRotationMatrix(wallBasis.makeBasis(wallX,wallY,wallZ));
+    return depthScale;
+  }
+
+  function wallArm(b,i,contact,n,tangent,bodyScale,weight,limit,heldWrist,hold){
+    const arm=b['arm'+i],fore=b['forearm'+i],wrist=b['wrist'+i],sign=i?1:-1;
+    savedRotations[0].copy(arm.quaternion);savedRotations[1].copy(fore.quaternion);savedRotations[2].copy(wrist.quaternion);
+    let support=gloveDepth*bodyScale;
+    for(let j=0;j<2;j++){
+      wallGoal.copy(contact).addScaledVector(n,support);
+      handleArm(b.chest,arm,fore,wallGoal,i,1,wrist.position,limit);
+      support=gloveDepth*flatGlove(fore,wrist,n,tangent,sign);
+    }
+    wallOffset.copy(wallGoal);b.chest.worldToLocal(wallOffset);const extension=wallOffset.distanceTo(arm.position);
+    arm.quaternion.slerp(savedRotations[0],1-weight);fore.quaternion.slerp(savedRotations[1],1-weight);
+    if(hold)heldWrist.copy(wrist.quaternion);
+    else wrist.quaternion.copy(heldWrist);
+    wrist.quaternion.slerp(savedRotations[2],1-weight);
+    for(const mesh of wrist.children)if(mesh.morphTargetInfluences)mesh.morphTargetInfluences[1]=weight;
+    return extension;
+  }
+
+  // Straightening an elbow or knee at constant endpoint speed approaches a
+  // two-link singularity. Release tension by extending at a finite joint rate;
+  // the toes can break contact while the silhouette keeps opening naturally.
+  function releasedLength(initial,upper,lower,t,interval){
+    const start=Math.acos(gaitClamp((initial*initial-upper*upper-lower*lower)/(2*upper*lower),-1,1));
+    const bend=gaitMix(start,Math.min(.25,start),easeStep(0,interval,t));
+    return Math.sqrt(upper*upper+lower*lower+2*upper*lower*Math.cos(bend));
+  }
+
+  function wallPose(actor,m,dt){
+    const rig=actor.userData.rig,b=rig.bones,w=m.wall;
+    const free=m.grounded===false&&!m.grips&&!m.operating&&!m.climbing&&!m.swing;
+    const active=free&&w&&(w.phase==='hold'||w.phase==='kick')&&Number.isFinite(w.planeX)&&Math.hypot(w.normalX||0,w.normalZ||0)>.5;
+    let state=rig.wallPose;
+    if(!free||(!active&&!state)){clearWall(rig);return;}
+    actor.updateWorldMatrix(true,false);wallRoot.setFromMatrixPosition(actor.matrixWorld);
+    const scale=actor.getWorldScale(wallOffset).y,hold=active&&w.phase==='hold';
+    if(active)wallNormal.set(w.normalX||0,0,w.normalZ||0).normalize();
+    if(!state||active&&(wallNormal.dot(state.normal)<.70||Math.abs(w.planeX-state.px)>.55)){
+      state=rig.wallPose={normal:wallNormal.clone(),px:w.planeX,pz:Number.isFinite(w.planeZ)?w.planeZ:wallRoot.z,
+        shift:0,age:0,prevPose:wallLimbs.map(()=>new T.Quaternion()),hasPose:false,phase:'hold',valid:false,wrists:[new T.Quaternion(),new T.Quaternion()],armLengths:[.37,.37],legLengths:[.63,.63],hands:[new T.Vector3(),new T.Vector3()],feet:[new T.Vector3(),new T.Vector3()]};
+    }
+    if(hold){
+      state.normal.copy(wallNormal);state.px=w.planeX;
+      if(Number.isFinite(w.planeZ))state.pz=w.planeZ;
+    }
+    wallNormal.copy(state.normal);wallTangent.set(wallNormal.z,0,-wallNormal.x);
+    const dist=(wallRoot.x-state.px)*wallNormal.x+(wallRoot.z-state.pz)*wallNormal.z;
+    if(hold){state.phase='hold';state.age=0;}
+    else{
+      const previous=state.phase==='kick'?state.age:0;
+      state.age=active&&Number.isFinite(w.age)?Math.max(0,w.age):previous+dt;
+      state.phase='kick';
+    }
+    const age=state.age;
+    const bodyWeight=hold?1:1-easeStep(.045,.36,age);
+    if(bodyWeight<.0001){clearWall(rig);return;}
+    const spring=hold?0:easeStep(.028,.160,age),handWeight=hold?1:1-easeStep(.025,.240,age);
+    const legsWeight=hold?1:1-easeStep(.09,.36,age);
+    const settle=hold?easeStep(0,.145,Math.max(0,w.age||0)):1;
+    const leftHigh=(wallNormal.x>0)!==!!rig.id;
+    if(hold||!state.valid){
+      const headroom=active&&Number.isFinite(w.topY)?(w.topY-wallRoot.y)/scale:Infinity;
+      const highPalm=Math.min(1.425,headroom-.126);
+      const lowering=gaitClamp(1.425-highPalm,0,1.46);
+      state.lowEdge=easeStep(.03,.91,lowering);state.crouch=lowering*.67;
+      const highFoot=Math.min(.511-state.crouch,headroom-.207);
+      state.shift=gaitClamp(.446-.025*state.lowEdge-dist/scale,-.48,.48);
+      wallPoint.copy(wallRoot).addScaledVector(wallNormal,-dist);
+      for(let i=0;i<2;i++){
+        const sign=i?1:-1,high=(i===0)===leftHigh;
+        state.hands[i].copy(wallPoint).addScaledVector(wallTangent,sign*(high?.211:.235)*scale);
+        state.hands[i].y+=(highPalm-(high?0:.195-.118*state.lowEdge))*scale;
+        state.feet[i].copy(wallPoint).addScaledVector(wallTangent,sign*(high?.165:.185)*scale);
+        state.feet[i].y+=(highFoot-(high?.186:0))*scale;
+      }
+      state.valid=true;
+    }
+    actor.getWorldQuaternion(wallQuat).invert();
+    wallLocalNormal.copy(wallNormal).applyQuaternion(wallQuat).normalize();
+    wallLocalUp.copy(worldUp).applyQuaternion(wallQuat).normalize();
+    const yaw=Math.atan2(wallLocalNormal.x,wallLocalNormal.z);
+    wallGoal.copy(wallLocalNormal).multiplyScalar(state.shift);
+    wallGoal.addScaledVector(wallLocalUp,.843-.052*settle+.083*spring-state.crouch);
+    b.hips.position.lerp(wallGoal,bodyWeight);
+    b.hips.quaternion.slerp(wallEase.setFromEuler(wallEuler.set(.043+.060*spring,yaw,leftHigh?.027:-.027)),bodyWeight);
+    b.chest.quaternion.slerp(wallEase.setFromEuler(wallEuler.set(-.23-.066*settle+.34*spring-.36*state.lowEdge,leftHigh?.052:-.052,leftHigh?-.034:.034)),bodyWeight);
+    b.head.rotation.x=gaitMix(b.head.rotation.x,.205-.12*spring+.18*state.lowEdge,bodyWeight);
+    b.head.rotation.y=gaitMix(b.head.rotation.y,leftHigh?-.14:.14,bodyWeight);
+    b.hips.updateMatrix();inversePelvis.copy(b.hips.matrix).invert();
+    for(let i=0;i<2;i++){
+      const sign=i?1:-1,thigh=b['thigh'+i],shin=b['shin'+i],boot=b['boot'+i];
+      const armLimit=hold?Infinity:releasedLength(state.armLengths[i],b['forearm'+i].position.length(),b['wrist'+i].position.length(),age,.16);
+      const armLength=wallArm(b,i,state.hands[i],wallNormal,wallTangent,scale,handWeight,armLimit,state.wrists[i],hold||!state.hasPose);
+      if(hold)state.armLengths[i]=armLength;
+      savedRotations[0].copy(thigh.quaternion);savedRotations[1].copy(shin.quaternion);savedRotations[2].copy(boot.quaternion);
+      wallGoal.copy(state.feet[i]).addScaledVector(wallNormal,.059*scale);actor.worldToLocal(wallGoal);
+      wallPole.set(sign*(1.03-.20*spring),.42,-.33);
+      if(hold)state.legLengths[i]=wallOffset.copy(wallGoal).applyMatrix4(inversePelvis).distanceTo(thigh.position);
+      const legLimit=hold?Infinity:releasedLength(state.legLengths[i],-shin.position.y,-boot.position.y,age,.135);
+      placeLeg(b,i,wallGoal.x,wallGoal.y,wallGoal.z,wallLocalNormal,0,0,0,wallPole,legLimit);
+      wallZ.copy(wallLocalUp).multiplyScalar(-1);wallX.crossVectors(wallLocalNormal,wallZ).normalize();
+      wallEase.setFromRotationMatrix(wallBasis.makeBasis(wallX,wallLocalNormal,wallZ));
+      boot.quaternion.copy(wallQuat.copy(b.hips.quaternion).multiply(thigh.quaternion).multiply(shin.quaternion).invert().multiply(wallEase));
+      thigh.quaternion.slerp(savedRotations[0],1-legsWeight);shin.quaternion.slerp(savedRotations[1],1-legsWeight);
+      boot.quaternion.slerp(savedRotations[2],1-legsWeight);
+    }
+    // The physics impulse can move the root 16 cm in one 60 Hz tick. Let the
+    // elbow and shin rotate out of compression over several ticks.
+    const turnRate=(13.5+easeStep(.19,.32,age)*22)*dt;
+    for(let j=0;j<wallLimbs.length;j++){
+      const pose=b[wallLimbs[j]].quaternion,previous=state.prevPose[j];
+      if(!hold&&state.hasPose&&age<.33)pose.copy(previous.rotateTowards(pose,turnRate));
+      else previous.copy(pose);
+    }
+    state.hasPose=true;
   }
 
   function animate(actor,motion,dt,time) {
@@ -1022,6 +1178,7 @@
       if(grips)handleArm(b.chest,arm,forearm,grips[i],i,ride?1:reaching?st.reach:work);
     }
     if(motion.pointAt||rig.pointing)pointGesture(actor,motion,s);
+    if(motion.wall||rig.wallPose)wallPose(actor,motion,s);
     st.x=actor.position.x;st.y=actor.position.y;st.z=actor.position.z;st.yaw=yaw;st.vx=vx;st.vz=vz;st.vy=vy;st.ground=ground;
   }
 
