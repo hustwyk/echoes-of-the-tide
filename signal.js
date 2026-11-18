@@ -36,10 +36,10 @@ const TideSignal=(()=>{
   }
   function create(g){
     if(!g.world.signal)return null;
-    return {stroke:0,armed:true,rpm:.13,spin:0,trim:.48,linked:false,glow:0,shutter:0,
+    return {...TideStarter.create(),glow:0,shutter:0,
       sent:false,heard:false,speech:0,mic:'idle',replyAt:0,turn:0,drift:0,arrest:0,
       angle:-.63,velocity:0,walked:false,onHead:false,pinned:false,closed:false,
-      early:-3,strokes:0,voice:'',clock:0,testStroke:0,tripReady:true,tripTime:5,flag:0,strokesTest:0,
+      early:-3,voice:'',clock:0,testStroke:0,tripReady:true,tripTime:5,flag:0,strokesTest:0,
       sightX:.062,sightY:-.041,darkTime:0,observed:false,marked:false,strikeAt:-5};
   }
   function bridgePose(g){
@@ -54,7 +54,7 @@ const TideSignal=(()=>{
   }
   function begin(g){
     const r=g.signal;if(!r)return;
-    if(g.stage>=1){r.linked=true;r.rpm=Math.max(.53,r.rpm);}
+    if(g.stage>=1){r.linked=true;r.shift=1;r.coupling='latched';r.rpm=Math.max(.53,r.rpm);r.drivenRPM=r.rpm;}
     if(g.stage===2){
       r.sent=true;r.heard=true;r.flag=0;r.shutter=1;r.glow=1;r.mic='idle';r.speech=0;
       r.turn=Math.max(r.turn,.11);r.drift=Math.max(r.drift,.045);
@@ -63,12 +63,13 @@ const TideSignal=(()=>{
   }
   function step(g,dt){
     const r=g.signal;
-    if(r.voice){r.clock+=dt;if(r.clock>=TideTransitSpeech[r.voice].duration){r.voice='';r.clock=0;}}
+    if(g.stage===0)TideStarter.step(g,dt);
+    else if(r.voice){r.clock+=dt;if(r.clock>=TideTransitSpeech[r.voice].duration){r.voice='';r.clock=0;}}
     r.spin+=r.rpm*dt*10.7;
-    if(g.stage===0)r.rpm=Math.max(.09,r.rpm-dt*.028);
-    else if(r.linked){
+    if(g.stage>0&&r.linked){
       const load=g.stage===1&&r.shutter>0?.055:0;
       r.rpm+=((.34+r.trim*.51-load+.030*Math.sin(g.time*1.7))-r.rpm)*(1-Math.exp(-dt*1.9));
+      r.drivenRPM=r.rpm;r.drivenSpin+=r.drivenRPM*dt*10.7;
     }
     const power=r.shutter*(r.linked?Math.min(1,r.rpm*1.85):0);
     r.glow+=(power-r.glow)*(1-Math.exp(-dt*5.4));
@@ -96,26 +97,6 @@ const TideSignal=(()=>{
     const rotation=yaw+Math.PI-1.04+1.02*r.turn;
     const swell=TideLookout.swell;
     return {x:p.x,y:g.cues.water+.5*(swell(p.x-3,p.z,t)+swell(p.x+3,p.z,t)),z:p.z,yaw:rotation};
-  }
-  function readySpeed(r){return r.rpm>=.50&&r.rpm<=.82;}
-  function start(g,k,dt){
-    const r=g.signal,strong=g.engaged[0],rear=g.engaged[1];
-    if(strong)r.stroke=clamp(r.stroke+k[0].z*dt*2.05,0,1);
-    if(r.stroke<.12)r.armed=true;
-    if(r.stroke>.88&&r.armed){
-      r.strokes++;r.armed=false;r.rpm=Math.min(.99,r.rpm+.15);g.sound(168+r.rpm*63,.075);
-    }
-    if(rear)r.trim=clamp(r.trim+k[1].x*dt*.48,0,1);
-    const matched=Math.abs(r.rpm-r.trim)<.105,ready=readySpeed(r)&&matched;
-    g.state.dials=[r.stroke,r.trim];
-    g.set(0,'握住起动杆，向后拉到底，再向前推回。匀速后让同伴接住飞轮',{
-      vis:'dial',value:r.rpm,target:.66,band:.16,caption:!r.armed?'回推，让棘爪重新咬齿':r.rpm>.82?'飞轮太快，先让它空转':readySpeed(r)?'转速进入绿弧，等试灯':'拉满一程才会带动飞轮'});
-    g.set(1,'左右调离合器，让红针对上正在走的黑针。飞轮在绿弧内时按确认试灯',{
-      vis:'dial',value:r.trim,target:r.rpm,band:.105,caption:!readySpeed(r)?'等同伴把飞轮摇进绿弧':matched?'两针已合，可以试灯':r.trim<r.rpm?'红针再往右':'红针再往左'});
-    if(g.commit(1,k)&&rear){
-      if(strong&&ready){r.linked=true;g.sound(440,.12);g.alert('试灯亮了。回路接住飞轮，岸外的新灯还没合闸。',3);g.advance();}
-      else if(g.time-r.early>1.4){r.early=g.time;g.alert(!strong?'等同伴扶住起动杆':'离合器弹开，再看两根针',1.8);}
-    }
   }
   function radio(g,k,dt,stop){
     const r=g.signal,active=g.engaged[1],ready=stop?r.closed&&r.glow<.06:r.shutter===1&&r.glow>.85;
@@ -180,15 +161,22 @@ const TideSignal=(()=>{
     radio(g,k,dt,true);
   }
   function interact(g,k,dt){
-    if(g.stage===0)start(g,k,dt);else if(TideTransit.active(g))TideTransit.operate(g,k,dt);else if(g.stage===1)light(g,k,dt);else blackout(g,k,dt);
+    if(g.stage===0)TideStarter.work(g,k,dt);else if(TideTransit.active(g))TideTransit.operate(g,k,dt);else if(g.stage===1)light(g,k,dt);else blackout(g,k,dt);
   }
   function checkpoint(g){
     const r=g.signal;
+    if(g.stage===0&&r?.linked)return {starter:'latched'};
     if(TideTransit.active(g))return {transit:true,turn:r.turn,drift:r.drift};
     return r?.pinned?{pinned:true,closed:r.closed,turn:r.turn,drift:r.drift}:null;
   }
   function restore(g,m){
     if(!g.signal)return;
+    if(g.stage===0&&m?.starter==='latched'){
+      const r=g.signal,w=g.world.signal;
+      r.coupling='latched';r.linked=true;r.shift=1;r.rpm=r.drivenRPM=.57;r.lines=['lamp'];
+      g.players=[w.starter,w.pilot].map(site=>({...TideTraversal.spawn(w.apron),x:site.x,y:site.y,z:site.z,yaw}));
+      g.checkpoints=[w.apron,w.apron];return;
+    }
     if(g.stage===1&&m?.transit===true){
       g.watch.done=true;g.field.done=true;g.signal.rpm=g.signal.trim=.66;
       g.players=[g.world.signal.cutout,g.world.signal.radio].map(s=>({...TideTraversal.spawn(s),x:s.x,z:s.z}));

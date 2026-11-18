@@ -306,6 +306,14 @@ window.TideAudioScene = (() => {
       setLayer(layers.rotor,now,pumpLoad * blade * .036,480);
       layers.drive.source.frequency.setTargetAtTime(42 + pumpLoad * 14,now,.42);
       layers.rotor.source.frequency.setTargetAtTime(84.6 + pumpLoad * 28.13,now,.39);
+      if(g.signal&&g.stage===0){
+        const r=g.signal,whine=30+105*r.rpm,sliding=Math.abs(r.rpm-r.drivenRPM)*r.shift;
+        setLayer(layers.drive,now,.017+.13*r.rpm,365+105*r.rpm,.08);
+        setLayer(layers.rotor,now,.10*r.drivenRPM,680,.11);
+        layers.drive.source.frequency.setTargetAtTime(whine,now,.08);
+        layers.rotor.source.frequency.setTargetAtTime(2*(30+105*r.drivenRPM),now,.09);
+        setLayer(layers.pump,now,.08*r.rpm+.23*sliding,230+580*r.rpm,.09);
+      }
       if(g.arrival?.engineRunning&&!g.arrival.done){
         const load=Math.abs(g.arrival.drive),power=.40+.60*load,firing=25+27*load;
         setLayer(layers.drive,now,.145*power,240+load*270,.11);
@@ -415,7 +423,7 @@ window.TideAudioScene = (() => {
       const delta = driving ? (q.ferry - previous.ferry) * 1.8 : q.dials[side] - previous.dials[side];
       if (active) previous.traveled[side] += Math.abs(delta);
       else previous.traveled[side] = 0;
-      if (previous.traveled[side] >= .078 && now >= previous.ratchetAt[side]) {
+      if (!(g.signal&&g.stage===0) && previous.traveled[side] >= .078 && now >= previous.ratchetAt[side]) {
         previous.traveled[side] %= .078;
         previous.ratchetAt[side] = now + .17;
         if (kind === 'tape') brush(now,'pink','bandpass',1780,2,.011,.13,.24,pan,.15,650);
