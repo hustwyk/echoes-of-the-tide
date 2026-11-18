@@ -3,10 +3,10 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const box=vm.createContext({});
-for(const name of ['missions','traversal','passage','rigging','drawbridge','fieldwork','lookout','paper','lantern','cooperation']){
+for(const name of ['missions','traversal','passage','rigging','drawbridge','fieldwork','lookout','paper','lantern','signal','cooperation']){
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../dist',name+'.js'),'utf8'),box);
 }
-const {Session,near,surface,lookout,ridePressure,TideLantern}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure,TideLantern})',box);
+const {Session,near,surface,lookout,ridePressure,TideLantern,TideSignal}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure,TideLantern,TideSignal})',box);
 const empty=()=>({x:0,z:0,use:false,jump:false});
 function steer(g,i,target,keys){
   const p=g.players[i],dx=target.x-p.x,dz=target.z-p.z,dist=Math.hypot(dx,dz);
@@ -39,8 +39,53 @@ function routeTo(g,i,site,keys) {
   else if(p.z>sec.ends[i].z+.8)steer(g,i,sec.ends[i],keys);
   else steer(g,i,site,keys);
 }
+function aimScope(g,out){
+    const w=g.watch,d=w.task.watcher,cam=lookout.camera(g);
+    const target=w.task.targets[w.step],pos=lookout.point(g,target);
+    const [dx,dy,dz]=pos.map((x,j)=>x-cam.eye[j]);
+    const axis=n=>Math.max(-1,Math.min(1,n*13));
+    out[d].x=axis(Math.atan2(dx,-dz)-cam.yaw);
+    out[d].z=-axis(Math.atan2(dy,Math.hypot(dx,dz))-cam.pitch);
+    out[d].jump=w.seen===target;out[1-d].jump=!!w.marked;
+}
+function signalInputs(g,out){
+  const r=g.signal,w=g.world.signal,axis=v=>Math.max(-1,Math.min(1,v));
+  for(let i=0;i<2;i++){
+    const p=g.players[i],s=g.section.sites[i];
+    if(i===0&&g.stage===2&&!r.pinned&&p.ground!==w.head){
+      const at=TideSignal.local(p);
+      let dest=TideSignal.point(0,.66,6.15);
+      if(Math.abs(at.x)<.48||at.z<5.78){
+        dest=r.angle>.39?w.shade:TideSignal.point(0,.66,5.96);
+      }
+      const dx=dest.x-p.x,dz=dest.z-p.z,k=Math.max(.6,Math.hypot(dx,dz));
+      out[i].x=dx/k;out[i].z=dz/k;
+      out[i].jump=r.walked&&p.grounded&&p.ground===w.bridge&&at.z<5.68-Math.cos(r.angle)*3.54;
+    }else if(near(p,s))out[i].use=true;
+    else steer(g,i,s,out[i]);
+  }
+  if(lookout.active(g)){if(out.every(k=>k.use))aimScope(g,out);return out;}
+  if(g.stage===0){
+    if(out[0].use)out[0].z=r.rpm<.66?(r.armed?1:-1):0;
+    if(out[1].use){out[1].x=axis((r.rpm-r.trim)*8);out[1].jump=r.rpm>.55&&Math.abs(r.trim-r.rpm)<.09;}
+  }else{
+    if(g.stage===1&&out[0].use){out[0].x=axis((.68-r.trim)*9);out[0].jump=r.shutter===0&&r.rpm>.59&&r.rpm<.75;}
+    if(g.stage===2&&!r.pinned){
+      if(out[1].use)out[1].z=axis((.56-r.angle)*7);
+      if(out[0].use)out[0].jump=r.onHead;
+      return out;
+    }
+    if(g.stage===2&&out[0].use)out[0].z=1;
+    if(out[1].use){
+      out[1].jump=r.mic==='idle'&&(g.stage===1?r.glow>.86:r.closed&&r.glow<.06);
+      if(r.mic==='sending'&&r.speech>=1||['readback','listening','receipt','answered'].includes(r.mic))out[1].use=false;
+    }
+  }
+  return out;
+}
 function control(g){
   const out=[empty(),empty()],sec=g.section,s=g.spec,q=g.state;
+  if(g.signal)return signalInputs(g,out);
   if(g.optic){
     const o=g.optic,k=o.phase;
     for(let i=0;i<2;i++){
@@ -157,18 +202,11 @@ function control(g){
   const trim=(i,value)=>{if(out[i].use)out[i].x=Math.max(-1,Math.min(1,(value-q.dials[i])*24));};
   if(!out.every(k=>k.use))return out;
   if(lookout.active(g)){
-    const w=g.watch,d=w.task.watcher,cam=lookout.camera(g);
-    const target=w.task.targets[w.step],pos=lookout.point(g,target);
-    const [dx,dy,dz]=pos.map((x,j)=>x-cam.eye[j]);
-    const axis=n=>Math.max(-1,Math.min(1,n*13));
-    out[d].x=axis(Math.atan2(dx,-dz)-cam.yaw);
-    out[d].z=-axis(Math.atan2(dy,Math.hypot(dx,dz))-cam.pitch);
-    out[d].jump=w.seen===target;out[1-d].jump=!!w.marked;
+    aimScope(g,out);
     return out;
   }
   switch(s.type){
     case 'cable':trim(1,(s.code+.5)/3);out[0].jump=g.time-q.pulseAt>2;out[1].jump=Math.min(2,Math.floor(q.dials[1]*3))===s.code;break;
-    case 'power':trim(0,s.value+.012);break;
     case 'paper':{
       const p=g.paper,h=p.holder,r=1-h,[x,y]=p.pin;
       const dx=p.offset[0]+Math.cos(p.angle)*x-Math.sin(p.angle)*y-x,dy=p.offset[1]+Math.sin(p.angle)*x+Math.cos(p.angle)*y-y;
@@ -226,6 +264,36 @@ if(require.main===module){
     for(let j=0;j<60*120&&!condition()&&!g.complete;j++)g.tick(step,control(g));
     assert.ok(condition(),'Did not reach checkpoint in chapter '+(g.index+1)+' stage '+g.stage);
   }
+  const station=new Session(2),range=station.signal,w=station.world.signal;
+  reach(station,()=>station.near.every(Boolean));
+  for(let n=0;n<300;n++)station.tick(step,[{...empty(),use:true,z:1},{...empty(),use:true,jump:true}]);
+  assert.equal(range.strokes,1);assert.equal(station.stage,0);
+  reach(station,()=>station.stage===1&&range.shutter===1&&range.glow>.80);
+  assert.ok(station.watch.done&&!range.heard);
+  while(range.glow<=.87)station.tick(step,[empty(),empty()]);
+  const heading=TideSignal.ship(station,station.time).yaw;
+  const keyed=(jump=false)=>[empty(),{...empty(),use:true,jump}];
+  station.tick(step,keyed(true));for(let n=0;n<20;n++)station.tick(step,keyed());
+  station.tick(step,[empty(),empty()]);assert.equal(range.mic,'idle');
+  station.tick(step,keyed(true));for(let n=0;n<280;n++)station.tick(step,keyed());
+  assert.equal(range.speech,1);assert.ok(!range.sent&&!range.heard);
+  assert.equal(TideSignal.ship(station,station.time).yaw,heading);
+  station.tick(step,[empty(),empty()]);assert.equal(range.mic,'listening');assert.equal(range.heard,false);
+  reach(station,()=>range.heard&&range.turn>.16);
+  assert.ok(TideSignal.ship(station,station.time).yaw>heading+.15);
+  reach(station,()=>station.stage===2);
+  for(let n=0;n<330;n++)station.tick(step,[empty(),control(station)[1]]);
+  assert.ok(range.angle>.35&&!range.pinned&&!range.closed&&range.glow>.85);
+  reach(station,()=>station.players[0].ground===w.bridge&&range.walked);
+  const leg=station.players[0];assert.ok(leg.y>w.gallery.y+.5&&leg.y<w.head.y);
+  reach(station,()=>range.pinned);assert.equal(station.players[0].ground,w.head);
+  const markSignal=TideSignal.checkpoint(station),reloadSignal=new Session(2);
+  reloadSignal.stage=2;reloadSignal.begin();TideSignal.restore(reloadSignal,markSignal);
+  assert.deepEqual(TideSignal.checkpoint(reloadSignal),markSignal);
+  reach(reloadSignal,()=>reloadSignal.signal.closed);
+  const shutterSave=TideSignal.checkpoint(reloadSignal);
+  const dark=new Session(2);dark.stage=2;dark.begin();TideSignal.restore(dark,shutterSave);
+  assert.equal(dark.signal.glow,0);reach(dark,()=>dark.complete);assert.ok(dark.signal.arrest>.95);
   const basket=new Session(0);
   reach(basket,()=>basket.stage===1&&basket.players[1].ground===basket.section.ferry.deck);
   assert.equal(basket.section.rig.slot,2);

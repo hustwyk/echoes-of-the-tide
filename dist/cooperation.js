@@ -31,10 +31,11 @@ const TideCoop = (() => {
   }
   class Session {
     constructor(index,events={}) {
-      this.index=index;this.world=index===9?TideLantern.layout():TideTraversal.build(index);this.events=events;
-      TideRigging.build(this.world);TideDrawbridge.build(this.world);if(!this.world.lantern)TideFieldWork.build(this.world,index);
+      this.index=index;this.world=index===2?TideSignal.layout():index===9?TideLantern.layout():TideTraversal.build(index);this.events=events;
+      TideRigging.build(this.world);TideDrawbridge.build(this.world);if(!this.world.lantern&&!this.world.signal)TideFieldWork.build(this.world,index);
       this.time=0;this.stage=0;this.setbacks=0;this.complete=false;this.notice='';this.noticeUntil=0;
       this.cues={light:0,angle:0,water:-4,rescue:0,ghost:0};
+      this.signal=TideSignal.create(this);
       this.players=this.world.sections[0].starts.map(TideTraversal.spawn);
       this.checkpoints=this.world.sections[0].starts.slice();TidePassage.build(this);
       this.begin();
@@ -49,7 +50,7 @@ const TideCoop = (() => {
         returnGate:0,balance:0,warnUntil:0,buttonCooldown:0,releaseHeld:false,catchup:0};
       if(this.spec.type==='ride')this.state.dials[this.spec.driver]=.50;
       this.rig=TideRigging.reset(this);this.paper=TidePaper.create(this);this.optic=TideLantern.create(this);
-      if(this.optic){this.cues.light=.97;this.cues.rays=TideLantern.viewData(this).images;}TideFieldWork.reset(this);TideLookout.reset(this);
+      if(this.optic){this.cues.light=.97;this.cues.rays=TideLantern.viewData(this).images;}TideFieldWork.reset(this);TideLookout.reset(this);TideSignal.begin(this);
       this.events.stage?.(this);
     }
     alert(text,seconds=2.5) {
@@ -83,16 +84,19 @@ const TideCoop = (() => {
       }
       const activeSites=this.field.done?section.sites:section.field.sites;
       this.near=this.players.map((p,i)=>near(p,activeSites[i]));
+      if(this.signal&&this.stage===2)this.near[0]&&=this.players[0].ground===this.world.signal.head;
       const cart=this.spec.mode==='bridge'&&!section.span.seated;
       if(cart)this.near[1-this.spec.driver]=TideDrawbridge.onCart(this,1-this.spec.driver,{use:true});
       if(section.tram)this.near=this.near.map((v,i)=>v&&this.players[i].ground===section.tram.deck);
       this.engaged=this.near.map((ok,i)=>ok&&inputs[i].use);
+      if(this.signal)TideSignal.step(this,dt);
       const prevStaff=section.span?.lower?TideDrawbridge.coordinates(section.span,this.players[1-this.spec.driver]):null;
       for(let side=0;side<2;side++){
         const p=this.players[side];
         TideTraversal.move(p,inputs[side],dt,this.world,yaws[side],this.engaged[side]||TideRigging.lighting(this,side,inputs[side]));
         TidePassage.collide(this,p);
-        if(this.optic){TideLantern.collide(p);if(this.engaged[side])TideLantern.stance(this,side,dt);}
+        if(this.signal){if(this.engaged[side])TideSignal.stand(this,side,dt);}
+        else if(this.optic){TideLantern.collide(p);if(this.engaged[side])TideLantern.stance(this,side,dt);}
         else if(this.engaged[side]&&!(cart&&side!==this.spec.driver))approachInstrument(this,side,activeSites[side],dt);
         if(p.y<Math.min(...section.starts.map(d=>d.y),...section.ends.map(d=>d.y))-4.2) {
           this.resetPerson(side,'安全索接住了你');
@@ -103,6 +107,7 @@ const TideCoop = (() => {
       if(prevStaff)TideDrawbridge.carry(this,inputs,dt,prevStaff);
       if(q.doneAt!==null)return;
       if(this.optic){TideLantern.interact(this,inputs,dt);return;}
+      if(this.signal){if(!TideLookout.interact(this,inputs,dt))TideSignal.interact(this,inputs,dt);return;}
       if(!TideFieldWork.interact(this,inputs,dt)&&!TideLookout.interact(this,inputs,dt))handlers[this.spec.type](this,inputs,dt);
     }
     hazardPhase(){return (this.time/(4.5-.08*this.index)+.16*this.stage)%1;}
@@ -165,25 +170,6 @@ const TideCoop = (() => {
     if(g.commit(1,input)){
       if(visible&&choice===s.code){g.advance();}else {q.pulseAt=-10;g.alert(visible?'支路不符，保险已弹回':'需要同伴先发出试灯脉冲');g.sound(100,.15);}
     }
-  }
-  function power(g,input,dt){
-    const q=g.state,t=g.spec.value;
-    q.dials[0]=clamp(q.dials[0]-dt*.076,0,1);
-    const v=g.tune(0,input,dt,.56),ok=Math.abs(v-t)<.10;
-    g.cues.light=v;
-    q.hold=ok && g.engaged[0] && g.engaged[1]?q.hold+dt:Math.max(0,q.hold-dt*2);
-    g.set(0,'左右转飞轮，把电压留在亮区',{vis:'dial',value:v,target:t,band:.10,caption:'发电机  '+percent(v)});
-    g.set(1,'看见绿色灯带后，按住操作键发报',{vis:'dial',value:q.hold/1.35,caption:ok?'引导灯已亮':'等待灯机稳压'});
-    if(q.hold>=1.35)g.advance();
-  }
-  function blackout(g,input,dt){
-    const q=g.state;
-    if(g.engaged[0])q.dials[0]=Math.max(0,q.dials[0]-dt*.5);
-    g.cues.light=q.dials[0]*1.8;
-    if(q.dials[0]<.08 && g.engaged[1])q.hold+=dt;
-    g.set(0,'压下遮光闸，直到绿光消失',{vis:'dial',value:q.dials[0]*2,target:0,caption:'透光量'});
-    g.set(1,'绿灯熄灭后按住操作键，叫停海雁号',{vis:'dial',value:q.hold,caption:'纠正回话'});
-    if(q.hold>=1)g.advance();
   }
   function alignment(g,input,dt){
     const q=g.state,s=g.spec,mode=s.type;
@@ -344,6 +330,6 @@ const TideCoop = (() => {
       if(g.cues.rescue===1 && g.commit(0,input))g.advance();
     }
   }
-  const handlers={ride,cable,power,blackout,tape:alignment,paper:TidePaper.interact,optic:alignment,radio,tide,post,rhythm,quiet,release};
+  const handlers={ride,cable,tape:alignment,paper:TidePaper.interact,optic:alignment,radio,tide,post,rhythm,quiet,release};
   return {Session,roleKeys,near,ridePressure};
 })();

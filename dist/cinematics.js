@@ -24,7 +24,7 @@ window.TideCinema = (() => {
     let clock=0, duration=0, playing=false, disposed=false;
     let cupboard, cup, tape, tin, screw, sheet, packet, green, marker;
     let tender, cable, workroom, paperStrip, hand, newLabel, voiceCoils;
-    let renderedText='',lampOffAt=-1;
+    let renderedText='';
     const scratch=new T.Vector3(), end=new T.Vector3();
     const filmTime=()=>playing?clock:0;
 
@@ -444,10 +444,6 @@ window.TideCinema = (() => {
           marker.position.y=g.cues.water+.14*Math.sin(t*.8);marker.rotation.z=.055*Math.sin(t*1.2);
           green.material.emissiveIntensity=.7+2.8*Math.pow(Math.max(0,Math.sin(t*2.5)),6);
         }
-        if(g.spec.type==='blackout' && lampOffAt<0)lampOffAt=g.time;
-        const drift=g.stage<1?0:g.stage===1?g.cues.light*.24:.62;
-        ship.rotation.y+=drift*Math.sin(.86+Math.min(2.3,Math.max(0,t-(lampOffAt<0?g.time:lampOffAt))*.08));
-        ship.position.x-=drift*3.3;
       }else if(idx===3){
         const float=g.stage===0 && !playing;
         cup.position.set(float?.15*Math.sin(t*.44):-.16,float?Math.max(.05,(g.cues.basin??g.cues.water)-shelf.position.y+.11):.024,float?.12*Math.cos(t*.36):.07);

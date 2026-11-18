@@ -113,6 +113,7 @@ window.TideCoast = (() => {
   const waterFragment = `
     uniform sampler2D uNoise,uSky;
     uniform float uTime,uHasSky,uSignal,uBearing,uInside;
+    uniform float uShoreLamp;uniform vec4 uTurningShip;
     uniform vec3 uSun,uFog;uniform vec4 basin,uNearOptic,uFarOptic;uniform vec2 uGhost,uRangeAxis;
     varying vec3 vSea;
     varying float vHeight;
@@ -164,6 +165,22 @@ window.TideCoast = (() => {
         float ghost=exp(-pow((u-img.y)/max(.28,img.z*.68),2.))*mix(uGhost.x,uGhost.y,slice);
         lit+=rangeFade*caustic*(vec3(2.8,2.46,1.72)*mainSpot*img.w+vec3(1.86,1.15,.38)*ghost);
       }
+      if(uShoreLamp>=0.){
+        vec2 transit=normalize(vec2(25.,10.));
+        vec2 across=vec2(-transit.y,transit.x);
+        vec2 shore=p-vec2(-54.24,-124.90);
+        float along=dot(shore,transit),side=dot(shore,across);
+        float facet=.25+1.3*smoothstep(-.20,.34,normal.x+.43*normal.z+.42*(noiseB.g-.5));
+        float shine=exp(-pow(side/(1.1+.12*max(0.,along)),2.))*smoothstep(-1.,2.,along)*exp(-max(0.,along)*.095);
+        vec2 nearMark=p-vec2(-42.,-120.);
+        float markerShine=exp(-pow(dot(nearMark,across)/.76,2.)-pow(dot(nearMark,transit)/3.3,2.));
+        lit+=facet*vec3(.07,1.17,.43)*(shine*uShoreLamp+.38*markerShine);
+        vec2 waterTrack=p-uTurningShip.xy,stern=vec2(sin(uTurningShip.z),cos(uTurningShip.z));
+        float aft=dot(waterTrack,stern),sideWake=abs(dot(waterTrack,vec2(stern.y,-stern.x)));
+        float legs=exp(-pow((sideWake-2.8-.19*aft)/(.64+.043*max(0.,aft)),2.));
+        float froth=smoothstep(-2.,7.,aft)*(1.-smoothstep(8.,24.,aft))*legs*uTurningShip.w;
+        lit=mix(lit,vec3(.60,.70,.67),froth*smoothstep(.23,.64,noiseA.r+.21*normal.x));
+      }
       lit=mix(lit,lit*vec3(.26,.39,.40)+vec3(.004,.009,.010),uInside);
       lit=mix(lit,uFog,smoothstep(90.,290.,dist)*.74);
       gl_FragColor=vec4(lit,1.);
@@ -202,6 +219,10 @@ window.TideCoast = (() => {
     sun.position.set(-31,46,-67);sun.castShadow=true;
     sun.shadow.mapSize.set(2048,2048);
     Object.assign(sun.shadow.camera,{left:-52,right:52,top:58,bottom:-58,near:.5,far:155});
+    if(index===2){
+      sunTarget.position.set(-56,1,-123);sun.position.set(-84,41,-151);
+      Object.assign(sun.shadow.camera,{left:-20,right:20,top:20,bottom:-20,near:24,far:94});
+    }
     if(index===9){
       sunTarget.position.set(14,22,-91);sun.position.set(-17,65,-127);
       Object.assign(sun.shadow.camera,{left:-12,right:12,top:12,bottom:-12,near:25,far:91});
@@ -220,6 +241,7 @@ window.TideCoast = (() => {
       vertices.setZ(i,270*Math.sign(z)*Math.pow(Math.abs(z),1.45));
     }
     const uniforms={uTime:{value:0},uNoise:{value:noise},uSky:{value:noise},uHasSky:{value:0},uSignal:{value:0},
+      uShoreLamp:{value:index===2?0:-1},uTurningShip:{value:new T.Vector4()},
       uNearOptic:{value:new T.Vector4(0,0,1,-1)},uFarOptic:{value:new T.Vector4()},uGhost:{value:new T.Vector2()},uRangeAxis:{value:new T.Vector2(Math.sin(TideLantern.yaw),Math.cos(TideLantern.yaw))},
       basin:{value:new T.Vector4()},uBearing:{value:0},uInside:{value:act===1?.9:0},uSun:{value:new T.Vector3(-.42,.40,-.82).normalize()},uFog:{value:fogColor}};
     const water=new T.Mesh(oceanGeo,mat(new T.ShaderMaterial({uniforms,vertexShader:waterVertex,fragmentShader:waterFragment})));
@@ -374,12 +396,18 @@ window.TideCoast = (() => {
     for(let i=0;i<56;i++){
       const side=i%2?1:-1, r=rng(), z=9-rng()*124, x=side*(29+rng()*51);
       const drawX=x<0&&z< -77&&x> -57?x-45:x;
-      rock(drawX,-5.1+rng(),z,2+r*10,2+r*r*9,2+rng()*9,i);
+      const clearPier=index===2&&Math.hypot(drawX+61,z+128)<20;
+      rock(clearPier?drawX-29:drawX,-5.1+rng(),z,2+r*10,2+r*r*9,2+rng()*9,i);
     }
     for(let i=0;i<11;i++){
       rock(14+(rng()-.5)*25,-3+rng()*3,-103+(rng()-.5)*14,5+rng()*8,4+rng()*3,7+rng()*6,i);
     }
 
+    if(index===2){
+      for(const [u,v,s] of [[-3,-26,1.4],[2,-31,1.1],[-5,-33,.85]]){
+        const p=TideSignal.point(u,0,v);rock(p.x,-4.65,p.z,s*2.6,s*1.37,s,3);
+      }
+    }
     function lighthouse(){
       const x=14,z=-91;
       cylinder(stone,x,1.9,z,12.6,3.8);
@@ -692,6 +720,10 @@ window.TideCoast = (() => {
       marker,
       update(t,cues={}){
         uniforms.uTime.value=t;
+        if(cues.vessel){
+          const s=cues.vessel;uniforms.uShoreLamp.value=cues.rangeGreen;
+          uniforms.uTurningShip.value.set(s.x,s.z,s.yaw,cues.wake||0);
+        }
         if(cues.basinBounds)uniforms.basin.value.fromArray(cues.basinBounds);
         rainMat.uniforms.uTime.value=t;
         const strength=T.MathUtils.clamp(cues.light||0,0,1);

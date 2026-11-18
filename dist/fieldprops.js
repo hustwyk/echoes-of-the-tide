@@ -314,29 +314,6 @@ window.TideFieldProps=(()=>{
         bubble.scale.setScalar(.10+.49*phase);bubble.visible=phase<.78;
       });
     }
-    function powerPlant(g){
-      const s=g.section.sites[0],p=offset(s,-1.02,.82,-1.40);
-      const axle=mesh(cylinder,solid(brass),p,.12,.28,.12);axle.rotation.x=Math.PI/2;
-      const wheel=new T.Group();section.add(wheel);wheel.position.copy(offset(p,0,0,.20));
-      rim(p,.57,iron);mesh(torus,solid(copper),v(0,0,0),.53,.53,.53,wheel);
-      for(let j=0;j<6;j++){
-        const a=j*TAU/6;shaft(wheel,v(0,0,0),v(.49*Math.cos(a),.49*Math.sin(a),0),.033,worn);
-      }
-      block(offset(p,0,-.48,0),.16,.67,.18,iron);
-      const gate=offset(g.section.sites[1],1.08,1.44,-1.40);
-      bolted(gate,1.0,.75,.16,iron);stand(offset(g.section.sites[1],1.08,0,-1.4),.78,1.41);
-      const light=mesh(plane,emit('#81efab'),offset(gate,0,0,.09),.78,.53);
-      const shutter=mesh(cube,solid('#424e4b'),offset(gate,0,.55,.115),.86,.59,.055);
-      const stencil=local(new T.ShapeGeometry((()=>{const shape=new T.Shape();shape.moveTo(-.07,0);shape.lineTo(-2.3,-11);shape.lineTo(2.3,-11);shape.lineTo(.07,0);shape.closePath();return shape;})()));
-      const sheen=mesh(stencil,local(new T.MeshBasicMaterial({color:'#7de5ae',transparent:true,opacity:.12,blending:T.AdditiveBlending,depthWrite:false,side:T.DoubleSide})),offset(gate,0,-.23,-.2));
-      sheen.rotation.x=Math.PI*.48;
-      animation.push(s=>{
-        const amount=clamp(s.cues.light);
-        wheel.rotation.z=s.state.dials[0]*2.8*TAU+(s.engaged[0]&&s.spec.type==='power'?Math.sin(s.time*12)*.038:0);
-        shutter.position.y=gate.y+.58*amount;light.visible=amount>.02;
-        sheen.material.opacity=.18*amount;sheen.visible=amount>.03;
-      });
-    }
     function archiveStrip(g){
       const s=g.section.sites,p=offset(s[0],1.12,1.13,-1.4);
       stand(offset(p,0,-1.13,0),1.5,1.02);bolted(p,1.53,.72,.15,iron);
@@ -724,7 +701,7 @@ window.TideFieldProps=(()=>{
         }
       }
     }
-    const builders={ride:tug,cable:harborsideCable,power:powerPlant,blackout:powerPlant,
+    const builders={ride:tug,cable:harborsideCable,
       tape:archiveStrip,paper:lightTable,radio:relay,tide:soundings,post:soundings,optic:optics,rhythm:signals,release:signals};
     function clearSection(){
       animation.length=0;
