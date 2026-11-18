@@ -30,12 +30,12 @@ const TideCoop = (() => {
   }
   class Session {
     constructor(index,events={}) {
-      this.index=index;this.world=index===5?TideGlass.layout():index===10?TideFogSignal.layout():index===8?TideSoundings.layout():index===7?TideRelay.layout():index===1?TideCableQuay.layout():index===2?TideSignal.layout():index===4?TideArchive.layout():index===9?TideLantern.layout():TideTraversal.build(index);this.events=events;
+      this.index=index;this.world=index===3?TideCistern.layout():index===5?TideGlass.layout():index===10?TideFogSignal.layout():index===8?TideSoundings.layout():index===7?TideRelay.layout():index===1?TideCableQuay.layout():index===2?TideSignal.layout():index===4?TideArchive.layout():index===9?TideLantern.layout():TideTraversal.build(index);this.events=events;
       if(index===0)TideLandfall.build(this.world);
-      TideRigging.build(this.world);TideDrawbridge.build(this.world);if(!this.world.glass&&!this.world.foghouse&&!this.world.soundings&&!this.world.relay&&!this.world.cableQuay&&!this.world.lantern&&!this.world.signal&&!this.world.archive)TideFieldWork.build(this.world,index);
+      TideRigging.build(this.world);TideDrawbridge.build(this.world);if(!this.world.cistern&&!this.world.glass&&!this.world.foghouse&&!this.world.soundings&&!this.world.relay&&!this.world.cableQuay&&!this.world.lantern&&!this.world.signal&&!this.world.archive)TideFieldWork.build(this.world,index);
       this.time=0;this.stage=0;this.setbacks=0;this.complete=false;this.notice='';this.noticeUntil=0;
       this.cues={light:0,angle:0,water:-4,rescue:0,ghost:0};
-      this.glass=TideGlass.create(this);this.fog=TideFogSignal.create(this);this.survey=TideSoundings.create(this);this.relay=TideRelay.create(this);this.cable=TideCableQuay.create(this);this.signal=TideSignal.create(this);
+      this.cistern=TideCistern.create(this);this.glass=TideGlass.create(this);this.fog=TideFogSignal.create(this);this.survey=TideSoundings.create(this);this.relay=TideRelay.create(this);this.cable=TideCableQuay.create(this);this.signal=TideSignal.create(this);
       this.players=this.world.sections[0].starts.map(TideTraversal.spawn);
       this.checkpoints=this.world.sections[0].starts.slice();TidePassage.build(this);
       this.begin();
@@ -50,7 +50,7 @@ const TideCoop = (() => {
         returnGate:0,balance:0,warnUntil:0,buttonCooldown:0,releaseHeld:false,catchup:0};
       if(this.spec.type==='ride')this.state.dials[this.spec.driver]=.50;
       this.rig=TideRigging.reset(this);this.paper=TidePaper.create(this);this.optic=TideLantern.create(this);
-      if(this.optic){this.cues.light=.97;this.cues.rays=TideLantern.viewData(this).images;}TideFieldWork.reset(this);TideCableQuay.begin(this);TideLookout.reset(this);TideRelay.begin(this);TideSoundings.begin(this);TideGlass.begin(this);TideFogSignal.begin(this);TideLastPass.begin(this);this.pilotHorn=TideFogSignal.formal(this);TideSignal.begin(this);TideArchive.begin(this);
+      if(this.optic){this.cues.light=.97;this.cues.rays=TideLantern.viewData(this).images;}TideFieldWork.reset(this);TideCableQuay.begin(this);TideLookout.reset(this);TideRelay.begin(this);TideSoundings.begin(this);TideGlass.begin(this);TideCistern.begin(this);TideFogSignal.begin(this);TideLastPass.begin(this);this.pilotHorn=TideFogSignal.formal(this);TideSignal.begin(this);TideArchive.begin(this);
       this.events.stage?.(this);
     }
     alert(text,seconds=2.5) {
@@ -61,6 +61,7 @@ const TideCoop = (() => {
     resetPerson(side,cause) {
       Object.assign(this.players[side],TideTraversal.spawn(this.checkpoints[side]));
       this.setbacks++;this.events.reset?.(side);this.alert(cause+' · 已回到安全台');
+      if(this.cistern)TideCistern.fall(this,side);
       if(this.cable)TideCableQuay.fall(this,side);
       if(this.section.tram?.departed){
         const c=this.section.tram;Object.assign(this.players[side],TideTraversal.spawn(c.deck),{x:c.deck.x+(side?.72:-.72)});
@@ -76,7 +77,7 @@ const TideCoop = (() => {
     }
     tick(dt,inputs,yaws=[0,0]) {
       if(this.complete)return;
-      this.time+=dt;if(this.glass)TideGlass.narrate(this,dt);
+      this.time+=dt;if(this.cistern)TideCistern.narrate(this,dt);if(this.glass)TideGlass.narrate(this,dt);
       const q=this.state, section=this.section;
       q.age+=dt;TidePassage.update(this);TideRigging.updateLadders(section,dt);
       if(q.doneAt!==null && this.time-q.doneAt>1.15){
@@ -88,7 +89,7 @@ const TideCoop = (() => {
       if(this.relay)TideRelay.step(this,dt);
       if(this.cable)TideCableQuay.update(this,dt);
       const activeSites=this.field.done?section.sites:section.field.sites;
-      this.near=this.players.map((p,i)=>this.glass?TideGlass.near(this,i):this.fog?TideFogSignal.near(this,i):this.survey?TideSoundings.near(this,i):this.relay?TideRelay.near(this,i):this.cable?TideCableQuay.near(this,i):this.landfall?TideLandfall.near(this,i):this.archive?TideArchive.near(this,i):near(p,activeSites[i]));
+      this.near=this.players.map((p,i)=>this.cistern?TideCistern.near(this,i):this.glass?TideGlass.near(this,i):this.fog?TideFogSignal.near(this,i):this.survey?TideSoundings.near(this,i):this.relay?TideRelay.near(this,i):this.cable?TideCableQuay.near(this,i):this.landfall?TideLandfall.near(this,i):this.archive?TideArchive.near(this,i):near(p,activeSites[i]));
       if(this.signal&&this.stage===2)this.near[0]&&=this.players[0].ground===this.world.signal.head;
       const cart=this.spec.mode==='bridge'&&!section.span.seated;
       if(cart)this.near[1-this.spec.driver]=TideDrawbridge.onCart(this,1-this.spec.driver,{use:true});
@@ -103,7 +104,8 @@ const TideCoop = (() => {
         TideTraversal.move(p,inputs[side],dt,this.world,yaws[side],this.engaged[side]||TideRigging.lighting(this,side,inputs[side]));
         TidePassage.collide(this,p);
         if(this.world.landfall)TideLandfall.collide(this,p,oldZ);
-        if(this.glass){TideGlass.collide(this,p,{x:oldX,z:oldZ});if(this.engaged[side])TideGlass.stance(this,side,dt);}
+        if(this.cistern){TideCistern.collide(this,p,oldZ);if(this.engaged[side])TideCistern.stance(this,side,dt);}
+        else if(this.glass){TideGlass.collide(this,p,{x:oldX,z:oldZ});if(this.engaged[side])TideGlass.stance(this,side,dt);}
         else if(this.fog){TideFogSignal.collide(this,p);if(this.engaged[side])TideFogSignal.stance(this,side,dt);}
         else if(this.survey){TideSoundings.collide(this,p);if(this.engaged[side])TideSoundings.stance(this,side,dt);}
         else if(this.relay){
@@ -116,7 +118,8 @@ const TideCoop = (() => {
         else if(this.optic){TideLantern.collide(p);if(this.engaged[side])TideLantern.stance(this,side,dt);}
         else if(this.engaged[side]&&!(cart&&side!==this.spec.driver))approachInstrument(this,side,activeSites[side],dt);
         if(this.rig&&side!==this.spec.driver)TideRigging.catchLine(this);
-        if(this.fog&&!p.grounded&&p.vy<0&&p.y<this.world.foghouse.rear.y-1.65){
+        if(this.cistern&&TideCistern.submerged(this,p)){this.resetPerson(side,'救生索把你拉回上一处露水平台');}
+        else if(this.fog&&!p.grounded&&p.vy<0&&p.y<this.world.foghouse.rear.y-1.65){
           this.resetPerson(side,'轮坑救生索接住了你');
           const c=this.checkpoints[side];
           if(this.world.foghouse.wheels.includes(c))Object.assign(p,{x:c.x,y:c.y,z:c.z,ground:c,grounded:true});
@@ -132,6 +135,7 @@ const TideCoop = (() => {
       }
       if(prevStaff)TideDrawbridge.carry(this,inputs,dt,prevStaff);
       if(q.doneAt!==null)return;
+      if(this.cistern){TideCistern.interact(this,inputs,dt);return;}
       if(this.glass){TideGlass.interact(this,inputs,dt);return;}
       if(this.fog){TideFogSignal.interact(this,inputs,dt);return;}
       if(this.survey){TideSoundings.interact(this,inputs,dt);return;}

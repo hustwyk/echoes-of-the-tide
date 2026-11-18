@@ -175,12 +175,9 @@ window.TideCinema = (() => {
       const head=disc(m,.040,0,0,.019,.012,metal);head.rotation.z=Math.PI/2;
       box(m,.047,.001,0,.0015,.004,.027,rubber);return m;
     }
-    if([3,4,5,6].includes(idx)){
+    if([4,5,6].includes(idx)){
       makeDesk(shelf,1.52,1.03);
-      if(idx===3){
-        cup=enamel(shelf);cup.position.set(-.16,.022,0);
-        cupboard=cassette(shelf,'值班录音');cupboard.position.set(.23,.021,-.03);
-      }else if(idx===4){
+      if(idx===4){
         tape=cassette(shelf,'灯机房 / 电台');tape.position.set(.05,.077,.02);tape.scale.setScalar(1.55);
         box(shelf,.06,.043,.02,.67,.082,.40,rubber);
         box(shelf,-.19,.09,.04,.073,.026,.22,ivory);
@@ -450,18 +447,6 @@ window.TideCinema = (() => {
           marker.position.y=g.cues.water+.14*Math.sin(t*.8);marker.rotation.z=.055*Math.sin(t*1.2);
           green.material.emissiveIntensity=.7+2.8*Math.pow(Math.max(0,Math.sin(t*2.5)),6);
         }
-      }else if(idx===3){
-        const float=g.stage===0 && !playing;
-        cup.position.set(float?.15*Math.sin(t*.44):-.16,float?Math.max(.05,(g.cues.basin??g.cues.water)-shelf.position.y+.11):.024,float?.12*Math.cos(t*.36):.07);
-        if(float){
-          const water=g.section.ferry?.deck;
-          if(water)cup.position.set(water.x-shelf.position.x+1.43,(g.cues.basin??g.cues.water)-shelf.position.y+.05,water.z-shelf.position.z-.44);
-        }
-        cup.rotation.set(float?.095*Math.sin(t):0,1.2+.11*Math.sin(t*.32),float?.115*Math.sin(t*.82):0);
-        if(playing){
-          const lift=smooth((clock-.65)/1.1)*(1-smooth((clock-3.0)/1.05));
-          cup.position.y=.024+lift*.28;cup.rotation.x=-lift*(Math.PI*.74);
-        }
       }else if(idx===4 || idx===6){
         if(hub.tram){const d=hub.tram.deck;shelf.position.set(d.x,d.y+.85,d.z-.88);}
         const spin=g.archive?((g.archive.review||0)+(playing?clock:0))*2.7:(playing?1:Math.max(.16,g.state.dials[0]||0))*(t*2.7);
@@ -488,6 +473,7 @@ window.TideCinema = (() => {
     // The active game keeps ownership of both actors and resumes from its checkpoints.
     function performance(side){
       if(!playing)return null;
+      if(idx===3){const p=side?game.world.cistern.haul:game.world.cistern.load;return {...p,yaw:side?1.73:-1.40,talking:TideCistern.film(clock).actor===side,gaze:side?.18:-.18};}
       if(idx===4){
         const p=game.players[side];return {x:p.x,y:p.y,z:p.z,yaw:p.yaw,talking:!side&&clock<2.8,
           gaze:side?-.14:.16,incline:side?.075:.045};
@@ -515,8 +501,7 @@ window.TideCinema = (() => {
         marker.getWorldPosition(end);end.y+=.93;view.at=end.toArray();
         return view;
       }
-      if(idx===3)return !i?subject(shelf,[-.46+f*.17,.47,.54],[-.16,.12+.18*Math.sin(f*Math.PI),.07]):
-        subject(shelf,[.58,.50,.40],[.22,.07,-.035]);
+      if(idx===3)return assets.cisternRoom.filmShot(g,i,t);
       if(idx===4){
         if(!i&&t<3.0)return portrait(0,t);
         if(i&&t>3.0)return portrait(1,t);
@@ -555,7 +540,7 @@ window.TideCinema = (() => {
       if(!playing)return '';
       const t=clock;
       if(idx===2)return t<2.8?'梁青　灯灭了，我看见了。':'沈遥　她已经漂进内流。我们得找到另一条路。';
-      if(idx===3)return t<2.7?'林澈　杯底还有两个名字。':'沈遥　柜顶上，那是值班带。';
+      if(idx===3)return TideCistern.film(t).subtitle;
       if(idx===4){
         const captions=window.TideArchiveMedia?.coda?.captions||[[0,'林澈　丙三柜。我去拿原图。'],[3.0,'梁青　阿棠，从船尾再看一眼。'],[6.2,'阿棠　旧标和白浪，叠在一起了。'],[10,'梁青　我这边错开半扇窗。两处都记上。']];
         let line='';for(const [at,text] of captions){if(t<at)break;line=text;}return line;
@@ -574,7 +559,7 @@ window.TideCinema = (() => {
     }
     function begin(kind){
       if(disposed||kind!=='chapter-end'||!durations[idx])return false;
-      clock=0;duration=idx===5?TideGlass.filmLength():(idx===4?window.TideArchiveMedia?.coda?.duration:null)||durations[idx];playing=true;renderedText='';
+      clock=0;duration=idx===3?TideCistern.filmLength():idx===5?TideGlass.filmLength():(idx===4?window.TideArchiveMedia?.coda?.duration:null)||durations[idx];playing=true;renderedText='';
       if(idx===11){setupFinal();newLabel.userData.repaint();}
       return true;
     }
