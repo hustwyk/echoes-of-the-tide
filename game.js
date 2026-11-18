@@ -14,7 +14,8 @@ const keys=new Set(),jumps=[false,false],toolTaps=[false,false],gamepadDown=[fal
 let tideTicket=null;
 try{tideTicket=TideGallery.validTicket(JSON.parse(localStorage.getItem('tide-survey-ticket')));}catch{}
 let session=null,view=null,index=0,mode='menu',last=0,remainder=0,redraw=0,voice=false;
-const padSlots=[null,null],cameraButtons=[false,false],pointTaps=[false,false];
+const padSlots=TideCrewInput.slots,cameraButtons=[false,false],pointTaps=[false,false];
+let seatPanel=null;
 let menuPadState=new Set(),padApiAvailable=true;
 function gamepads(){
   if(!padApiAvailable)return [];
@@ -68,6 +69,7 @@ function savePoint(g){
   try{localStorage.setItem('tide-3d-checkpoint',JSON.stringify(resume));}catch{}
 }
 function clearInput(){
+  TideCrewInput.clear();
   if(view)view.lastTick=null;
   view?.pointing?.cancel();pointTaps.fill(false);keys.clear();jumps.fill(false);toolTaps.fill(false);gamepadDown.fill(false);cameraButtons.fill(false);last=0;remainder=0;
 }
@@ -144,7 +146,7 @@ function openLevel(n,stage=0,mark=null){
   overlay.innerHTML='<div class="story"><h3>正在进入北岬</h3></div>';
   try{
     view??=new TideHarbor.WorldView(canvas,(i,kind)=>sound.tone(kind==='seen'?(i?820:740):(i?690:518),kind==='seen'?.16:.10,'sine',.11,i?.58:-.58),fieldRenderer());
-    if(n===0){TideReceiverAudio.loadFender();if(!stage&&!mark)TideReceiverAudio.loadArrival();}
+    if(n===0){TideReceiverAudio.loadFender();if(!stage&&!mark){TideReceiverAudio.loadArrival();TideReceiverAudio.loadPlate();}}
     if(n===6)TideReceiverAudio.loadSwing();
     if(n===3)TideReceiverAudio.loadCistern();
     if(n===5)TideReceiverAudio.loadGlass();
@@ -186,14 +188,15 @@ function openLevel(n,stage=0,mark=null){
   const level=levels[n],act=acts[Math.floor(n/3)];mode='story';
   $('act').textContent=act.name+'　/　'+String(n+1).padStart(2,'0')+' OF 12';$('level-title').textContent=level.name;
   $('elapsed').textContent='';showStatus('两名玩家 · 独立视角');
-  overlay.innerHTML='<div class="story"><small>行动简报</small><h3>'+level.name+'</h3><p>'+level.story+'</p><blockquote>'+level.quote+'</blockquote><p class="hint">林澈　WASD 移动 · 空格跳跃 · E 操作<br>沈遥　方向键移动 · / 跳跃 · Enter 操作</p><button class="primary">'+(stage||mark?'从检查点继续':n===0?'登上交通艇':'进入关卡')+'　›</button></div>';
-  overlay.querySelector('button').onclick=()=>startPlaying(true);
-  overlay.querySelector('button').focus();view.draw(session,0,false);
+  overlay.innerHTML='<div class="story"><small>行动简报</small><h3>'+level.name+'</h3><p>'+level.story+'</p><blockquote>'+level.quote+'</blockquote><div id="brief-seats"></div><button class="primary">'+(stage||mark?'从检查点继续':n===0?'登上交通艇':'进入关卡')+'　›</button></div>';
+  seatPanel=TideCrewInput.panel($('brief-seats'),TideArrival.active(session)?session.arrival.radio:null);
+  overlay.querySelector('.primary').onclick=()=>startPlaying(true);
+  overlay.querySelector('.primary').focus();view.draw(session,0,false);
 }
 function startPlaying(announce){
-  clearInput();
-  const connected=gamepads();
-  for(let i=0;i<2;i++)gamepadDown[i]=!!(connected.find(p=>p.index===padSlots[i])||connected[i])?.buttons[0]?.pressed;
+  seatPanel=null;clearInput();
+  const connected=gamepads();assignPads(connected);
+  for(let i=0;i<2;i++)gamepadDown[i]=!!connected.find(p=>p.index===padSlots[i])?.buttons[0]?.pressed;
   overlay.replaceChildren();$('split').hidden=false;mode='playing';$('pause').disabled=false;$('pause').textContent='暂停';canvas.focus();
   if(wantsAudio&&!sound.enabled)sound.enable(true).then(updateAudio);
   if(announce&&!TideGallery.active(session)&&!TideFenders.active(session)&&!session.swing?.voice&&!session.cistern?.voice)radio(TideFenders.active(session)?TideFenders.briefing:session.cable?TideCableQuay.briefing(session):session.landfall?(session.landfall.pinned?'沈遥：门销扣好了。来听船上的信号。':'沈遥：我在门后插销。你在这里握住链子。'):session.spec.radio,6);
@@ -338,8 +341,9 @@ function pause(){
   mode='paused';clearInput();sound.stopScene();window.speechSynthesis?.cancel();
   $('pause').textContent='继续';
   const arrival=TideArrival.active(session),gallery=TideGallery.active(session);
-  const hint=gallery?'西台与背风台各有一架手轮。握住操作键左右转轮，松手停车；另一人从黄边起跳。过白漆台后，两人沿梯进灯室。':arrival?'艇首用 A、D 调台，按住 E 发话。艇尾用上下方向键进退车，左右掌舵。看到首缆牌后收油，两人分别负责投缆与停机。':'站到彩色光圈内，按住操作键使用设备。操作时可左右微调，按跳跃键确认。拖动各自的画面调整视角，双击可回正。';
+  const hint=gallery?'西台与背风台各有一架手轮。握住操作键左右转轮，松手停车；另一人从黄边起跳。过白漆台后，两人沿梯进灯室。':arrival&&session.arrival.radio==='line'?'林澈移动缆圈，瞄准岸桩后投缆。沈遥收油回空挡，等船慢下来后按住操作键停机；林澈才拉得动缆绳。':arrival?'无线电的工作频道刻在舵座。掌舵的人按住操作键俯身，再左右擦开铜牌。船首的人听到频道后调台，按住发话键等自己说完。':'站到彩色光圈内，按住操作键使用设备。操作时可左右微调，按跳跃键确认。拖动各自的画面调整视角，双击可回正。';
   overlay.innerHTML='<div class="story"><h3>行动暂停</h3><p>'+levels[index].name+'　/　'+(gallery?(session.gallery.phase==='file'?'灯室潮尺原数联':'绕塔检修台'):arrival?'交通艇进港':TideFenders.active(session)?'护舷井登岸':session.cable?TideCableQuay.title(session):session.spec.title)+'</p><p class="hint">'+hint+'</p><div class="pause-options"><button id="unpause">继续行动</button><button id="retry">重试此段</button><button id="quit">返回档案</button><button id="voice"></button><button id="quality"></button></div></div>';
+  seatPanel=TideCrewInput.panel(overlay.querySelector('.story'),arrival?session.arrival.radio:null);
   addJournal(overlay.querySelector('.story'),journal);
   $('unpause').onclick=()=>startPlaying(false);$('quit').onclick=()=>game.close();$('retry').onclick=()=>openLevel(index,session.stage,TideLantern.checkpoint(session)||TideGallery.checkpoint(session)||TideFenders.checkpoint(session)||TideSwing.checkpoint(session)||TideCistern.checkpoint(session)||TideGlass.checkpoint(session)||TideLastPass.checkpoint(session)||TideFogSignal.checkpoint(session)||TideSoundings.checkpoint(session)||TideRelay.checkpoint(session)||TideCableQuay.checkpoint(session)||TideLandfall.checkpoint(session));
   const update=()=>{$('voice').textContent='设备语音　'+(voice?'开':'关');$('quality').textContent='画质　'+(view.quality===1?'高':'流畅');};update();
@@ -357,12 +361,7 @@ async function toggleAudio(){
   if(sound.enabled)sound.tone(440);else window.speechSynthesis?.cancel();
 }
 function recenter(i){view.yaws[i]=session.players[i].yaw;view.pitch[i]=0;}
-function assignPads(connected){
-  for(let i=0;i<2;i++)if(!connected.some(p=>p.index===padSlots[i]))padSlots[i]=null;
-  for(const pad of connected)if(!padSlots.includes(pad.index)){
-    const slot=padSlots.indexOf(null);if(slot>=0)padSlots[slot]=pad.index;
-  }
-}
+const assignPads=TideCrewInput.assign;
 function pollInputs(now,connected){
   assignPads(connected);
   return [0,1].map(i=>{
@@ -408,13 +407,14 @@ function padMenus(pads){
   const choices=[...root.querySelectorAll('button:not(:disabled),a[href]')].filter(n=>n.getClientRects().length);
   const selected=choices.indexOf(document.activeElement);
   if(direction&&choices.length){choices[(Math.max(selected,0)+direction+choices.length)%choices.length].focus();return;}
-  const fallback=game.open?(mode==='cinema'?$('skip'):overlay.querySelector('button')):info.open?choices[0]:$('start');
+  const fallback=game.open?(mode==='cinema'?$('skip'):(overlay.querySelector('.primary')||overlay.querySelector('button'))):info.open?choices[0]:$('start');
   (choices[selected]||fallback)?.click();
 }
 function frame(now){
   requestAnimationFrame(frame);
   if(document.hidden)return;
   const pads=gamepads();
+  if(seatPanel&&seatPanel.box.isConnected)seatPanel.update(pads);
   if(mode==='regatta'&&race){race.frame(now,pads);return;}
   if(mode==='regatta-loading')return;
   if(mode!=='receipt'&&(pads.length||menuPadState.size))padMenus(pads);
@@ -453,10 +453,11 @@ $('skip').onclick=()=>{if(mode==='cinema'){view.cinema.skip();showDebrief(sessio
 $('pause').onclick=pause;$('sound').onclick=$('field-audio').onclick=toggleAudio;
 $('expand').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else if(game.requestFullscreen)await game.requestFullscreen();}catch{showStatus('当前窗口已使用可用的最大画面');}};
 $('brief').onclick=()=>{showInfo('<h2>北岬灯塔 · 紧急任务</h2><p>海雁号失去动力。机修员林澈和信号员沈遥必须在潮水吞没北礁前恢复电台，找出灯塔旧档案里的误判，重新校准光束。</p><p>十二关贯穿四幕。两人各自操作一名角色，共用同一个三维世界。</p><p><a href="story.html" target="_blank" rel="noopener">阅读原作调研、原创故事与十二关设计（含剧透）</a></p>');addJournal($('info-content'),levels.slice(0,progress).map((l,i)=>'第 '+(i+1)+' 关　'+l.name+'　'+l.after));};
-$('help').onclick=()=>showInfo('<h2>双人操作指南</h2><p>林澈用 WASD 移动、空格跳跃，按住 E 操作。沈遥用方向键移动、斜杠 / 或右 Shift 跳跃，按住 Enter 操作。轻点跳跃可以越过短阶，按住则跳得更高。</p><p>林澈用 Q / R 转镜头，C 回到人物身后。沈遥用逗号 / 句号转镜头，反斜杠回正。两人可以同时转动各自的镜头。</p><p>要给同伴指路，林澈按住 F，沈遥按住分号，手柄按住 LB。用移动键或左摇杆瞄准实物，松开即可。也可以在自己的半屏右击。标记会跟着甲板或船移动。自由行动时站稳，林澈按住 G，沈遥按住单引号键，手柄按住 RB，看向同伴刚指出的实物。看清后对方会收到回应。松开回到原视角。</p><p>跟随各自画面内的设备标记。在光圈里按住操作键，左右键调节仪器，跳跃键确认读数或发送信号。站在移动甲板上会随甲板运动，可从边缘跃向对岸。</p><p>拖动半屏可转动该玩家的镜头，双击回正。标准手柄使用左摇杆移动、A 跳跃、RT 操作、右摇杆转动视角、按下回到身后，按接入顺序分配给两位玩家。方向键选菜单，A 确认，B 返回，Start 或 Esc 暂停，章节与段落检查点保存在此浏览器。</p>');
+$('help').onclick=()=>showInfo('<h2>双人操作指南</h2><p>林澈用 WASD 移动、空格跳跃，按住 E 操作。沈遥用方向键移动、斜杠 / 或右 Shift 跳跃，按住 Enter 操作。轻点跳跃可以越过短阶，按住则跳得更高。</p><p>林澈用 Q / R 转镜头，C 回到人物身后。沈遥用逗号 / 句号转镜头，反斜杠回正。两人可以同时转动各自的镜头。</p><p>要给同伴指路，林澈按住 F，沈遥按住分号，手柄按住 LB。用移动键或左摇杆瞄准实物，松开即可。也可以在自己的半屏右击。标记会跟着甲板或船移动。自由行动时站稳，林澈按住 G，沈遥按住单引号键，手柄按住 RB，看向同伴刚指出的实物。看清后对方会收到回应。松开回到原视角。</p><p>跟随各自画面内的设备标记。在光圈里按住操作键，左右键调节仪器，跳跃键确认读数或发送信号。站在移动甲板上会随甲板运动，可从边缘跃向对岸。</p><p>拖动半屏可转动该玩家的镜头，双击回正。标准手柄使用左摇杆移动、A 跳跃、RT 操作、右摇杆转动视角、按下回到身后。轻推摇杆，行动简报与暂停菜单会亮起对应角色。只有一只手柄时可把它交给任意一边，两只手柄也可互换。方向键选菜单，A 确认，B 返回，Start 或 Esc 暂停，章节与段落检查点保存在此浏览器。</p>');
 const moveCodes=new Set(['KeyW','KeyA','KeyS','KeyD','KeyE','Space','ArrowUp','ArrowLeft','ArrowDown','ArrowRight','Enter','Slash','ShiftRight','KeyQ','KeyR','KeyC','Comma','Period','Backslash','KeyF','Semicolon','KeyG','Quote']);
 document.addEventListener('keydown',e=>{
   if(!game.open)return;
+  if(mode==='paused'||mode==='story'||mode==='regatta')TideCrewInput.key(e.code,true);
   if(race){race.key(e);return;}
   if(mode==='receipt'){
     const action={KeyA:'left',KeyD:'right',KeyE:'clip',Enter:'file',Escape:'close'}[e.code];
@@ -473,10 +474,10 @@ document.addEventListener('keydown',e=>{
     (session.stage===2&&session.cable.patched>=0&&!session.cable.backTest&&e.code==='Enter')))toolTaps[e.code==='KeyE'?0:1]=true;
   if(!e.repeat && ['Space','Slash','ShiftRight'].includes(e.code))jumps[e.code==='Space'?0:1]=true;
 });
-document.addEventListener('keyup',e=>{keys.delete(e.code);race?.up(e.code);});
+document.addEventListener('keyup',e=>{TideCrewInput.key(e.code,false);keys.delete(e.code);race?.up(e.code);});
 window.addEventListener('blur',()=>{race?.pause(true);if(mode==='playing')pause();else clearInput();});
 document.addEventListener('visibilitychange',()=>{if(document.hidden){race?.pause(true);filing?.reply.pause();}if(document.hidden&&mode==='playing')pause();if(document.hidden&&mode==='cinema'){sound.tape?.stop();sound.receiver?.stop();}clearInput();});
-game.addEventListener('close',()=>{if(!game.open){raceEntry++;race?.dispose();race=null;closeFiling();mode='menu';clearInput();sound.stopScene();window.speechSynthesis?.cancel();view?.free();session=null;}});
+game.addEventListener('close',()=>{if(!game.open){seatPanel=null;raceEntry++;race?.dispose();race=null;closeFiling();mode='menu';clearInput();sound.stopScene();window.speechSynthesis?.cancel();view?.free();session=null;}});
 game.addEventListener('cancel',e=>{
   if(race){e.preventDefault();race.pause();return;}
   if(mode==='cinema'){e.preventDefault();$('skip').click();}

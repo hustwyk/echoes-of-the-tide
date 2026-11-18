@@ -9,7 +9,7 @@
   const cylinder = new T.CylinderGeometry(1, 1, 1, 12);
   const cordRing = new T.TorusGeometry(1, .115, 6, 32);
   const fatRing = new T.TorusGeometry(1, .27, 8, 36);
-  const transform = new T.Object3D(), gloveVertex=new T.Vector3(), gloveNormal=new T.Vector3();
+  const transform = new T.Object3D();
   const normalMatrix = new T.Matrix3();
   const v = new T.Vector3();
   const n = new T.Vector3();
@@ -216,7 +216,6 @@
       let data = this.parts.get(finish);
       if (!data) {
         data = {position:[], normal:[], color:[], uv:[], tailoring:[], backPanel:[], coating:[], index:[]};
-        if(this.glove){data.clench=[];data.clenchNormals=[];data.pressed=[];data.pressedNormals=[];}
         this.parts.set(finish,data);
       }
       transform.position.fromArray(at);
@@ -232,16 +231,6 @@
         n.fromBufferAttribute(a.normal,i).applyMatrix3(normalMatrix).normalize();
         data.position.push(v.x,v.y,v.z);
         data.normal.push(n.x,n.y,n.z);
-        if(data.clench){
-          gloveVertex.copy(v);gloveNormal.copy(n);
-          if(this.fingerPose){gloveVertex.applyMatrix4(this.fingerPose);gloveNormal.transformDirection(this.fingerPose);}
-          data.clench.push(gloveVertex.x,gloveVertex.y,gloveVertex.z);data.clenchNormals.push(gloveNormal.x,gloveNormal.y,gloveNormal.z);
-          const splay=.10*T.MathUtils.smoothstep(-v.y,.052,.107);
-          const flatten=Math.max(0,-.012-v.z),pressedZ=flatten?-.012-.011*(1-Math.exp(-flatten/.0055)):v.z;
-          data.pressed.push(v.x*(1+splay),v.y,pressedZ-.024*T.MathUtils.smoothstep(-v.y,.012,.046));
-          gloveNormal.copy(n);if(flatten)gloveNormal.z/=Math.max(.12,2*Math.exp(-flatten/.0055));
-          gloveNormal.normalize();data.pressedNormals.push(gloveNormal.x,gloveNormal.y,gloveNormal.z);
-        }
         data.color.push(color.r,color.g,color.b);
         const u=a.uv?.getX(i)||0,w=a.uv?.getY(i)||0;
         if(finish==='jacket'){
@@ -301,10 +290,6 @@
           shape.setAttribute('tailoring',new T.Float32BufferAttribute(d.tailoring,4));
           shape.setAttribute('backPanel',new T.Float32BufferAttribute(d.backPanel,1));
           shape.setAttribute('coating',new T.Float32BufferAttribute(d.coating,4));
-        }
-        if(d.clench){
-          shape.morphAttributes.position=[new T.Float32BufferAttribute(d.clench,3),new T.Float32BufferAttribute(d.pressed,3)];
-          shape.morphAttributes.normal=[new T.Float32BufferAttribute(d.clenchNormals,3),new T.Float32BufferAttribute(d.pressedNormals,3)];
         }
         shape.setIndex(d.index);
         shape.computeBoundingSphere();
@@ -642,19 +627,240 @@
     d.flush(ankle);
   }
 
-  // The glove is one draw per finish. A single morph folds the three spare
+  // A single morph folds the three spare
   // fingers about their two knuckles while straightening the index finger.
   function fingerFrame(i,sign,distal){
-    const index=i===(sign===1?0:3),x=(i-1.5)*.0172;
+    const index=i===(sign===1?3:0),x=(i-1.5)*.0172;
     const angle=index?-.273:.73+.095*Math.abs(i-1.5);
     const origin=new T.Vector3(x,-.067,-.002),knuckle=new T.Vector3(x,-.092,-.009);
     const base=new T.Matrix4().makeTranslation(origin.x,origin.y,origin.z)
       .multiply(new T.Matrix4().makeRotationX(angle)).multiply(new T.Matrix4().makeTranslation(-origin.x,-origin.y,-origin.z));
     if(!distal)return base;
-    const moved=knuckle.clone().applyMatrix4(base),dy=(-.113+.005*Math.abs(i-1.5))+.092;
+    const moved=knuckle.clone().applyMatrix4(base);
+    // The extended distal phalanx follows the finished index's centreline.
+    const distalAngle=index?-Math.atan2(.0098,.0248):1.78;
     return new T.Matrix4().makeTranslation(moved.x,moved.y,moved.z)
-      .multiply(new T.Matrix4().makeRotationX(index?-Math.atan2(.010,-dy):1.78))
+      .multiply(new T.Matrix4().makeRotationX(distalAngle))
       .multiply(new T.Matrix4().makeTranslation(-knuckle.x,-knuckle.y,-knuckle.z));
+  }
+
+  // One swatch, one material, four gloves. The two halves of this weatherproof
+  // hide/cloth swatch have different grains, highlights and moisture uptake.
+  function workGloveFinish(){
+    const size=256,half=size/2,heights=new Float32Array(size*size),base=new Uint8Array(size*size*4),normal=new Uint8Array(size*size*4);
+    const hash=(x,y)=>{let n=Math.imul(x+37,1597334677)^Math.imul(y+71,3812015801);n^=n>>>14;n=Math.imul(n,1103515245);return (n>>>0)/4294967296;};
+    const wrap=(p,n)=>(p%n+n)%n;
+    for(let y=0;y<size;y++)for(let x=0;x<size;x++){
+      const i=y*size+x,cloth=x>=half,u=x%half,g=hash(u,y);
+      const xx=u/5,yy=y/5,ix=Math.floor(xx),iy=Math.floor(yy);
+      let d0=5,d1=5;
+      for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+        const cx=ix+dx,cy=iy+dy;
+        const px=cx+.09+.82*hash(cx%26,cy%51),py=cy+.09+.82*hash((cx+13)%26,(cy+29)%51);
+        const dst=(xx-px)*(xx-px)+(yy-py)*(yy-py);
+        if(dst<d0){d1=d0;d0=dst;}else if(dst<d1)d1=dst;
+      }
+      const valley=Math.exp(-5.7*Math.abs(Math.sqrt(d1)-Math.sqrt(d0))),mottling=Math.sin(u*.099+.55*Math.sin(y*.069))*Math.cos(y*.082);
+      const warp=(1+Math.cos(Math.PI*.5*u+.36*Math.sin(TAU*y/32)))*.5,
+        fill=(1+Math.cos(TAU*y/3.2+.20*Math.cos(TAU*u/32)))*.5,over=((u>>2)+(y>>2))%2;
+      heights[i]=cloth?.19+(over?.45*warp+.15*fill:.16*warp+.44*fill)+.102*g:.61-.28*valley+.19*g+.064*mottling;
+      const tone=cloth?206+13*(warp+fill-1)+13*g:213-24*valley+17*g+9*mottling;
+      const rough=cloth?241-11*warp:202+25*valley+9*mottling;
+      base.set([tone,tone,Math.max(0,tone-2),rough],i*4);
+    }
+    for(let y=0;y<size;y++)for(let x=0;x<size;x++){
+      const offset=x<half?0:half,u=x%half;
+      const sample=(xx,yy)=>heights[wrap(yy,size)*size+offset+wrap(xx,half)];
+      const nx=(sample(u-1,y)-sample(u+1,y))*1.28,ny=(sample(u,y-1)-sample(u,y+1))*1.28,s=1/Math.hypot(nx,ny,1);
+      normal.set([Math.round(127.5*(1+nx*s)),Math.round(127.5*(1+ny*s)),Math.round(127.5*(1+s)),255],4*(y*size+x));
+    }
+    const swatch=(pixels,srgb)=>{
+      const tx=new T.DataTexture(pixels,size,size,T.RGBAFormat);tx.wrapS=tx.wrapT=T.RepeatWrapping;
+      tx.colorSpace=srgb?T.SRGBColorSpace:T.NoColorSpace;tx.magFilter=T.LinearFilter;tx.generateMipmaps=true;tx.minFilter=T.LinearMipmapLinearFilter;tx.anisotropy=4;tx.needsUpdate=true;return tx;
+    };
+    const mat=new T.MeshPhysicalMaterial({vertexColors:true,map:swatch(base,true),normalMap:swatch(normal,false),
+      normalScale:new T.Vector2(.58,.58),roughness:1,metalness:0,clearcoat:.095,clearcoatRoughness:.41});
+    mat.name='驾驶与机修 · 湿鞣皮与棉帆布';
+    mat.onBeforeCompile=s=>{
+      s.fragmentShader=s.fragmentShader.replace('#include <map_fragment>','vec4 gloveSwatch=texture2D(map,vMapUv);diffuseColor.rgb*=gloveSwatch.rgb;')
+        .replace('#include <roughnessmap_fragment>','float roughnessFactor=gloveSwatch.a;');
+    };
+    mat.customProgramCacheKey=()=>'tide-continuous-workglove-28';return mat;
+  }
+
+  function workGlove(wrist,sign,side){
+    const material=finishes.workGlove||(finishes.workGlove=workGloveFinish());
+    const pos=[],curl=[],pressed=[],rgb=[],uv=[],indices=[];
+    const rayRoot=new T.Vector3(),rayTip=new T.Vector3();
+    const rest=new T.Vector3(),p0=new T.Vector3(),p1=new T.Vector3(),c=new T.Color();
+    const poses=Array.from({length:4},(_,i)=>[fingerFrame(i,sign,false),fingerFrame(i,sign,true)]);
+    const smooth=T.MathUtils.smoothstep,clamp=T.MathUtils.clamp,mix=T.MathUtils.lerp;
+    const lerpArr=(rings,y)=>{
+      const k=rings.findIndex(r=>r[0]>=y);
+      if(k<=0)return rings[k<0?rings.length-1:0];
+      const a=rings[k-1],b=rings[k],t=(y-a[0])/(b[0]-a[0]);return a.map((a0,i)=>mix(a0,b[i],t));
+    };
+    const dorsal=side?'#787869':'#797564',hide=side?'#79745e':'#827359',gusset=side?'#5f6354':'#666151';
+    const patch=side?'#6b7368':'#716e5b',thread=side?'#9b9980':'#ab9878',stain='#5d5c4e';
+    function point(x,y,z,tint,cloth,u,vv,digit=-1,fade=1){
+      rest.set(x,y,z);pos.push(x,y,z);p0.copy(rest);
+      if(digit>=0){
+        const [prox,dist]=poses[digit];p1.copy(rest).applyMatrix4(prox);
+        p0.lerp(p1,smooth(-y,.054,.078));p1.copy(rest).applyMatrix4(dist);p0.lerp(p1,smooth(-y,.085,.100));
+      }
+      curl.push(p0.x,p0.y,p0.z);
+      // This is the contact convention used by the fender climb and brass plate.
+      const zBelow=Math.max(0,-.012-z),splay=.10*smooth(-y,.052,.107);
+      pressed.push(x*(1+splay),y,(zBelow?-.012-.011*(1-Math.exp(-zBelow/.0055)):z)-.024*smooth(-y,.012,.046));
+      c.set(tint);rgb.push(c.r*fade,c.g*fade,c.b*fade);
+      uv.push((cloth?.555:.055)+.39*u,vv);
+      return pos.length/3-1;
+    }
+    const pair=(a,b,c,d,flip=false)=>{if(flip)indices.push(a,c,b,a,d,c);else indices.push(a,b,c,a,c,d);};
+    // All ring arrays run from distal to proximal, with +Z on the back of
+    // the glove. Low knuckle relief is continuous across the skin of each tube.
+    function sleeve(rings,lookup,n=20){
+      const start=pos.length/3;
+      for(let j=0;j<rings.length;j++)for(let i=0;i<=n;i++){
+        const a=TAU*i/n,out=lookup(rings[j],a,j);
+        point(...out);
+        if(i<n&&j<rings.length-1){const k=start+j*(n+1)+i;pair(k,k+1,k+n+2,k+n+1);}
+      }
+      // The distal welt closes over the final pad. Adjacent skin shares these
+      // vertices, including both absolute deformation targets.
+      for(let i=1;i<n-1;i++)indices.push(start,start+i+1,start+i);
+    }
+    const palm=[[-.084,.014,.006,-.007],[-.081,.031,.011,-.005],[-.075,.037,.015,-.0038],[-.066,.0394,.018,-.0025],[-.053,.0413,.021,-.0015],[-.039,.0408,.0223,.0001],[-.027,.0384,.0225,.001],[-.015,.0347,.020,.0018],[-.004,.0305,.019,.0015],[.009,.029,.019,.0005],[.019,.0282,.019,.0002]];
+    const exp=(v,p)=>Math.sign(v)*Math.pow(Math.abs(v),p);
+    function backZ(x,y){
+      const r=lerpArr(palm,y),d=clamp(x/r[1],-.999,.999);
+      return r[3]+r[2]*Math.pow(Math.max(0,1-Math.pow(Math.abs(d),2/.78)),.78/2);
+    }
+    sleeve(palm,(r,a)=>{
+      const si=Math.sin(a),co=Math.cos(a),isBack=co>.02,y=r[0],x=r[1]*exp(si,.78),z=r[3]+r[2]*exp(co,.78);
+      const tint=y>-.009?gusset:isBack?dorsal:hide;
+      return [x,y,z,tint,isBack,(a/TAU),y*9+.71,-1,.99+.044*Math.sin(4*a+y*71)];
+    },36);
+    function strip(line,width,tint,cloth,digit=-1,lift=.0002){
+      const first=pos.length/3;
+      for(let i=0;i<line.length;i++){
+        const a=line[Math.max(0,i-1)],b=line[Math.min(line.length-1,i+1)],p=line[i],len=Math.hypot(b[0]-a[0],b[1]-a[1])||1;
+        const dx=(b[1]-a[1])/len*width/2,dy=-(b[0]-a[0])/len*width/2;
+        point(p[0]-dx,p[1]-dy,p[2]+lift,tint,cloth,.20,i*.12,digit);
+        point(p[0]+dx,p[1]+dy,p[2]+lift,tint,cloth,.24,i*.12,digit);
+        if(i){const k=first+2*i;pair(k-2,k-1,k+1,k);}
+      }
+    }
+    // A crescent yoke and two long curved seams follow the actual domed back
+    // and wrap toward the thumb. The panel is under a millimetre proud.
+    const rows=[[-.075,.020],[-.072,.030],[-.067,.034],[-.061,.035],[-.055,.036],[-.048,.0355],[-.037,.0332],[-.024,.0285],[-.018,.022],[-.016,.012]];
+    const panelStart=pos.length/3;
+    function yoke(x,y,w){
+      return backZ(x,y)+.0005+.0015*Math.max(0,1-(x/w)**2)+.0005*Math.cos((y+.05)*101);
+    }
+    for(let j=0;j<rows.length;j++){
+      const [y,w]=rows[j];
+      for(let i=0;i<=12;i++){
+        const t=i/12,x=(2*t-1)*w,yy=y-.0017*Math.cos(Math.PI*x/w);
+        point(x,yy,yoke(x,yy,w),patch,true,t,yy*9,-1,.98+.05*Math.sin(t*Math.PI));
+        if(j&&i){const v=panelStart+j*13+i;pair(v-14,v-13,v,v-1);}
+      }
+    }
+    for(const s of [-1,1]){
+      const yokeEdge=rows.map(([yy,w])=>{const y=yy+.0017,x=s*w;return [x,y,yoke(x,y,w)];});
+      strip(yokeEdge,.0013,stain,false);
+      const stitch=(a,b,i)=>{const p=(k,j)=>mix(a[j],b[j],k);return [[p(.18,0)-s*.0017,p(.18,1),p(.18,2)+.0005],[p(.69,0)-s*.0017,p(.69,1),p(.69,2)+.0005]];};
+      for(let j=1;j<yokeEdge.length;j++)strip(stitch(yokeEdge[j-1],yokeEdge[j],j),.00065,thread,false);
+    }
+    const widths=[.0082,.0090,.0092,.0085],maxLengths=[.109,.1184,.122,.1168];
+    for(let i=0;i<4;i++){
+      const radial=sign>0?i:3-i,index=radial===3,x=(i-1.5)*.0172;
+      const r=widths[radial],tip=maxLengths[radial];
+      const rings=[
+        [-tip,.0014,.0017,-.0188],
+        [-tip+.0022,r*.67,.0044,-.0190],
+        [-tip+.0048,r*.86,.00615,-.0190],
+        [-.1105,r*.96,.00750,-.01950],
+        [-.1052,r*1.02,.0081,-.0173],[-.0980,r*1.05,.0084,-.0130],[-.0943,r*.99,.0082,-.0108],
+        [-.0920,r*.98,.0083,-.0095],[-.0894,r*1.05,.0087,-.0084],[-.0864,r*1.07,.0089,-.0075],
+        [-.0811,r*1.04,.0090,-.0060],[-.0765,r*1.02,.010,-.0044],[-.071,r*1.08,.012,-.0028],
+        [-.064,r*1.12,.0136,-.0018],[-.059,r,.012,-.0011]
+      ].filter((q,j)=>j<3||q[0]>-tip+.0049).sort((a,b)=>a[0]-b[0]);
+      // Keep the historically calibrated pad as an actual vertex even when a
+      // neighbouring finger is shorter. The -X centre slot is used by the helm.
+      if(i===1&&!rings.some(q=>q[0]===-.1105))rings.push([-.1105,r*.95,.00750,-.01950]);
+      rings.sort((a,b)=>a[0]-b[0]);
+      const fingerStart=pos.length/3;
+      sleeve(rings,(q,a)=>{
+        const [y,rx,rz,cz]=q,si=Math.sin(a),co=Math.cos(a),edge=Math.abs(si);
+        const t=smooth(-y,.068,.112),shift=i===1?0:(i-1.5)*.00049*t;
+        const xx=x+shift+rx*exp(si,.88),zz=cz+rz*exp(co,.87);
+        const tone=co>.25?(y<-.094?hide:patch):edge>.87?gusset:hide;
+        const crease=(.5+.5*Math.cos(a*2))*Math.exp(-(((y+.092)/.0028)**2));
+        return [xx,y,zz,tone,co>.25&&y>-.094,a/TAU,y*10.3+i*.17,i,1.05-.073*crease+.022*Math.cos(3*a+39*y)];
+      },20);
+      if(index){
+        // Opposite vertices of an actual cross-section locate the fabric's
+        // pointing axis, even with a curved fingertip and a shallow side welt.
+        const center=(j,out)=>{
+          const a=3*(fingerStart+21*j),b=a+30;
+          return out.set((curl[a]+curl[b])*.5,(curl[a+1]+curl[b+1])*.5,(curl[a+2]+curl[b+2])*.5);
+        };
+        center(rings.findIndex(q=>q[0]===-.071),rayRoot);center(0,rayTip);
+      }
+      // Edge stitching runs along the welt instead of dividing a digit into
+      // rings. Two short flexible folds dimple the dorsal face above the joint.
+      for(const s of [-1,1]){
+        const nodes=rings.filter(r=>r[0]<-.069&&r[0]>-tip+.0022).map(q=>{
+          const [y,rx,rz,cz]=q,sh=i===1?0:(i-1.5)*.00049*smooth(-y,.068,.112);
+          return [x+sh+s*.811*rx,y,cz+.704*rz];
+        });
+        strip(nodes,.0010,stain,false,i,.00023);
+        for(let j=2;j<nodes.length;j+=2)strip([nodes[j-1],nodes[j]],.00056,thread,false,i,.00040);
+      }
+      for(const yy of [-.0895,-.0942]){
+        const q=lerpArr(rings,yy),line=[];
+        for(let k=0;k<=5;k++){
+          const xx=(k/5-.5)*1.02*q[1],y=yy+.00155*(xx/q[1])**2+sign*.00026*k;
+          const qr=lerpArr(rings,y),co=Math.pow(1-Math.min(.999,(Math.abs(xx)/qr[1])**(2/.88)),.87/2);
+          line.push([x+xx,y,qr[3]+qr[2]*co+.00014]);
+        }
+        strip(line,.00065,stain,false,i,.00015);
+      }
+    }
+    // The thenar gusset widens into the thumb, rather than leaving a second
+    // disconnected tube on the outside of the palm.
+    const thumb=[
+      [-.079,.0020,.0026,-.033,.0338],[-.0773,.0067,.0069,-.0335,.0341],[-.073,.0097,.0088,-.033,.0356],
+      [-.067,.0108,.0093,-.0298,.0392],[-.061,.0113,.0107,-.0263,.0426],[-.056,.0119,.0112,-.0229,.0437],
+      [-.050,.0131,.0127,-.0188,.0420],[-.044,.0142,.015,-.0144,.0380],[-.037,.0145,.016,-.011,.0330],
+      [-.031,.013,.0163,-.0087,.0284],[-.026,.011,.014,-.007,.0250],[-.022,.005,.007,-.005,.0240]
+    ];
+    sleeve(thumb,(q,a)=>{
+      const [y,rx,rz,cz,cx]=q,co=Math.cos(a),si=Math.sin(a),x=sign*cx+rx*si,z=cz+rz*co;
+      return [x,y,z,co>.54?dorsal:hide,co>.54,a/TAU,y*8+.38,-1,.965+.055*Math.cos(a+y*27)];
+    },24);
+    const thumbSeam=thumb.slice(1,-1).map(([y,rx,rz,cz,cx])=>[sign*(cx+.40*rx),y,cz+.925*rz]);
+    strip(thumbSeam,.00112,gusset,false);
+    for(let j=2;j<thumbSeam.length;j+=2)strip([thumbSeam[j-1],thumbSeam[j]],.00067,thread,false,-1,.00042);
+
+    function geometry(p){
+      const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(p,3));g.setIndex(indices);g.computeVertexNormals();
+      // Seam vertices have separate UVs. Average exactly coincident normals so
+      // grazing sun does not draw an artificial meridian across the fingertip.
+      const attr=g.attributes.normal,merged=new Map(),keys=[];
+      for(let i=0;i<attr.count;i++){
+        const key=Math.round(p[3*i]*1e6)+','+Math.round(p[3*i+1]*1e6)+','+Math.round(p[3*i+2]*1e6);keys.push(key);
+        let n=merged.get(key);if(!n)merged.set(key,n=new T.Vector3());n.add(p0.fromBufferAttribute(attr,i));
+      }
+      merged.forEach(n=>n.normalize());for(let i=0;i<keys.length;i++){const n=merged.get(keys[i]);attr.setXYZ(i,n.x,n.y,n.z);}
+      return g;
+    }
+    const base=geometry(pos),bent=geometry(curl),flat=geometry(pressed);
+    base.morphAttributes.position=[bent.attributes.position,flat.attributes.position];base.morphAttributes.normal=[bent.attributes.normal,flat.attributes.normal];
+    base.setAttribute('color',new T.Float32BufferAttribute(rgb,3));base.setAttribute('uv',new T.Float32BufferAttribute(uv,2));base.computeBoundingSphere();
+    base.userData.pointBase=rayRoot;base.userData.pointAxis=rayTip.sub(rayRoot).normalize();
+    bent.dispose();flat.dispose();const mesh=new T.Mesh(base,material);mesh.name='workGlove';mesh.castShadow=mesh.receiveShadow=true;wrist.add(mesh);
   }
 
   function arm(shoulder,elbow,wrist,sign,side) {
@@ -686,24 +892,7 @@
     c.loft('#686552',[[-.197,.0465,.0505,-.003],[-.193,.0475,.0525,-.003],[-.188,.0475,.0525,-.002]],'fabric',.018);
     c.oval('#686954',[sign*.047,-.190,-.003],[.0035,.006,.006],'fabric');
     c.flush(elbow);
-    const hand=new Batch();hand.glove=true;
-    hand.loft('#545144',[[-.085,.027,.018,-.008],[-.066,.038,.022,-.005],[-.034,.040,.025],
-      [-.013,.033,.023],[.011,.031,.022]],'fabric',.017);
-    hand.oval('#41443b',[0,-.048,.011],[.034,.033,.013],'fabric');
-    for(let i=0;i<4;i++){
-      const x=(i-1.5)*.0172,tip=-.113+.005*Math.abs(i-1.5);
-      const proximal=fingerFrame(i,sign,false);hand.fingerPose=proximal;
-      hand.tube('#525044',[x,-.067,-.002],[x,-.092,-.009],.0085,'fabric');
-      hand.fingerPose=fingerFrame(i,sign,true);
-      hand.tube('#48483e',[x,-.092,-.009],[x,tip,-.019],.008,'fabric');
-      hand.oval('#4a4b42',[x,tip,-.019],[.008,.009,.008],'fabric');
-      hand.fingerPose=proximal;
-      hand.box('#697065',[x,-.066,.013],[.010,.006,.002],'satin');
-    }
-    hand.fingerPose=null;
-    hand.tube('#524f42',[-sign*.028,-.037,-.008],[-sign*.041,-.058,-.024],.012,'fabric');
-    hand.tube('#47473c',[-sign*.041,-.058,-.024],[-sign*.035,-.075,-.034],.010,'fabric');
-    hand.flush(wrist);
+    workGlove(wrist,sign,side);
   }
 
   const badgeTextures=new Map();
@@ -824,7 +1013,7 @@
   }
 
   const signalTarget=new T.Vector3(),signalShoulder=new T.Vector3(),signalPalm=new T.Vector3(),signalEnd=new T.Vector3();
-  const signalFrame=new T.Quaternion(),signalDown=new T.Vector3(0,-1,0);
+  const signalFrame=new T.Quaternion();
   // Triggered by the player's world marker. Equipment takes over both hands
   // immediately. When the marker simply expires, lower the arm over a few frames.
   function pointGesture(actor,m,dt){
@@ -864,12 +1053,13 @@
     b.chest.localToWorld(signalPalm);handleArm(b.chest,arm,fore,signalPalm,side,weight);
     signalEnd.copy(sight.goal);fore.worldToLocal(signalEnd);signalEnd.sub(wrist.position);
     if(signalEnd.lengthSq()>.00001){
-      signalFrame.setFromUnitVectors(signalDown,signalEnd.normalize());
+      const pointing=wrist.children[0].geometry.userData;
+      signalFrame.setFromUnitVectors(pointing.pointAxis,signalEnd.normalize());
       // Offset the axis to the root of the index finger, especially at short range.
-      signalEnd.set((side?-.0258:.0258),-.067,-.002).applyQuaternion(signalFrame);
+      signalEnd.copy(pointing.pointBase).applyQuaternion(signalFrame);
       signalTarget.copy(sight.goal);fore.worldToLocal(signalTarget);
       signalTarget.sub(wrist.position).sub(signalEnd);
-      if(signalTarget.lengthSq()>.00001)signalFrame.setFromUnitVectors(signalDown,signalTarget.normalize());
+      if(signalTarget.lengthSq()>.00001)signalFrame.setFromUnitVectors(pointing.pointAxis,signalTarget.normalize());
       wrist.quaternion.slerp(signalFrame,weight);
     }
   }

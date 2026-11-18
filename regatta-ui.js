@@ -5,9 +5,10 @@ const TideRegattaUI=(()=>{
   const fmt=t=>Number.isFinite(t)?t.toFixed(2)+' 秒':'未完赛';
   function create(renderer,fromMemory,onExit){
     let r=TideRegatta.create(),view=TideRegattaView.create(renderer),audio=null,paused=false,quality=1;
+    let seatPanel=null;
     let last=0,carry=0,panePhase='',resultAt=0,activeVoice='',voiceAge=0,best=[null,null];
     try{const saved=JSON.parse(localStorage.getItem('tide-regatta-records'));if(Array.isArray(saved))best=best.map((_,i)=>Number.isFinite(saved[i])&&saved[i]>0?saved[i]:null);}catch{}
-    const held=new Set(),padsLast=[new Set(),new Set()],layer=document.createElement('div');
+    const held=new Set(),padsLast=new Map(),layer=document.createElement('div');
     layer.className='rg-layer';canvas.parentElement.append(layer);
     const panes=names.map((name,i)=>{
       const p=document.createElement('section');p.className='rg-pane rg-'+i;
@@ -27,6 +28,7 @@ const TideRegattaUI=(()=>{
       for(const line of body){const p=document.createElement('p');p.textContent=line;box.append(p);}
       const controls=document.createElement('div');controls.className='rg-actions';box.append(controls);
       for(const [label,fn] of buttons){const b=document.createElement('button');b.textContent=label;b.onclick=fn;controls.append(b);}
+      if(paused)seatPanel=TideCrewInput.panel(box,false,true);else seatPanel=null;
       panel.append(box);controls.firstElementChild.focus({preventScroll:true});
     }
     function restart(){
@@ -80,14 +82,18 @@ const TideRegattaUI=(()=>{
     }
     function inputs(pads){
       assignPads(pads);
+      // Swapping from a gamepad menu must not deliver the same A press to the other seat.
+      const seats=padSlots.slice();
+      for(const id of padsLast.keys())if(!pads.some(p=>p.index===id))padsLast.delete(id);
       return keysBySide.map(([left,right,up,down,boost,reset],i)=>{
         if(dead)return {x:0,z:0};
-        const pad=pads.find(p=>p.index===padSlots[i]),buttons=new Set();
+        const pad=pads.find(p=>p.index===seats[i]),buttons=new Set();
         pad?.buttons.forEach((b,j)=>{if(b.pressed)buttons.add(j);});
-        const edge=j=>buttons.has(j)&&!padsLast[i].has(j);
+        const previous=padsLast.get(pad?.index);
+        const edge=j=>buttons.has(j)&&!previous?.has(j);
         if(edge(9)&&r.phase!=='result')pause();
         else if(paused||r.phase==='result'){
-          const options=[...panel.querySelectorAll('button')],pos=options.indexOf(document.activeElement);
+          const options=[...panel.querySelectorAll('button:not([hidden])')],pos=options.indexOf(document.activeElement);
           if(edge(1)){if(paused)pause();else leave();}
           else if(edge(12)||edge(14)||edge(13)||edge(15)){const dir=edge(12)||edge(14)?-1:1;options[(pos+dir+options.length)%options.length]?.focus();}
           else if(edge(0)&&options.includes(document.activeElement))document.activeElement.click();
@@ -95,13 +101,14 @@ const TideRegattaUI=(()=>{
           if((edge(0)||edge(7))&&r.phase==='ready')ready(i);
           if(edge(11))view.toggle(i);
         }
-        padsLast[i]=buttons;const axis=j=>Math.abs(pad?.axes[j]||0)>.14?pad.axes[j]:0;
+        if(pad)padsLast.set(pad.index,buttons);const axis=j=>Math.abs(pad?.axes[j]||0)>.14?pad.axes[j]:0;
         return {x:Math.max(-1,Math.min(1,+held.has(right)-held.has(left)+axis(0))),z:Math.max(-1,Math.min(1,+held.has(down)-held.has(up)+axis(1))),
           boost:held.has(boost)||buttons.has(7),reset:held.has(reset)||i===1&&held.has('ShiftRight')||buttons.has(3)};
       });
     }
     let dead=false;
     function frame(now,pads){
+      if(paused&&seatPanel)seatPanel.update(pads);
       const k=inputs(pads);if(dead||paused){last=0;return;}
       const delta=last?Math.min(.12,Math.max(0,(now-last)/1000)):0;last=now;carry+=delta;
       while(carry+1e-9>=1/60){TideRegatta.step(r,k,1/60);carry-=1/60;}

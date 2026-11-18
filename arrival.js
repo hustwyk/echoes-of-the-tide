@@ -15,25 +15,62 @@ const TideArrival=(()=>{
   function begin(g){
     const h=g.world.fenders.floatPose;
     g.arrival={x:h.anchorX-17.6,z:h.anchorZ+4.65,heading:.19,speed:.63,rudder:0,drive:0,
+      plate:{look:0,stroke:.045,coverage:Array(12).fill(0),read:false,reported:false,held:false,direction:0,cue:'',cueAt:0,serial:0},
       dial:9,channel:9,receive:0,radio:'tune',voice:'',voiceAt:0,caption:'',cue:'',serial:0,
       lateral:-.78,reach:2.9,flight:null,attached:false,secured:false,haul:0,walking:0,
       moored:false,done:false,use:false,warning:'',warnTo:0,misses:0,engineRunning:true};
     advanceHull(g,0,0,0);placeCrew(g,0);display(g);
   }
   function tell(g,key){const s=g.arrival;s.cue=key;s.serial++;}
-  function speak(s,key){s.voice=key;s.voiceAt=0;}
+  const callSignEnd=TideArrivalSpeech.captain.cues[0].end+.09;
+  const speech=id=>TideArrivalSpeech[id]||TidePlateSpeech[id];
+  function speak(s,key){s.voice=key;s.voiceAt=0;s.caption='';}
+  function inspectPlate(g,helm,dt){
+    const s=g.arrival,p=s.plate,held=!!helm.use&&s.radio!=='line';
+    const cue=id=>{p.cue=id;p.cueAt=g.time;p.serial++;};
+    if(!held&&p.held&&p.look>.55)cue('tap');
+    p.held=held;
+    p.look=clamp(p.look+dt*(held?2.25:-2.82),0,1);
+    const old=p.stroke;
+    if(held&&p.look>.52)p.stroke=clamp(old+helm.x*dt*1.03,0,1);
+    const span=Math.abs(p.stroke-old),direction=Math.sign(p.stroke-old);
+    if(span<.00001){p.direction=0;return;}
+    if(direction!==p.direction&&g.time-p.cueAt>.28)cue('wipe');
+    p.direction=direction;
+    const left=Math.min(old,p.stroke),right=Math.max(old,p.stroke);
+    for(let i=0;i<p.coverage.length;i++){
+      const x=(i+.5)/p.coverage.length,dist=Math.max(left-x,x-right,0);
+      p.coverage[i]=clamp(p.coverage[i]+span*11*clamp(1-dist/.123,0,1),0,1);
+    }
+    // Both stamped digits must be legible. Scrubbing one small spot cannot reveal the other.
+    if(!p.read)p.read=[1,2,3,4,7,8,9,10].every(i=>p.coverage[i]>.54);
+  }
   function voice(g,dt,pressed){
     const s=g.arrival;
     if(s.radio==='tune'){
       s.receive=s.channel===12?Math.min(.48,s.receive+dt):0;
-      if(s.receive>=.48){s.radio='listen';speak(s,'captain');}
+      if(s.plate.read&&!s.plate.reported&&!s.voice){
+        s.plate.reported=true;speak(s,'read');
+      }
+      if(s.receive>=.48&&!s.voice){
+        s.radio=s.plate.reported?'acquire':'listen';speak(s,'captain');
+      }
     }
     if(s.radio==='wait'&&pressed){s.radio='test';speak(s,'call');}
     if(!s.voice){s.caption='';return;}
-    const clip=TideArrivalSpeech[s.voice];s.voiceAt+=dt;
-    for(const [at,line] of clip.lines)if(s.voiceAt>=at)s.caption=line;
+    const clip=speech(s.voice);s.voiceAt+=dt;
+    // The receiver catches the ship's call sign first. Lin echoes the number in
+    // the pause; the same transmission continues from its passenger count.
+    if(s.radio==='acquire'&&s.voice==='captain'&&s.voiceAt>=callSignEnd){
+      s.radio='readback';speak(s,'tuned');return;
+    }
+    const from=s.plate.reported&&s.radio==='listen'&&s.voice==='captain'?callSignEnd:0;
+    const line=clip.lines.findLast(l=>l[0]>=from&&l[0]<=s.voiceAt)?.[1]||'';
+    if(line!==s.caption){s.caption=line;if(line)g.events.log?.(line);}
     if(s.voiceAt<clip.duration)return;
-    if(s.voice==='captain')speak(s,'heard');
+    if(s.voice==='read'){s.voice='';s.caption='';}
+    else if(s.voice==='tuned'){s.radio='listen';speak(s,'captain');s.voiceAt=callSignEnd;}
+    else if(s.voice==='captain')speak(s,'heard');
     else if(s.voice==='heard')speak(s,'button');
     else if(s.voice==='call')speak(s,'dark');
     else {s.radio=s.voice==='button'?'wait':'line';s.voice='';s.caption='';}
@@ -125,12 +162,12 @@ const TideArrival=(()=>{
       if(channel!==s.channel){s.channel=channel;tell(g,'dial');}
     }else if(s.radio==='wait'&&pressed||s.radio==='test'&&released)tell(g,pressed?'pttDown':'pttUp');
     if(released&&s.radio==='test'&&s.voice==='call'){s.radio='wait';s.voice='';warn(g,'松键太早了。按住到林澈把话说完。');}
-    voice(g,dt,pressed);
+    inspectPlate(g,helm,dt);voice(g,dt,pressed);
     // Keys spring back to idle. The pilot can back up and try the same shore cleat again.
     const thrust=clamp(-helm.z,-1,1);
     if(s.attached&&Math.abs(thrust)<.12&&Math.abs(s.speed)<.68&&helm.use){s.secured=true;s.engineRunning=false;}
     s.haul=s.attached&&s.secured&&k.use?1:0;
-    advanceHull(g,helm.x,thrust,dt);
+    advanceHull(g,s.plate.held?s.rudder:helm.x,thrust,dt);
     if(s.radio==='line'&&!s.attached){
       if(!s.flight){
         s.lateral=clamp(s.lateral+k.x*dt*2.2,-4.8,4.8);
@@ -165,9 +202,11 @@ const TideArrival=(()=>{
     else{radio=g.time<s.warnTo?s.warning:'看岸上的黄铜系缆桩，移动缆圈的落点。套准后按操作键抛缆。';
       read=s.flight?'缆圈在空中':miss<.65?'缆圈对准桩顶':miss>6?'岸桩还在投缆范围外':'收放缆圈，对准岸桩';}
     g.set(0,radio,{caption:read});
-    const pilot=s.moored?'已贴靠。换位，让林澈去堤下的绞盘。':s.attached?(s.secured?'发动机已停。等首缆收紧。':'松开油门，减速后按住操作键停机。'):
+    const plate=s.plate,inspect=s.radio==='tune'&&!plate.reported;
+    const pilot=plate.held?(plate.read?'读出值班频道，松开操作键抬头看堤。':'左右移动手套，把两位数字上的盐霜都擦掉。油门仍可进退。'):
+      inspect?'舵轮旁有一块值班牌。按住操作键俯身看，报给艇首。':s.moored?'已贴靠。换位，让林澈去堤下的绞盘。':s.attached?(s.secured?'发动机已停。等首缆收紧。':'松开油门，减速后按住操作键停机。'):
       '看岸边红白「首缆」牌，向前进车，带船首靠过去。临近收油，过头可倒车。';
-    g.set(1,pilot,{caption:(s.secured?'空挡':'航速 '+Math.abs(s.speed).toFixed(1)+' m/s')+'　／　外港值班 12'});
+    g.set(1,pilot,{caption:(s.secured?'空挡':'航速 '+Math.abs(s.speed).toFixed(1)+' m/s')+(s.radio==='tune'?(plate.read?'　／　外港值班 12':'　／　舵座铜牌'):'')});
   }
-  return {begin,step,active,cleat,deck,endPoint,helmSite,castSite,radioSite};
+  return {begin,step,active,speech,cleat,deck,endPoint,helmSite,castSite,radioSite};
 })();
