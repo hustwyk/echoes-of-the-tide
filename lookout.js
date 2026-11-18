@@ -18,6 +18,7 @@ const TideLookout=(()=>{
     return .46*Math.sin(x*.23+z*.11+t*1.12)+.34*Math.sin(-x*.17+z*.29-t*.88)+.18*Math.sin(x*.49-z*.41+t*1.42)+.09*Math.sin(x*.81+z*.62-t*1.64);
   }
   function vessel(g,t){
+    if(g.signal){const p=TideSignal.ship(g,t);return [p.x,p.y,p.z];}
     const f=g.cues.rescue;
     const x=marks.ship.x+(g.index===9?9.5:0)-16*f+Math.sin(t*.055)*1.8,z=marks.ship.z-(g.index===9?6:0)-12*f;
     return [x,g.cues.water+.5*(swell(x-3,z,t)+swell(x+3,z,t)),z];
@@ -31,8 +32,8 @@ const TideLookout=(()=>{
   // Telescopes sit beyond the outer rail, clear of the overhead crane and tower walls.
   function camera(g){
     const w=g.watch,side=w.task.watcher;
-    const eye=[side?-21.3:-37.3,side?4.35:5.15,-89.8];
-    const base=Math.atan2(-32-eye[0],117+eye[2]);
+    const eye=g.signal?TideSignal.scope(g):[side?-21.3:-37.3,side?4.35:5.15,-89.8];
+    const base=g.signal?Math.atan2(-26-eye[0],eye[2]+113):Math.atan2(-32-eye[0],117+eye[2]);
     const yaw=base+w.yaw,pitch=w.pitch;
     return {eye,at:[eye[0]+Math.sin(yaw)*Math.cos(pitch),eye[1]+Math.sin(pitch),eye[2]-Math.cos(yaw)*Math.cos(pitch)],yaw,pitch};
   }

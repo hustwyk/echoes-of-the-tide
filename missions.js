@@ -13,9 +13,9 @@ const TideMissions = (() => {
       step('cable','吊臂背面的接线柱',['breaker','radio'],'沈遥：从吊臂背面绕过去，看另一根线。',{code:1,rough:2})
     ],
     [
-      step('power','启动飞轮',['wheel','breaker'],'林澈：先稳住电压，你看岸外那片水。',{value:.35}),
-      step('power','向船上报灯',['wheel','radio'],'沈遥：北线已恢复。',{value:.71,rough:1}),
-      step('blackout','遮光与叫停',['brake','radio'],'梁青：收到，北线可以进入。\n沈遥：等等！船在向碎浪转！')
+      step('power','启动飞轮',['wheel','breaker'],'林澈：我摇飞轮。两根针搭上，你接离合。',{value:.35}),
+      step('power','向船上报灯',['wheel','radio'],'沈遥：我先找旧标和船，你帮我核对。',{value:.71,rough:1}),
+      step('blackout','遮光与叫停',['brake','radio'],'沈遥：她真往那边转了！我提梯，你上去遮灯。')
     ],
     [
       step('ride','降下浮架',['pump','breaker'],'林澈：浮架在高处，先把水排下去。',{driver:0,mode:'raft',length:16,rise:-1.55}),

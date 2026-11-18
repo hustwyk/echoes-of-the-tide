@@ -49,9 +49,9 @@ function campaign() {
 
 function savePoint(g){
   if(g.index!==progress)return;
-  const mark=TideLantern.checkpoint(g);
+  const mark=TideLantern.checkpoint(g),signal=TideSignal.checkpoint(g);
   if(!g.stage&&!mark)return;
-  resume={index:g.index,stage:g.stage,...(mark?{lantern:mark}:{})};
+  resume={index:g.index,stage:g.stage,...(mark?{lantern:mark}:{}),...(signal?{signal}:{})};
   try{localStorage.setItem('tide-3d-checkpoint',JSON.stringify(resume));}catch{}
 }
 function clearInput(){
@@ -111,7 +111,7 @@ function openLevel(n,stage=0,mark=null){
         deck.active=true;if(deck.hinge!==undefined){deck.unlocked=true;deck.hinge=1;}
       }
     }
-    if(mark){TideLantern.restore(session,mark);savePoint(session);}
+    if(mark){if(session.signal)TideSignal.restore(session,mark);else TideLantern.restore(session,mark);savePoint(session);}
     view.load(session);
   }catch(err){
     console.error(err);mode='error';
@@ -267,7 +267,7 @@ function frame(now){
 }
 requestAnimationFrame(frame);
 
-$('start').onclick=()=>openLevel(progress===12?0:progress,resume?.index===progress?resume.stage:0,resume?.index===progress?resume.lantern:null);
+$('start').onclick=()=>openLevel(progress===12?0:progress,resume?.index===progress?resume.stage:0,resume?.index===progress?resume.lantern||resume.signal:null);
 $('skip').onclick=()=>{if(mode==='cinema'){view.cinema.skip();showDebrief(session);}};
 $('pause').onclick=pause;$('sound').onclick=$('field-audio').onclick=toggleAudio;
 $('expand').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else if(game.requestFullscreen)await game.requestFullscreen();}catch{showStatus('当前窗口已使用可用的最大画面');}};
