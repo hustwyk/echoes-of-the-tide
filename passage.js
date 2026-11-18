@@ -3,7 +3,7 @@ const TidePassage = (() => {
   const TAU=Math.PI*2;
   function build(g){
     g.crossings=[];
-    if(g.world.foghouse||g.world.soundings||g.world.relay||g.world.cableQuay||g.world.lantern||g.world.signal||g.world.archive){g.solidSites=[];return;}
+    if(g.world.glass||g.world.foghouse||g.world.soundings||g.world.relay||g.world.cableQuay||g.world.lantern||g.world.signal||g.world.archive){g.solidSites=[];return;}
     g.solidSites=g.world.sections.flatMap(section=>section.tram?[]:section.sites.concat(section.field?.sites||[]));
     const act=Math.floor(g.index/3);
     for(let stage=0;stage<g.world.sections.length;stage++){

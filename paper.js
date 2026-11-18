@@ -46,13 +46,13 @@ const TidePaper=(()=>{
       caption:p.pinned?'第一孔已固定　·　另一侧正在验印':directions(dx,dy)});
     const vertical=p.light<p.lightTarget?'抬高掠射灯':'压低掠射灯';
     g.set(r,!p.pinned?'等同伴别上第一枚针。两孔重叠时提醒他确认':'左右旋纸，前后抬低侧灯。辨出纸面批注后确认',{
-      caption:!p.pinned?'观察第一孔　·　'+directions(dx,dy):!match?(p.angle>0?'红线还需顺时针转回':'红线还需逆时针转回'):!lit?vertical+'，直到笔痕显出来':readings[g.stage]});
+      caption:!p.pinned?'观察第一孔　·　'+directions(dx,dy):!match?(p.angle>0?'红线还需顺时针转回':'红线还需逆时针转回'):!lit?vertical+'，直到笔痕显出来':g.glass&&g.stage===2?'两道裁边重合，框外留有压纹':readings[g.stage]});
     if(!p.pinned&&g.commit(h,input)){
-      if(Math.hypot(dx,dy)<.049){p.pinned=true;lockOrigin(p);g.sound(610,.10);g.alert('铜针穿过两层，另一侧可以绕针转纸');}
+      if(Math.hypot(dx,dy)<.049){p.pinned=true;lockOrigin(p);if(g.glass)g.events.checkpoint?.(g);g.sound(610,.10);g.alert('铜针穿过两层，另一侧可以绕针转纸');}
       else g.alert('铜针碰到了纸边　·　'+directions(dx,dy),1.7);
     }
     if(p.pinned&&g.commit(r,input)){
-      if(p.revealed&&g.engaged[h]){g.alert(readings[g.stage],3);g.advance();}
+      if(p.revealed&&g.engaged[h]){g.alert(g.glass&&g.stage===2?'裁边下还有字。':readings[g.stage],3);if(g.glass)TideGlass.registered(g);else g.advance();}
       else g.alert(!g.engaged[h]?'请同伴扶住铜针，再读一遍':!match?'印痕仍有两道，沿铜针旋转底片':vertical+'，掠过纸面再确认',1.7);
     }
   }

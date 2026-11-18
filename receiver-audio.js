@@ -16,6 +16,7 @@ const TideReceiverAudio=(()=>{
   const loadSoundings=()=>loadData('TideSoundingsMedia','assets/soundings-media.js');
   const loadFog=()=>loadData('TideFogMedia','assets/fog-signal-media.js');
   const loadPass=()=>loadData('TidePassMedia','assets/final-pass-media.js');
+  const loadGlass=()=>loadData('TideGlassMedia','assets/glass-media.js');
   function create(ctx,output){
     const buffers={},pending=new Set();
     let air=null,echo=null;
@@ -26,9 +27,10 @@ const TideReceiverAudio=(()=>{
       pending.add(key);
       try{
         const mast=key.startsWith('mast/'),survey=key.startsWith('tide/'),horn=key.startsWith('horn/'),final=key.startsWith('pass/');
-        const stock=final?await loadPass():horn?await loadFog():survey?await loadSoundings():mast?await loadRelay():(key==='receiver'||key==='hoist')?TideBreakwaterAudio:await loadQuay();
+        const room=key.startsWith('room/');
+        const stock=room?await loadGlass():final?await loadPass():horn?await loadFog():survey?await loadSoundings():mast?await loadRelay():(key==='receiver'||key==='hoist')?TideBreakwaterAudio:await loadQuay();
         if(!stock)return;
-        const bytes=Uint8Array.from(atob(stock[mast||survey||horn||final?key.slice(5):key]),v=>v.charCodeAt(0));
+        const bytes=Uint8Array.from(atob(stock[mast||survey||horn||final||room?key.slice(5):key]),v=>v.charCodeAt(0));
         buffers[key]=await ctx.decodeAudioData(bytes.buffer);
       }finally{pending.delete(key);}
     }
@@ -71,7 +73,7 @@ const TideReceiverAudio=(()=>{
     }
     function update(g){
       const horn=g.pilotHorn||g.fog;
-      if(g.lastPass||horn||g.relay||g.survey){
+      if(g.glass||g.lastPass||horn||g.relay||g.survey){
         if(horn){
           const key='horn/diaphone',r=horn;
           if(!buffers[key]&&!pending.has(key))decode(key).catch(()=>{});
@@ -79,9 +81,9 @@ const TideReceiverAudio=(()=>{
           if(!r.down&&air)air=end(air);
           if(air){air.filter.frequency.setTargetAtTime(840+r.valve*1480,ctx.currentTime,.023);air.gain.gain.setTargetAtTime(.19+.47*r.pressure,ctx.currentTime,.023);}
         }
-        const table=g.lastPass?TidePassSpeech:horn?TideFogSpeech:g.survey?TideSoundingsSpeech:TideRelaySpeech,prefix=g.lastPass?'pass/':horn?'horn/':g.survey?'tide/':'mast/';
+        const table=g.glass?TideGlassSpeech:g.lastPass?TidePassSpeech:horn?TideFogSpeech:g.survey?TideSoundingsSpeech:TideRelaySpeech,prefix=g.glass?'room/':g.lastPass?'pass/':horn?'horn/':g.survey?'tide/':'mast/';
         for(const id of Object.keys(table)){const key=prefix+id;if(!pending.has(key)&&!buffers[key])decode(key).catch(()=>{});}
-        const r=g.lastPass||horn||g.survey||g.relay,key=r.voice&&!r.occupied?prefix+r.voice:'';
+        const r=g.glass||g.lastPass||horn||g.survey||g.relay,key=r.voice&&!r.occupied?prefix+r.voice:'';
         if(key!==storyKey||story&&Math.abs(ctx.currentTime-story.start-r.clock)>.50){story=end(story);storyKey=key;}
         if(key&&!story)story=play(key,1.06,r.clock);
         return;
@@ -109,5 +111,5 @@ const TideReceiverAudio=(()=>{
     }
     return {update,stop};
   }
-  return {create,loadQuay,loadRelay,loadSoundings,loadFog,loadPass};
+  return {create,loadQuay,loadRelay,loadSoundings,loadFog,loadPass,loadGlass};
 })();

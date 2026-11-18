@@ -344,9 +344,9 @@ window.TideFieldProps=(()=>{
           c.font='bold 15px serif';c.fillText('N',744,36);c.font='14px monospace';c.fillText('36°14′ N',550,194);c.fillText('121°05′ E',637,194);
           for(let i=0;i<5;i++){c.fillStyle=i%2?'#e5d7b5':'#536965';c.fillRect(549+i*35,422,35,5);}
         }else{
-          c.save();c.rotate(-.032);c.font='bold 43px sans-serif';c.fillStyle='#944f39';c.fillText(['北线　原始航测','潮位修正记录','北线　须复测'][stage%3],50,75);
+          c.save();c.rotate(-.032);c.font='bold 43px sans-serif';c.fillStyle='#944f39';c.fillText(['北线　原始航测','潮位修正记录','北线　裁印底稿'][stage%3],50,75);
           c.setLineDash([17,8]);c.strokeStyle='#a25140';c.lineWidth=4;c.beginPath();c.moveTo(70,429);c.bezierCurveTo(318,275,522,491,779,229);c.stroke();
-          c.setLineDash([]);c.strokeRect(518,449,250,54);c.font='24px monospace';c.fillText('CHECK SOUNDINGS',535,485);c.restore();
+          c.setLineDash([]);c.strokeRect(518,449,250,54);c.font='24px monospace';c.fillText('FILE C / SHEET 03',535,485);c.restore();
         }
         for(let i=0;i<12500;i++){
           const x=random()*w,y=random()*h,t=random();
@@ -390,7 +390,7 @@ window.TideFieldProps=(()=>{
       const peg=mesh(cylinder,solid(brass),v(state.pin[0],state.pin[1],.097),.037,.116,.037,board);peg.rotation.x=Math.PI/2;
       const noteMap=texture(640,138,(c,w,h)=>{
         c.fillStyle='#e1dcc0';c.fillRect(0,0,w,h);c.lineWidth=3;c.strokeStyle='#a09673';c.strokeRect(3,3,w-6,h-6);
-        c.fillStyle='#575e53';c.font='30px serif';c.fillText(TidePaper.readings[g.stage],19,83,w-38);
+        c.fillStyle='#575e53';c.font='30px serif';c.fillText(g.glass&&g.stage===2?'框外仍有手写压痕':TidePaper.readings[g.stage],19,83,w-38);
       });
       const noteMat=local(new T.MeshStandardMaterial({map:noteMap,transparent:true,depthWrite:false,opacity:0,roughness:.89}));
       const annotation=mesh(plane,noteMat,v(.03,-.40,.065),1.07,.21,1,board);annotation.renderOrder=3;
@@ -405,6 +405,10 @@ window.TideFieldProps=(()=>{
       const grazingLamp=new T.SpotLight(0xffe8b5,1.7,3.0,.48,.65,2);
       lamp.add(grazingLamp);board.add(grazingLamp.target);
       animation.push(s=>{
+        if(s.glass){
+          const loaded=s.glass.docked;ref.visible=folio.visible=loaded;
+          if(!loaded){peg.visible=false;noteMat.opacity=0;return;}
+        }
         const p=s.paper;
         ref.rotation.z=0;folio.rotation.z=p.angle;folio.position.x=p.offset[0];folio.position.y=p.offset[1];
         peg.visible=p.pinned;lamp.position.y=.15+p.light*.58;lamp.position.z=.10+p.light*.27;
