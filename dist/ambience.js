@@ -338,7 +338,7 @@ window.TideAudioScene = (() => {
       }
     }
     function snapshot(g) {
-      return {game:g, section:g.state,
+      return {game:g, section:g.state, fenderWinding:0,fenderPaid:0,fenderRung:0,fenderWall:null,
         well:g.cistern?{caught:g.cistern.caught,stowed:g.cistern.cupKept,stroke:Math.floor(g.cistern.stroke*2),ports:g.cistern.ports,
           blocked:g.cistern.blocked,moored:g.cistern.moored,basket:g.cistern.tape,hoist:Math.floor(g.cistern.hoist*8)}:null,
         stamp:g.optic?.stamp??0, guide:g.optic?.mount?.gate??0, notch:g.section.span?.notch, impact:g.section.span?.impact, cableBay:0,
@@ -369,6 +369,24 @@ window.TideAudioScene = (() => {
     }
     function instruments(g, now, side) {
       const q = g.state, spec = g.spec, kind = spec.tools[side], pan = panFor(side);
+      if(TideFenders.active(g)){
+        const s=g.fenders;
+        if(side===0){
+          const tooth=Math.floor(s.setting*13),rung=s.onLadder?Math.floor((g.players[0].y+2.49)/.27):0;
+          if(tooth!==previous.fenderWinding){wheel(now,-.58,.48);previous.fenderWinding=tooth;}
+          if(s.onLadder&&rung!==previous.fenderRung){foot(now,-.5,'ladder',.53,true);previous.fenderRung=rung;}
+        }else{
+          const tooth=Math.floor(s.ladder*15),contact=s.wall?.phase;
+          if(tooth!==previous.fenderPaid){click(now,.53,.69);previous.fenderPaid=tooth;}
+          if(contact&&contact!==previous.fenderWall){
+            const kick=contact==='kick';
+            brush(now,'pink','lowpass',kick?590:880,.86,.004,kick?.15:.11,kick?.47:.31,.41,.23,177);
+            ring(now,kick?80:128,.093,kick?.20:.12,.43,{end:68});
+          }
+          previous.fenderWall=contact;
+        }
+        return;
+      }
       const active = g.engaged[side];
       if (active && !previous.engaged[side] && !(spec.type === 'quiet' && side === 0)) equipment(kind,now,pan);
       if (!active && previous.engaged[side] && kind === 'radio') squelch(now,pan,.45);

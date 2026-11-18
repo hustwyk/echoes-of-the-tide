@@ -3,10 +3,11 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const box=vm.createContext({});
-for(const name of ['missions','traversal','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','lookout','cistern-speech','cistern','glass-speech','chartroom','paper','lantern','signal','archive','relay-speech','relay','soundings-speech','soundings','fog-speech','fogsignal','pass-speech','lastpass','swing-speech','swing','cooperation']){
+for(const name of ['missions','traversal','fender-speech','fenders','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','lookout','cistern-speech','cistern','glass-speech','chartroom','paper','lantern','signal','archive','relay-speech','relay','soundings-speech','soundings','fog-speech','fogsignal','pass-speech','lastpass','swing-speech','swing','cooperation']){
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../dist',name+'.js'),'utf8'),box);
 }
 const {Session,near,surface,lookout,ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideSwing,TideCistern,TideGlass,TidePaper}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideSwing,TideCistern,TideGlass,TidePaper})',box);
+const TideFenders=vm.runInContext('TideFenders',box);
 const empty=()=>({x:0,z:0,use:false,jump:false});
 function steer(g,i,target,keys){
   const p=g.players[i],dx=target.x-p.x,dz=target.z-p.z,dist=Math.hypot(dx,dz);
@@ -442,8 +443,40 @@ function swingInputs(g,out){
   }
   return out;
 }
+function fenderInputs(g,out){
+  const s=g.fenders,w=g.world.fenders,[a,b]=g.players;
+  const headOut=(i)=>{
+    const p=g.players[i];
+    if(p.z>8.4)steer(g,i,w.landing,out[i]);
+    else if(p.z>7.2)steer(g,i,w.steps,out[i]);
+    else steer(g,i,g.section.starts[0],out[i]);
+  };
+  if(s.top[0])headOut(0);
+  else if(s.ladder>=1){
+    if(s.onLadder||Math.hypot(a.x-TideFenders.ladder.x,a.z-TideFenders.ladder.z)<.83){out[0].use=true;out[0].z=-1;}
+    else steer(g,0,TideFenders.ladder,out[0]);
+  }else if(s.seen[0]&&Math.hypot(a.x-TideFenders.wheel.x,a.z-TideFenders.wheel.z)<.82){
+    out[0].use=true;out[0].z=-1;
+  }else steer(g,0,TideFenders.wheel,out[0]);
+  if(s.ladder>=1)headOut(1);
+  else if(s.top[1]){
+    if(Math.hypot(b.x-TideFenders.pawl.x,b.z-TideFenders.pawl.z)<.8){out[1].use=true;out[1].z=1;}
+    else steer(g,1,TideFenders.pawl,out[1]);
+  }else if(!s.seen[1]){
+    steer(g,1,b.z>14.33?w.shelf:w.well,out[1]);
+  }else if(s.wall?.phase==='hold'){
+    out[1].x=-s.wall.normalX;
+    out[1].jump=s.wall.age>.025&&(!s.lastFace?s.setting>.88:true)&&!s.previousJump;
+  }else if(s.lastFace)out[1].x=s.lastFace<0&&b.x<-.98?Math.max(-1,Math.min(1,(-1.72-b.x)*2-b.vx*.22)):s.lastFace;
+  else if(b.z>11.35||b.z<9.55)steer(g,1,w.well,out[1]);
+  else{
+    out[1].x=-1;out[1].jump=b.grounded&&s.setting>.85;
+  }
+  return out;
+}
 function control(g){
   const out=[empty(),empty()],sec=g.section,s=g.spec,q=g.state;
+  if(TideFenders.active(g))return fenderInputs(g,out);
   if(TideSwing.active(g))return swingInputs(g,out);
   if(g.cistern)return cisternInputs(g,out);
   if(g.glass)return glassInputs(g,out);
@@ -637,6 +670,45 @@ if(require.main===module){
   function reach(g,condition){
     for(let j=0;j<60*120&&!condition()&&!g.complete;j++)g.tick(step,control(g));
     assert.ok(condition(),'Did not reach checkpoint in chapter '+(g.index+1)+' stage '+g.stage);
+  }
+  {
+    const g=new Session(0),s=g.fenders;
+    reach(g,()=>s.wall?.phase==='hold'&&s.wall.normalX===1);
+    const entry=g.players[1].y,crank=g.players[0];
+    // A held jump cannot fire repeated kicks. The first kick requires a new press.
+    for(let j=0;j<5;j++){const k=control(g);k[1].jump=false;k[1].jumpHeld=true;g.tick(step,k);}
+    assert.equal(s.wall.phase,'hold');assert.ok(g.players[1].y<=entry+.01);
+    reach(g,()=>s.wall?.phase==='hold'&&s.wall.normalX===-1);assert.equal(s.kicks,1);
+    assert.ok(s.setting>.65);assert.ok(Math.abs(g.players[1].x-(s.fenderX-.28))<.03);
+    reach(g,()=>s.top[1]);assert.ok(!s.top[0]);
+    const upper=TideFenders.checkpoint(g);assert.equal(upper.berth,'upper');
+    const saved=new Session(0);TideFenders.restore(saved,upper);
+    assert.equal(saved.players[1].ground,saved.world.fenders.ledge);
+    assert.equal(saved.players[0].ground,saved.world.fenders.lower);
+    const upperFalls=saved.setbacks;
+    for(let j=0;j<180&&saved.setbacks===upperFalls;j++)saved.tick(step,[empty(),{...empty(),x:1}]);
+    assert.equal(saved.setbacks,upperFalls+1);assert.equal(saved.players[1].ground,saved.world.fenders.ledge);
+    reach(g,()=>s.onLadder&&g.players[0].y>-1.12);
+    const y=crank.y;
+    for(let j=0;j<40;j++)g.tick(step,[empty(),empty()]);
+    assert.equal(crank.y,y);assert.equal(s.ladder,1);assert.ok(!s.top[0]);
+    reach(g,()=>s.phase==='done');assert.equal(g.stage,0);assert.equal(g.state.ferry,0);
+    const docked=new Session(0);TideFenders.restore(docked,TideFenders.checkpoint(g));
+    assert.equal(TideFenders.active(docked),false);reach(docked,()=>docked.stage===1);
+    const solo=new Session(0);
+    reach(solo,()=>solo.fenders.seen[1]);
+    for(let j=0;j<500;j++){
+      const a=control(solo);a[0]=empty();
+      a[1].x=-1;a[1].jump=solo.players[1].grounded||solo.fenders.wall?.phase==='hold'&&j%5===0;
+      solo.tick(step,a);
+    }
+    assert.ok(!solo.fenders.top[1]&&solo.fenders.setting===0);
+    // Run straight over the seaward edge while the other player keeps the winch tension.
+    const drop=new Session(0);reach(drop,()=>drop.fenders.seen[1]&&drop.fenders.setting>.70);
+    const other=drop.players[0],sideX=other.x,falls=drop.setbacks;
+    for(let j=0;j<240&&drop.setbacks===falls;j++)drop.tick(step,[{...empty(),use:true,z:-1},{...empty(),z:-1}]);
+    assert.equal(drop.setbacks,falls+1);assert.equal(drop.players[1].ground,drop.world.fenders.well);
+    assert.ok(Math.abs(other.x-sideX)<.1&&drop.fenders.setting>.7);
   }
   {
     const g=new Session(10),r=g.fog,w=g.world.foghouse;

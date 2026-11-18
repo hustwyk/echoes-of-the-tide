@@ -18,6 +18,7 @@ const TideReceiverAudio=(()=>{
   const loadPass=()=>loadData('TidePassMedia','assets/final-pass-media.js');
   const loadCistern=()=>loadData('TideCisternMedia','assets/cistern-media.js');
   const loadSwing=()=>loadData('TideSwingMedia','assets/swing-media.js');
+  const loadFender=()=>loadData('TideFenderMedia','assets/fender-media.js');
   const loadGlass=()=>loadData('TideGlassMedia','assets/glass-media.js');
   function create(ctx,output){
     const buffers={},pending=new Set();
@@ -30,9 +31,10 @@ const TideReceiverAudio=(()=>{
       try{
         const mast=key.startsWith('mast/'),survey=key.startsWith('tide/'),horn=key.startsWith('horn/'),final=key.startsWith('pass/');
         const room=key.startsWith('room/'),well=key.startsWith('well/'),swing=key.startsWith('sway/');
-        const stock=swing?await loadSwing():well?await loadCistern():room?await loadGlass():final?await loadPass():horn?await loadFog():survey?await loadSoundings():mast?await loadRelay():(key==='receiver'||key==='hoist')?TideBreakwaterAudio:await loadQuay();
+        const berth=key.startsWith('dock/');
+        const stock=berth?await loadFender():swing?await loadSwing():well?await loadCistern():room?await loadGlass():final?await loadPass():horn?await loadFog():survey?await loadSoundings():mast?await loadRelay():(key==='receiver'||key==='hoist')?TideBreakwaterAudio:await loadQuay();
         if(!stock)return;
-        const bytes=Uint8Array.from(atob(stock[mast||survey||horn||final||room||well||swing?key.slice(5):key]),v=>v.charCodeAt(0));
+        const bytes=Uint8Array.from(atob(stock[mast||survey||horn||final||room||well||swing||berth?key.slice(5):key]),v=>v.charCodeAt(0));
         buffers[key]=await ctx.decodeAudioData(bytes.buffer);
       }finally{pending.delete(key);}
     }
@@ -75,7 +77,8 @@ const TideReceiverAudio=(()=>{
     }
     function update(g){
       const horn=g.pilotHorn||g.fog;
-      if(g.swing||g.cistern||g.glass||g.lastPass||horn||g.relay||g.survey){
+      const berth=g.stage===0&&g.fenders;
+      if(berth||g.swing||g.cistern||g.glass||g.lastPass||horn||g.relay||g.survey){
         if(g.swing){
           if(swingSource!==g.swing){swingSource=g.swing;swingSerial=g.swing.cueSerial||0;}
           for(const id of ['strain','clasp','tin']){const key='sway/'+id;if(!buffers[key]&&!pending.has(key))decode(key).catch(()=>{});}
@@ -88,9 +91,9 @@ const TideReceiverAudio=(()=>{
           if(!r.down&&air)air=end(air);
           if(air){air.filter.frequency.setTargetAtTime(840+r.valve*1480,ctx.currentTime,.023);air.gain.gain.setTargetAtTime(.19+.47*r.pressure,ctx.currentTime,.023);}
         }
-        const table=g.swing?TideSwingSpeech:g.cistern?TideCisternSpeech:g.glass?TideGlassSpeech:g.lastPass?TidePassSpeech:horn?TideFogSpeech:g.survey?TideSoundingsSpeech:TideRelaySpeech,prefix=g.swing?'sway/':g.cistern?'well/':g.glass?'room/':g.lastPass?'pass/':horn?'horn/':g.survey?'tide/':'mast/';
+        const table=berth?TideFenderSpeech:g.swing?TideSwingSpeech:g.cistern?TideCisternSpeech:g.glass?TideGlassSpeech:g.lastPass?TidePassSpeech:horn?TideFogSpeech:g.survey?TideSoundingsSpeech:TideRelaySpeech,prefix=berth?'dock/':g.swing?'sway/':g.cistern?'well/':g.glass?'room/':g.lastPass?'pass/':horn?'horn/':g.survey?'tide/':'mast/';
         for(const id of Object.keys(table)){const key=prefix+id;if(!pending.has(key)&&!buffers[key])decode(key).catch(()=>{});}
-        const r=g.swing||g.cistern||g.glass||g.lastPass||horn||g.survey||g.relay,key=r.voice&&(g.swing||!r.occupied)?prefix+r.voice:'';
+        const r=berth||g.swing||g.cistern||g.glass||g.lastPass||horn||g.survey||g.relay,key=r.voice&&(g.swing||!r.occupied)?prefix+r.voice:'';
         if(key!==storyKey||story&&Math.abs(ctx.currentTime-story.start-r.clock)>.50){story=end(story);storyKey=key;}
         if(key&&!story)story=play(key,1.06,r.clock);
         return;
@@ -118,5 +121,5 @@ const TideReceiverAudio=(()=>{
     }
     return {update,stop};
   }
-  return {create,loadQuay,loadRelay,loadSoundings,loadFog,loadPass,loadGlass,loadCistern,loadSwing};
+  return {create,loadQuay,loadRelay,loadSoundings,loadFog,loadPass,loadGlass,loadCistern,loadSwing,loadFender};
 })();

@@ -31,18 +31,19 @@ const TideCoop = (() => {
   class Session {
     constructor(index,events={}) {
       this.index=index;this.world=index===3?TideCistern.layout():index===5?TideGlass.layout():index===10?TideFogSignal.layout():index===8?TideSoundings.layout():index===7?TideRelay.layout():index===1?TideCableQuay.layout():index===2?TideSignal.layout():index===4?TideArchive.layout():index===9?TideLantern.layout():TideTraversal.build(index);this.events=events;
-      if(index===0)TideLandfall.build(this.world);
+      if(index===0){TideLandfall.build(this.world);TideFenders.build(this.world);}
       TideRigging.build(this.world);TideDrawbridge.build(this.world);if(index===6)TideSwing.build(this.world);if(!this.world.cistern&&!this.world.glass&&!this.world.foghouse&&!this.world.soundings&&!this.world.relay&&!this.world.cableQuay&&!this.world.lantern&&!this.world.signal&&!this.world.archive)TideFieldWork.build(this.world,index);
       this.time=0;this.stage=0;this.setbacks=0;this.complete=false;this.notice='';this.noticeUntil=0;
       this.cues={light:0,angle:0,water:-4,rescue:0,ghost:0};
       this.swing=TideSwing.create(this);this.cistern=TideCistern.create(this);this.glass=TideGlass.create(this);this.fog=TideFogSignal.create(this);this.survey=TideSoundings.create(this);this.relay=TideRelay.create(this);this.cable=TideCableQuay.create(this);this.signal=TideSignal.create(this);
       this.players=this.world.sections[0].starts.map(TideTraversal.spawn);
-      this.checkpoints=this.world.sections[0].starts.slice();TidePassage.build(this);
+      this.checkpoints=this.world.sections[0].starts.slice();TidePassage.build(this);this.fenders=TideFenders.create(this);
       this.begin();
     }
     get section(){return this.world.sections[this.stage];}
     get spec(){return this.section.spec;}
     begin() {
+      if(this.fenders&&this.stage>0){this.fenders.phase='done';this.fenders.ladder=1;}
       this.station=[instrument(''),instrument('')];
       this.near=[false,false];this.engaged=[false,false];this.ready=[false,false];
       this.state={dials:[.5,.5],yes:[false,false],age:0,hold:0,ferry:0,latch:false,doneAt:null,
@@ -78,13 +79,14 @@ const TideCoop = (() => {
     }
     tick(dt,inputs,yaws=[0,0]) {
       if(this.complete)return;
-      this.time+=dt;if(this.swing)TideSwing.narrate(this,dt);if(this.cistern)TideCistern.narrate(this,dt);if(this.glass)TideGlass.narrate(this,dt);
+      this.time+=dt;TideFenders.narrate(this,dt);if(this.swing)TideSwing.narrate(this,dt);if(this.cistern)TideCistern.narrate(this,dt);if(this.glass)TideGlass.narrate(this,dt);
       const q=this.state, section=this.section;
       q.age+=dt;TidePassage.update(this);TideRigging.updateLadders(section,dt);
       if(q.doneAt!==null && this.time-q.doneAt>1.15){
         if(this.stage+1===this.world.sections.length) {this.complete=true;this.events.finish?.(this);return;}
         this.checkpoints=section.ends.slice();this.stage++;this.begin();return;
       }
+      if(TideFenders.active(this)){TideFenders.step(this,inputs,yaws,dt);return;}
       if(this.fog||this.pilotHorn)TideFogSignal.step(this,dt);
       if(this.survey)TideSoundings.step(this,dt);
       if(this.relay)TideRelay.step(this,dt);
