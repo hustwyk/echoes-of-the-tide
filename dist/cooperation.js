@@ -32,6 +32,7 @@ const TideCoop = (() => {
   class Session {
     constructor(index,events={}) {
       this.index=index;this.world=index===2?TideSignal.layout():index===4?TideArchive.layout():index===9?TideLantern.layout():TideTraversal.build(index);this.events=events;
+      if(index===0)TideLandfall.build(this.world);
       TideRigging.build(this.world);TideDrawbridge.build(this.world);if(!this.world.lantern&&!this.world.signal&&!this.world.archive)TideFieldWork.build(this.world,index);
       this.time=0;this.stage=0;this.setbacks=0;this.complete=false;this.notice='';this.noticeUntil=0;
       this.cues={light:0,angle:0,water:-4,rescue:0,ghost:0};
@@ -83,7 +84,7 @@ const TideCoop = (() => {
         this.checkpoints=section.ends.slice();this.stage++;this.begin();return;
       }
       const activeSites=this.field.done?section.sites:section.field.sites;
-      this.near=this.players.map((p,i)=>this.archive?TideArchive.near(this,i):near(p,activeSites[i]));
+      this.near=this.players.map((p,i)=>this.landfall?TideLandfall.near(this,i):this.archive?TideArchive.near(this,i):near(p,activeSites[i]));
       if(this.signal&&this.stage===2)this.near[0]&&=this.players[0].ground===this.world.signal.head;
       const cart=this.spec.mode==='bridge'&&!section.span.seated;
       if(cart)this.near[1-this.spec.driver]=TideDrawbridge.onCart(this,1-this.spec.driver,{use:true});
@@ -92,13 +93,17 @@ const TideCoop = (() => {
       if(this.signal)TideSignal.step(this,dt);
       const prevStaff=section.span?.lower?TideDrawbridge.coordinates(section.span,this.players[1-this.spec.driver]):null;
       for(let side=0;side<2;side++){
-        const p=this.players[side];
+        const p=this.players[side],oldZ=p.z;
+        if(this.rig?.belay&&side!==this.spec.driver)continue;
         TideTraversal.move(p,inputs[side],dt,this.world,yaws[side],this.engaged[side]||TideRigging.lighting(this,side,inputs[side]));
         TidePassage.collide(this,p);
-        if(this.archive){TideArchive.collide(this,p);if(this.engaged[side])TideArchive.stance(this,side,dt);}
+        if(this.world.landfall)TideLandfall.collide(this,p,oldZ);
+        if(this.landfall){if(this.engaged[side])TideLandfall.stance(this,side,dt);}
+        else if(this.archive){TideArchive.collide(this,p);if(this.engaged[side])TideArchive.stance(this,side,dt);}
         else if(this.signal){if(this.engaged[side])TideSignal.stand(this,side,dt);}
         else if(this.optic){TideLantern.collide(p);if(this.engaged[side])TideLantern.stance(this,side,dt);}
         else if(this.engaged[side]&&!(cart&&side!==this.spec.driver))approachInstrument(this,side,activeSites[side],dt);
+        if(this.rig&&side!==this.spec.driver)TideRigging.catchLine(this);
         if(p.y<Math.min(...section.starts.map(d=>d.y),...section.ends.map(d=>d.y))-4.2) {
           this.resetPerson(side,'安全索接住了你');
         } else if(p.ground && section.danger.includes(p.ground) && this.hazardPhase()>.78) {
@@ -107,6 +112,7 @@ const TideCoop = (() => {
       }
       if(prevStaff)TideDrawbridge.carry(this,inputs,dt,prevStaff);
       if(q.doneAt!==null)return;
+      if(this.landfall){TideLandfall.interact(this,inputs,dt);return;}
       if(this.archive){TideArchive.interact(this,inputs,dt);return;}
       if(this.optic){TideLantern.interact(this,inputs,dt);return;}
       if(this.signal){if(!TideLookout.interact(this,inputs,dt))TideSignal.interact(this,inputs,dt);return;}
@@ -148,7 +154,9 @@ const TideCoop = (() => {
         g.set(d,'通道已展开，穿过桥面去找同伴');
         g.set(r,'在亮灯的平台接应同伴');
       }
-      if(near(g.players[d],sc.ends[d])&&(near(rider,sc.ends[r])||near(rider,sc.sites[r]))&&(!activeRelay||q.returnGate===2))g.advance();
+      if(near(g.players[d],sc.ends[d])&&(near(rider,sc.ends[r])||near(rider,sc.sites[r]))&&(!activeRelay||q.returnGate===2)){
+        if(g.world.landfall&&g.stage===2)TideLandfall.start(g);else g.advance();
+      }
       return;
     }
     if(s.mode==='basket'){

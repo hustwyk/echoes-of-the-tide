@@ -3,10 +3,10 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const box=vm.createContext({});
-for(const name of ['missions','traversal','passage','rigging','drawbridge','fieldwork','lookout','paper','lantern','signal','archive','cooperation']){
+for(const name of ['missions','traversal','passage','landfall-message','landfall','rigging','drawbridge','fieldwork','lookout','paper','lantern','signal','archive','cooperation']){
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../dist',name+'.js'),'utf8'),box);
 }
-const {Session,near,surface,lookout,ridePressure,TideLantern,TideSignal,TideArchive}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure,TideLantern,TideSignal,TideArchive})',box);
+const {Session,near,surface,lookout,ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall})',box);
 const empty=()=>({x:0,z:0,use:false,jump:false});
 function steer(g,i,target,keys){
   const p=g.players[i],dx=target.x-p.x,dz=target.z-p.z,dist=Math.hypot(dx,dz);
@@ -115,8 +115,34 @@ function archiveInputs(g,out){
   }
   return out;
 }
+const chainDirection=new WeakMap();
+function landfallInputs(g,out){
+  const a=g.landfall,w=g.world.landfall,o=w.origin,site=TideLandfall.targets(g);
+  for(let i=0;i<2;i++){
+    const p=g.players[i],k=out[i],z=p.z-o.z;
+    if(TideLandfall.near(g,i)){k.use=true;continue;}
+    let dest=site[i];
+    // Approach the outer landing from either broken ladder; cross the shutter on its centre line.
+    if(z>-.8)dest={x:o.x+(i?2.8:-3.1),y:o.y,z:o.z-1.05};
+    else if(dest.z<o.z-8&&z>-8.5){
+      dest={x:o.x+.23,y:o.y,z:o.z+(z>-6.17?-6.35:-8.9)};
+    }
+    steer(g,i,dest,k);
+  }
+  if(!a.pinned){
+    if(out[0].use&&a.height<2.36)out[0].z=a.stroke>.985||chainDirection.get(g)&&a.stroke>.02?-1:1;
+    chainDirection.set(g,out[0].z===-1);
+    if(out[1].use)out[1].jump=Math.abs(a.height-2.35)<.15;
+  }else{
+    if(out[0].use)out[0].jump=!a.plugged;
+    const pos=lookout.vessel(g,g.time),bearing=Math.atan2(pos[2]-w.loop.z,pos[0]-w.loop.x)+Math.PI;
+    if(out[1].use&&!a.receiving)out[1].x=Math.max(-1,Math.min(1,(bearing-a.angle)*7));
+  }
+  return out;
+}
 function control(g){
   const out=[empty(),empty()],sec=g.section,s=g.spec,q=g.state;
+  if(g.landfall)return landfallInputs(g,out);
   if(g.archive)return archiveInputs(g,out);
   if(g.signal)return signalInputs(g,out);
   if(g.optic){
@@ -387,6 +413,52 @@ if(require.main===module){
   assert.ok(basket.state.ferry>.36&&basket.state.ferry<=.42);
   reach(basket,()=>basket.stage===2);
 
+  function verifyBreakwater(){
+    // Walk off the actual moving basket. Both players must get the hanging rider back to the beam.
+    const rescue=new Session(0);
+    reach(rescue,()=>rescue.stage===1&&rescue.state.ferry>.955);
+    for(let n=0;n<240&&!rescue.rig.belay;n++){
+      const k=control(rescue);k[1]={...empty(),z:-1,x:.2};rescue.tick(step,k);
+    }
+    assert.ok(rescue.rig.belay);
+    rescue.tick(step,[empty(),{...empty(),jump:true}]);
+    assert.ok(rescue.rig.belay,'An early release cannot detach the lifeline');
+    for(let n=0;n<540&&!rescue.rig.landed;n++){
+      const b=rescue.rig.belay,p=rescue.players[1],l=rescue.section.rig.ledge;
+      const k=[{...empty(),use:true,z:-1},empty()];
+      k[1].x=Math.max(-1,Math.min(1,(l.x-p.x)*4));
+      k[1].z=b?-.72:Math.max(-1,Math.min(1,(l.z-p.z)*3));
+      k[1].jump=!!b&&p.y>l.y-.23&&Math.abs(p.z-l.z)<1.16&&Math.abs(p.x-l.x)<.60;
+      rescue.tick(step,k);
+    }
+    assert.ok(rescue.rig.landed&&!rescue.rig.belay);
+    assert.equal(rescue.setbacks,0);
+    reach(rescue,()=>!!rescue.landfall&&TideLandfall.near(rescue,0));
+    const a=rescue.landfall,w=rescue.world.landfall;
+    for(let n=0;n<230;n++)rescue.tick(step,[{...empty(),use:true,z:1},{...empty(),z:-1}]);
+    assert.ok(a.height>.8&&a.height<1.01&&!a.pinned,'One pull stops at the end of the chain stroke');
+    assert.ok(rescue.players[1].z>w.origin.z-7.5,'A low gate stops an approaching character');
+    for(let n=0;n<120;n++)rescue.tick(step,[empty(),empty()]);
+    assert.equal(a.height,0,'The wet chain runs out when the brake is released');
+    for(let n=0;n<2000&&!TideLandfall.near(rescue,1);n++){
+      const k=control(rescue);k[1].jump=false;rescue.tick(step,k);
+    }
+    assert.ok(TideLandfall.near(rescue,1)&&!a.pinned);
+    for(let n=0;n<100;n++)rescue.tick(step,[empty(),{...empty(),use:true}]);
+    rescue.tick(step,[empty(),{...empty(),use:true,jump:true}]);
+    assert.ok(!a.pinned,'Misaligned slots cannot accept the pin from the dry side');
+    reach(rescue,()=>a.pinned);
+    const mark=TideLandfall.checkpoint(rescue),saved=new Session(0);
+    saved.stage=2;saved.begin();TideLandfall.restore(saved,mark);
+    assert.ok(saved.landfall.pinned&&!saved.landfall.plugged);
+    reach(saved,()=>saved.landfall.plugged);
+    for(let n=0;n<180;n++)saved.tick(step,[empty(),empty()]);
+    assert.ok(!saved.landfall.receiving,'The loudspeaker alone cannot resolve the ship');
+    reach(saved,()=>saved.landfall.receiving);
+    reach(saved,()=>saved.complete);
+  }
+  verifyBreakwater();
+
   const pump=new Session(3);
   reach(pump,()=>pump.rig.guider);
   const startLevel=pump.rig.water;
@@ -522,5 +594,5 @@ if(require.main===module){
     quiet.tick(1/60,inputs);
   }
   assert.ok(quiet.complete&&quiet.skipTin);
-  console.log('Verified both roles, basket mark, hydraulic sill, two drawbridge catches, folding staff, shared cable car, lantern shutters, optical carriage and saved guide positions, tape transport, wrong splices, cabinet keys, paper registration, final radio release and optional recording.');
+  console.log('Verified both roles, swinging belay, floodgate collision and pin, emergency radio reception, basket mark, hydraulic sill, two drawbridge catches, folding staff, shared cable car, lantern shutters, optical carriage and saved guide positions, tape transport, wrong splices, cabinet keys, paper registration, final radio release and optional recording.');
 }
