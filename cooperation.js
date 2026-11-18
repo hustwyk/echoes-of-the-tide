@@ -30,12 +30,12 @@ const TideCoop = (() => {
   }
   class Session {
     constructor(index,events={}) {
-      this.index=index;this.world=index===7?TideRelay.layout():index===1?TideCableQuay.layout():index===2?TideSignal.layout():index===4?TideArchive.layout():index===9?TideLantern.layout():TideTraversal.build(index);this.events=events;
+      this.index=index;this.world=index===8?TideSoundings.layout():index===7?TideRelay.layout():index===1?TideCableQuay.layout():index===2?TideSignal.layout():index===4?TideArchive.layout():index===9?TideLantern.layout():TideTraversal.build(index);this.events=events;
       if(index===0)TideLandfall.build(this.world);
-      TideRigging.build(this.world);TideDrawbridge.build(this.world);if(!this.world.relay&&!this.world.cableQuay&&!this.world.lantern&&!this.world.signal&&!this.world.archive)TideFieldWork.build(this.world,index);
+      TideRigging.build(this.world);TideDrawbridge.build(this.world);if(!this.world.soundings&&!this.world.relay&&!this.world.cableQuay&&!this.world.lantern&&!this.world.signal&&!this.world.archive)TideFieldWork.build(this.world,index);
       this.time=0;this.stage=0;this.setbacks=0;this.complete=false;this.notice='';this.noticeUntil=0;
       this.cues={light:0,angle:0,water:-4,rescue:0,ghost:0};
-      this.relay=TideRelay.create(this);this.cable=TideCableQuay.create(this);this.signal=TideSignal.create(this);
+      this.survey=TideSoundings.create(this);this.relay=TideRelay.create(this);this.cable=TideCableQuay.create(this);this.signal=TideSignal.create(this);
       this.players=this.world.sections[0].starts.map(TideTraversal.spawn);
       this.checkpoints=this.world.sections[0].starts.slice();TidePassage.build(this);
       this.begin();
@@ -50,7 +50,7 @@ const TideCoop = (() => {
         returnGate:0,balance:0,warnUntil:0,buttonCooldown:0,releaseHeld:false,catchup:0};
       if(this.spec.type==='ride')this.state.dials[this.spec.driver]=.50;
       this.rig=TideRigging.reset(this);this.paper=TidePaper.create(this);this.optic=TideLantern.create(this);
-      if(this.optic){this.cues.light=.97;this.cues.rays=TideLantern.viewData(this).images;}TideFieldWork.reset(this);TideCableQuay.begin(this);TideLookout.reset(this);TideRelay.begin(this);TideSignal.begin(this);TideArchive.begin(this);
+      if(this.optic){this.cues.light=.97;this.cues.rays=TideLantern.viewData(this).images;}TideFieldWork.reset(this);TideCableQuay.begin(this);TideLookout.reset(this);TideRelay.begin(this);TideSoundings.begin(this);TideSignal.begin(this);TideArchive.begin(this);
       this.events.stage?.(this);
     }
     alert(text,seconds=2.5) {
@@ -83,10 +83,11 @@ const TideCoop = (() => {
         if(this.stage+1===this.world.sections.length) {this.complete=true;this.events.finish?.(this);return;}
         this.checkpoints=section.ends.slice();this.stage++;this.begin();return;
       }
+      if(this.survey)TideSoundings.step(this,dt);
       if(this.relay)TideRelay.step(this,dt);
       if(this.cable)TideCableQuay.update(this,dt);
       const activeSites=this.field.done?section.sites:section.field.sites;
-      this.near=this.players.map((p,i)=>this.relay?TideRelay.near(this,i):this.cable?TideCableQuay.near(this,i):this.landfall?TideLandfall.near(this,i):this.archive?TideArchive.near(this,i):near(p,activeSites[i]));
+      this.near=this.players.map((p,i)=>this.survey?TideSoundings.near(this,i):this.relay?TideRelay.near(this,i):this.cable?TideCableQuay.near(this,i):this.landfall?TideLandfall.near(this,i):this.archive?TideArchive.near(this,i):near(p,activeSites[i]));
       if(this.signal&&this.stage===2)this.near[0]&&=this.players[0].ground===this.world.signal.head;
       const cart=this.spec.mode==='bridge'&&!section.span.seated;
       if(cart)this.near[1-this.spec.driver]=TideDrawbridge.onCart(this,1-this.spec.driver,{use:true});
@@ -101,7 +102,8 @@ const TideCoop = (() => {
         TideTraversal.move(p,inputs[side],dt,this.world,yaws[side],this.engaged[side]||TideRigging.lighting(this,side,inputs[side]));
         TidePassage.collide(this,p);
         if(this.world.landfall)TideLandfall.collide(this,p,oldZ);
-        if(this.relay){
+        if(this.survey){TideSoundings.collide(this,p);if(this.engaged[side])TideSoundings.stance(this,side,dt);}
+        else if(this.relay){
           TideRelay.collision(this,p);if(this.engaged[side])TideRelay.stance(this,side,dt);
           if(!side&&this.relay.top&&p.y<this.world.relay.upper.y-1.40)this.resetPerson(0,'桅顶安全索接住了你');
         }else if(this.cable){if(!side)TideCableQuay.restrain(this);TideCableQuay.collide(this,p);if(this.engaged[side])TideCableQuay.pose(this,side,dt);}
@@ -111,7 +113,9 @@ const TideCoop = (() => {
         else if(this.optic){TideLantern.collide(p);if(this.engaged[side])TideLantern.stance(this,side,dt);}
         else if(this.engaged[side]&&!(cart&&side!==this.spec.driver))approachInstrument(this,side,activeSites[side],dt);
         if(this.rig&&side!==this.spec.driver)TideRigging.catchLine(this);
-        if(this.cable&&!p.grounded&&p.vy<0&&p.y<this.cable.water+TideLookout.swell(p.x,p.z,this.time)-.34){
+        if(this.survey&&!p.grounded&&p.vy<0&&p.y<TideSoundings.surface(p.x,p.z,this.time)-.22){
+          this.resetPerson(side,'系在救生索上的尺和人一起回到检修台');
+        }else if(this.cable&&!p.grounded&&p.vy<0&&p.y<this.cable.water+TideLookout.swell(p.x,p.z,this.time)-.34){
           this.resetPerson(side,'落水后，安全索把你拉了回来');
         }else if(p.y<Math.min(...section.starts.map(d=>d.y),...section.ends.map(d=>d.y))-4.2) {
           this.resetPerson(side,'安全索接住了你');
@@ -121,6 +125,7 @@ const TideCoop = (() => {
       }
       if(prevStaff)TideDrawbridge.carry(this,inputs,dt,prevStaff);
       if(q.doneAt!==null)return;
+      if(this.survey){TideSoundings.interact(this,inputs,dt);return;}
       if(this.relay){TideRelay.interact(this,inputs,dt);return;}
       if(this.cable){TideCableQuay.interact(this,inputs,dt);return;}
       if(this.landfall){TideLandfall.interact(this,inputs,dt);return;}
@@ -199,30 +204,6 @@ const TideCoop = (() => {
     }
     q.hold=two&&ok.every(Boolean)?q.hold+dt:0;
     if(q.hold>(strict?1.7:1.05))g.advance();
-  }
-  function tide(g,input){
-    const q=g.state,s=g.spec,lead=s.lead,peer=1-lead;
-    const phase=(g.time%5)/5,target=.74;
-    const low=Math.abs(phase-target)<.14;
-    g.cues.water=-4+.6*Math.cos((phase-.24)*TAU);
-    g.set(lead,'浪谷经过亮区时按跳跃键报数',{vis:'tide',value:phase,target,band:.14,caption:'观测窗'});
-    g.set(peer,'听见报数后立刻按跳跃键锁尺',{vis:'tide',value:phase,caption:g.time-q.readAt<.95?'现在锁尺':'等待同一波谷'});
-    if(g.commit(lead,input)){
-      if(low){q.readAt=g.time;g.sound(650,.12);}else g.alert('浪沫遮住尺脚，等下一道波谷');
-    }
-    if(g.commit(peer,input)){
-      if(g.time-q.readAt<.95)g.advance();else g.alert('两次读数不在同一道浪内');
-    }
-  }
-  function post(g,input,dt){
-    const q=g.state,open=Math.sin(g.time*1.4)<.25;
-    const v=g.tune(0,input,dt,.65),choice=Math.min(2,Math.floor(v*3));
-    g.set(1,'等白沫退开，按跳跃键标出断桩',{vis:'tide',value:(Math.sin(g.time*1.4)+1)/2,caption:open?'看见双环桩':'海面被白浪遮住'});
-    g.set(0,'从图上选出同伴看到的桩，按跳跃键叠图',{vis:'chart',value:v,caption:['单环桩','双环桩','三环桩'][choice]});
-    if(g.commit(1,input)&&open){q.mark=g.time;g.alert('阿棠：就是双环那根！',2);}
-    if(g.commit(0,input)){
-      if(g.time-q.mark<4&&choice===1)g.advance();else g.alert('等船尾确认桩号，再核对潮图');
-    }
   }
   function rhythm(g,input){
     const q=g.state,s=g.spec;
@@ -318,6 +299,6 @@ const TideCoop = (() => {
       if(g.cues.rescue===1 && g.commit(0,input))g.advance();
     }
   }
-  const handlers={ride,paper:TidePaper.interact,optic:alignment,tide,post,rhythm,quiet,release};
+  const handlers={ride,paper:TidePaper.interact,optic:alignment,rhythm,quiet,release};
   return {Session,roleKeys,near,ridePressure};
 })();
