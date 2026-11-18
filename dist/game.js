@@ -11,7 +11,7 @@ const sound=new HarborSound();
 let wantsAudio=true;try{wantsAudio=localStorage.getItem('tide-audio')!=='off';}catch{}
 const keys=new Set(),jumps=[false,false],toolTaps=[false,false],gamepadDown=[false,false];
 let session=null,view=null,index=0,mode='menu',last=0,remainder=0,redraw=0,voice=false;
-const padSlots=[null,null];
+const padSlots=[null,null],cameraButtons=[false,false];
 let menuPadState=new Set(),padApiAvailable=true;
 function gamepads(){
   if(!padApiAvailable)return [];
@@ -50,13 +50,13 @@ function campaign() {
 function savePoint(g){
   if(g.index!==progress)return;
   const landfall=TideLandfall.checkpoint(g),mark=TideLantern.checkpoint(g),signal=TideSignal.checkpoint(g),archive=TideArchive.checkpoint(g);
-  const cistern=TideCistern.checkpoint(g),cable=TideCableQuay.checkpoint(g),relay=TideRelay.checkpoint(g),survey=TideSoundings.checkpoint(g),glass=TideGlass.checkpoint(g),fog=TideFogSignal.checkpoint(g),pass=TideLastPass.checkpoint(g);
+  const swing=TideSwing.checkpoint(g),cistern=TideCistern.checkpoint(g),cable=TideCableQuay.checkpoint(g),relay=TideRelay.checkpoint(g),survey=TideSoundings.checkpoint(g),glass=TideGlass.checkpoint(g),fog=TideFogSignal.checkpoint(g),pass=TideLastPass.checkpoint(g);
   if(!g.stage&&!cistern&&!mark&&!archive&&!cable&&!relay&&!survey&&!fog&&!glass)return;
-  resume={index:g.index,stage:g.stage,...(cistern?{cistern}:{}),...(glass?{glass}:{}),...(pass?{pass}:{}),...(fog?{fog}:{}),...(survey?{survey}:{}),...(relay?{relay}:{}),...(cable?{cable}:{}),...(landfall?{landfall}:{}),...(mark?{lantern:mark}:{}),...(signal?{signal}:{}),...(archive?{archive}:{})};
+  resume={index:g.index,stage:g.stage,...(swing?{swing}:{}),...(cistern?{cistern}:{}),...(glass?{glass}:{}),...(pass?{pass}:{}),...(fog?{fog}:{}),...(survey?{survey}:{}),...(relay?{relay}:{}),...(cable?{cable}:{}),...(landfall?{landfall}:{}),...(mark?{lantern:mark}:{}),...(signal?{signal}:{}),...(archive?{archive}:{})};
   try{localStorage.setItem('tide-3d-checkpoint',JSON.stringify(resume));}catch{}
 }
 function clearInput(){
-  keys.clear();jumps.fill(false);toolTaps.fill(false);gamepadDown.fill(false);last=0;remainder=0;
+  keys.clear();jumps.fill(false);toolTaps.fill(false);gamepadDown.fill(false);cameraButtons.fill(false);last=0;remainder=0;
 }
 function note(line){
   if(line && journal.at(-1)!==line)journal.push(line);
@@ -85,7 +85,7 @@ function radio(line,duration=5){
 }
 function onStage(g){
   savePoint(g);note(g.spec.radio);g.notice=g.spec.radio;g.noticeUntil=g.time+6;
-  if(mode==='playing'&&!g.cistern?.voice)say(g.spec.radio);
+  if(mode==='playing'&&!g.swing?.voice&&!g.cistern?.voice)say(g.spec.radio);
 }
 function openLevel(n,stage=0,mark=null){
   if(info.open)info.close();
@@ -97,6 +97,7 @@ function openLevel(n,stage=0,mark=null){
   overlay.innerHTML='<div class="story"><h3>正在进入北岬</h3></div>';
   try{
     view??=new TideHarbor.WorldView(canvas);
+    if(n===6)TideReceiverAudio.loadSwing();
     if(n===3)TideReceiverAudio.loadCistern();
     if(n===5)TideReceiverAudio.loadGlass();
     if(n===10)TideReceiverAudio.loadFog();
@@ -121,7 +122,7 @@ function openLevel(n,stage=0,mark=null){
         deck.active=true;if(deck.hinge!==undefined){deck.unlocked=true;deck.hinge=1;}
       }
     }
-    if(mark){if(session.cistern)TideCistern.restore(session,mark);else if(session.glass)TideGlass.restore(session,mark);else if(session.lastPass)TideLastPass.restore(session,mark);else if(session.fog)TideFogSignal.restore(session,mark);else if(session.survey)TideSoundings.restore(session,mark);else if(session.relay)TideRelay.restore(session,mark);else if(session.cable)TideCableQuay.restore(session,mark);else if(session.world.landfall)TideLandfall.restore(session,mark);else if(session.archive)TideArchive.restore(session,mark);else if(session.signal)TideSignal.restore(session,mark);else TideLantern.restore(session,mark);savePoint(session);}
+    if(mark){if(session.swing)TideSwing.restore(session,mark);else if(session.cistern)TideCistern.restore(session,mark);else if(session.glass)TideGlass.restore(session,mark);else if(session.lastPass)TideLastPass.restore(session,mark);else if(session.fog)TideFogSignal.restore(session,mark);else if(session.survey)TideSoundings.restore(session,mark);else if(session.relay)TideRelay.restore(session,mark);else if(session.cable)TideCableQuay.restore(session,mark);else if(session.world.landfall)TideLandfall.restore(session,mark);else if(session.archive)TideArchive.restore(session,mark);else if(session.signal)TideSignal.restore(session,mark);else TideLantern.restore(session,mark);savePoint(session);}
     view.load(session);
   }catch(err){
     console.error(err);mode='error';
@@ -141,7 +142,7 @@ function startPlaying(announce){
   for(let i=0;i<2;i++)gamepadDown[i]=!!(connected.find(p=>p.index===padSlots[i])||connected[i])?.buttons[0]?.pressed;
   overlay.replaceChildren();$('split').hidden=false;mode='playing';$('pause').disabled=false;$('pause').textContent='暂停';canvas.focus();
   if(wantsAudio&&!sound.enabled)sound.enable(true).then(updateAudio);
-  if(announce&&!session.cistern?.voice)radio(session.cable?TideCableQuay.briefing(session):session.landfall?(session.landfall.pinned?'沈遥：门销扣好了。来听船上的信号。':'沈遥：我在门后插销。你在这里握住链子。'):session.spec.radio,6);
+  if(announce&&!session.swing?.voice&&!session.cistern?.voice)radio(session.cable?TideCableQuay.briefing(session):session.landfall?(session.landfall.pinned?'沈遥：门销扣好了。来听船上的信号。':'沈遥：我在门后插销。你在这里握住链子。'):session.spec.radio,6);
   TideHud.update(session,padSlots);redraw=0;
 }
 function finishLevel(g){
@@ -154,7 +155,7 @@ function finishLevel(g){
     if(!resume)localStorage.removeItem('tide-3d-checkpoint');
   }catch{}
   campaign();
-  if(!g.skipTin&&view.cinema.begin('chapter-end')){
+  if(view.cinema.begin('chapter-end')){
     mode='cinema';$('split').hidden=true;$('film').hidden=false;$('skip').focus();
     showStatus('无线电回话');$('subtitle').textContent='';drawFilm(0);return;
   }
@@ -168,6 +169,7 @@ function drawFilm(dt){
   }
   if(!film.step(dt)){showDebrief(session);return;}
   if(index===11 && before<5.2 && film.time>=5.2)sound.cue('ending');
+  if(index===6&&sound.enabled)sound.receiver?.update({swing:TideSwing.film(film.time)});
   if(index===3&&sound.enabled)sound.receiver?.update({cistern:TideCistern.film(film.time)});
   if(index===5&&sound.enabled)sound.receiver?.update({glass:TideGlass.film(film.time)});
   view.draw(session,dt,false);
@@ -175,7 +177,7 @@ function drawFilm(dt){
   const line=film.subtitle();
   if($('subtitle').textContent!==line){
     $('subtitle').textContent=line;
-    if(index!==3&&index!==4&&index!==5&&voice&&sound.enabled&&line) say(line.split('　').at(-1));
+    if(index!==3&&index!==4&&index!==5&&index!==6&&voice&&sound.enabled&&line) say(line.split('　').at(-1));
   }
 }
 function showDebrief(g){
@@ -195,7 +197,7 @@ function pause(){
   $('pause').textContent='继续';
   overlay.innerHTML='<div class="story"><h3>行动暂停</h3><p>'+levels[index].name+'　/　'+(session.cable?TideCableQuay.title(session):session.spec.title)+'</p><p class="hint">站到彩色光圈内，按住操作键使用设备。操作时可左右微调，按跳跃键确认。拖动各自的画面调整视角，双击可回正。</p><div class="pause-options"><button id="unpause">继续行动</button><button id="retry">重试此段</button><button id="quit">返回档案</button><button id="voice"></button><button id="quality"></button></div></div>';
   addJournal(overlay.querySelector('.story'),journal);
-  $('unpause').onclick=()=>startPlaying(false);$('quit').onclick=()=>game.close();$('retry').onclick=()=>openLevel(index,session.stage,TideCistern.checkpoint(session)||TideGlass.checkpoint(session)||TideLastPass.checkpoint(session)||TideFogSignal.checkpoint(session)||TideSoundings.checkpoint(session)||TideRelay.checkpoint(session)||TideCableQuay.checkpoint(session)||TideLandfall.checkpoint(session));
+  $('unpause').onclick=()=>startPlaying(false);$('quit').onclick=()=>game.close();$('retry').onclick=()=>openLevel(index,session.stage,TideSwing.checkpoint(session)||TideCistern.checkpoint(session)||TideGlass.checkpoint(session)||TideLastPass.checkpoint(session)||TideFogSignal.checkpoint(session)||TideSoundings.checkpoint(session)||TideRelay.checkpoint(session)||TideCableQuay.checkpoint(session)||TideLandfall.checkpoint(session));
   const update=()=>{$('voice').textContent='设备语音　'+(voice?'开':'关');$('quality').textContent='画质　'+(view.quality===1?'高':'流畅');};update();
   $('voice').onclick=()=>{voice=!voice;if(voice&&!sound.enabled)toggleAudio();update();};
   $('quality').onclick=()=>{view.quality=view.quality===1?.72:1;update();};$('unpause').focus();
@@ -209,6 +211,7 @@ async function toggleAudio(){
   await sound.enable(wantsAudio);updateAudio();
   if(sound.enabled)sound.tone(440);else window.speechSynthesis?.cancel();
 }
+function recenter(i){view.yaws[i]=session.players[i].yaw;view.pitch[i]=0;}
 function pollInputs(now,connected){
   for(let i=0;i<2;i++)if(!connected.some(p=>p.index===padSlots[i]))padSlots[i]=null;
   for(const pad of connected)if(!padSlots.includes(pad.index)){
@@ -220,10 +223,13 @@ function pollInputs(now,connected){
     const dead=v=>Math.abs(v||0)>.17?v:0;
     const down=!!pad?.buttons[0]?.pressed;
     const jump=jumps[i]||down&&!gamepadDown[i];gamepadDown[i]=down;
+    const orbit=Number(keys.has(i?'Period':'KeyR'))-Number(keys.has(i?'Comma':'KeyQ'));
+    view.yaws[i]-=orbit*now*2.30;
+    const center=!!pad?.buttons[11]?.pressed;if(center&&!cameraButtons[i])recenter(i);cameraButtons[i]=center;
     if(pad){view.yaws[i]-=dead(pad.axes[2])*now*2.4;view.pitch[i]=TideTraversal.clamp(view.pitch[i]+dead(pad.axes[3])*now*2,-1.15,2.1);}
     return {x:Math.max(-1,Math.min(1,Number(keys.has(right))-Number(keys.has(left))+dead(pad?.axes[0]))),
       z:Math.max(-1,Math.min(1,Number(keys.has(back))-Number(keys.has(front))+dead(pad?.axes[1]))),
-      use:toolTaps[i]||keys.has(i?'Enter':'KeyE')||!!pad?.buttons[7]?.pressed,jump};
+      use:toolTaps[i]||keys.has(i?'Enter':'KeyE')||!!pad?.buttons[7]?.pressed,jumpHeld:(i?keys.has('Slash')||keys.has('ShiftRight'):keys.has('Space'))||down,jump};
   });
 }
 function padMenus(pads){
@@ -277,25 +283,26 @@ function frame(now){
   if(sound.enabled){sound.scene?.update(session,dt);sound.tape?.update(session);sound.receiver?.update(session);}
   if(!redraw||now-redraw>55){
     TideHud.update(session,padSlots);
-    showStatus(session.cistern?.subtitle||session.glass?.subtitle||(!session.lastPass?.occupied&&session.lastPass?.subtitle)||session.pilotHorn?.subtitle||session.fog?.subtitle||session.survey?.subtitle||session.relay?.subtitle||session.cable?.subtitle||(session.noticeUntil>session.time?session.notice.replace(/\n/g,'　'):(session.cable?TideCableQuay.title(session):session.landfall?'防潮门值班间':session.spec.title)+'　·　靠近角色颜色的目标'));
+    showStatus(session.swing?.subtitle||session.cistern?.subtitle||session.glass?.subtitle||(!session.lastPass?.occupied&&session.lastPass?.subtitle)||session.pilotHorn?.subtitle||session.fog?.subtitle||session.survey?.subtitle||session.relay?.subtitle||session.cable?.subtitle||(session.noticeUntil>session.time?session.notice.replace(/\n/g,'　'):(session.cable?TideCableQuay.title(session):session.landfall?'防潮门值班间':session.spec.title)+'　·　靠近角色颜色的目标'));
     $('elapsed').textContent=timeLabel(session.time)+'　/　'+(session.stage+1)+' of 3';
     redraw=now;
   }
 }
 requestAnimationFrame(frame);
 
-$('start').onclick=()=>openLevel(progress===12?0:progress,resume?.index===progress?resume.stage:0,resume?.index===progress?resume.cistern||resume.glass||resume.pass||resume.fog||resume.survey||resume.relay||resume.cable||resume.landfall||resume.lantern||resume.signal||resume.archive:null);
+$('start').onclick=()=>openLevel(progress===12?0:progress,resume?.index===progress?resume.stage:0,resume?.index===progress?resume.swing||resume.cistern||resume.glass||resume.pass||resume.fog||resume.survey||resume.relay||resume.cable||resume.landfall||resume.lantern||resume.signal||resume.archive:null);
 $('skip').onclick=()=>{if(mode==='cinema'){view.cinema.skip();showDebrief(session);}};
 $('pause').onclick=pause;$('sound').onclick=$('field-audio').onclick=toggleAudio;
 $('expand').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else if(game.requestFullscreen)await game.requestFullscreen();}catch{showStatus('当前窗口已使用可用的最大画面');}};
 $('brief').onclick=()=>{showInfo('<h2>北岬灯塔 · 紧急任务</h2><p>海雁号失去动力。机修员林澈和信号员沈遥必须在潮水吞没北礁前恢复电台，找出灯塔旧档案里的误判，重新校准光束。</p><p>十二关贯穿四幕。两人各自操作一名角色，共用同一个三维世界。</p><p><a href="story.html" target="_blank" rel="noopener">阅读原作调研、原创故事与十二关设计（含剧透）</a></p>');addJournal($('info-content'),levels.slice(0,progress).map((l,i)=>'第 '+(i+1)+' 关　'+l.name+'　'+l.after));};
-$('help').onclick=()=>showInfo('<h2>双人操作指南</h2><p>林澈用 WASD 移动、空格跳跃，按住 E 操作。沈遥用方向键移动、斜杠 / 或右 Shift 跳跃，按住 Enter 操作。</p><p>跟随各自画面内的设备标记。在光圈里按住操作键，左右键调节仪器，跳跃键确认读数或发送信号。站在移动甲板上会随甲板运动，可从边缘跃向对岸。</p><p>拖动半屏可转动该玩家的镜头，双击回正。标准手柄使用左摇杆移动、A 跳跃、RT 操作、右摇杆转动视角，按接入顺序分配给两位玩家。方向键选菜单，A 确认，B 返回，Start 或 Esc 暂停，章节与段落检查点保存在此浏览器。</p>');
-const moveCodes=new Set(['KeyW','KeyA','KeyS','KeyD','KeyE','Space','ArrowUp','ArrowLeft','ArrowDown','ArrowRight','Enter','Slash','ShiftRight']);
+$('help').onclick=()=>showInfo('<h2>双人操作指南</h2><p>林澈用 WASD 移动、空格跳跃，按住 E 操作。沈遥用方向键移动、斜杠 / 或右 Shift 跳跃，按住 Enter 操作。轻点跳跃可以越过短阶，按住则跳得更高。</p><p>林澈用 Q / R 转镜头，C 回到人物身后。沈遥用逗号 / 句号转镜头，反斜杠回正。两人可以同时转动各自的镜头。</p><p>跟随各自画面内的设备标记。在光圈里按住操作键，左右键调节仪器，跳跃键确认读数或发送信号。站在移动甲板上会随甲板运动，可从边缘跃向对岸。</p><p>拖动半屏可转动该玩家的镜头，双击回正。标准手柄使用左摇杆移动、A 跳跃、RT 操作、右摇杆转动视角、按下回到身后，按接入顺序分配给两位玩家。方向键选菜单，A 确认，B 返回，Start 或 Esc 暂停，章节与段落检查点保存在此浏览器。</p>');
+const moveCodes=new Set(['KeyW','KeyA','KeyS','KeyD','KeyE','Space','ArrowUp','ArrowLeft','ArrowDown','ArrowRight','Enter','Slash','ShiftRight','KeyQ','KeyR','KeyC','Comma','Period','Backslash']);
 document.addEventListener('keydown',e=>{
   if(!game.open)return;
   if(e.code==='Escape'&&(mode==='playing'||mode==='paused')){e.preventDefault();if(!e.repeat)pause();return;}
   if(mode!=='playing'||!moveCodes.has(e.code))return;
   e.preventDefault();keys.add(e.code);
+  if(!e.repeat&&(e.code==='KeyC'||e.code==='Backslash'))recenter(e.code==='KeyC'?0:1);
   if(!e.repeat&&session?.cable&&((session.stage===0&&e.code==='KeyE')||
     (session.stage===2&&session.cable.patched>=0&&!session.cable.backTest&&e.code==='Enter')))toolTaps[e.code==='KeyE'?0:1]=true;
   if(!e.repeat && ['Space','Slash','ShiftRight'].includes(e.code))jumps[e.code==='Space'?0:1]=true;

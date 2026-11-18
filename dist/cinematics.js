@@ -478,12 +478,11 @@ window.TideCinema = (() => {
         const p=game.players[side];return {x:p.x,y:p.y,z:p.z,yaw:p.yaw,talking:!side&&clock<2.8,
           gaze:side?-.14:.16,incline:side?.075:.045};
       }
-      if(![5,6].includes(idx))return null;
-      const t=clock,mid=hub.tram?.deck||hub.mid,hand=side?1:-1;
-      const speaking=idx===5?TideGlass.film(t).actor===side:
-        idx===6?(side===0?t<3.23:t>=3.42&&t<6.65):(side===0&&t<2.65);
-      const listening=idx===5?TideGlass.film(t).actor<0:t>=7;
-      return {x:idx===5?TideGlass.origin.x+(side?2.73:1.56):mid.x+hand*.58,y:mid.y,z:idx===5?TideGlass.origin.z-4.16:mid.z+.29+side*.04,yaw:hand*.48,
+      if(idx===6){const p=game.world.swing.fileSites[side];return {...p,yaw:p.face,talking:!!side,gaze:side?.17:-.12,incline:.16};}
+      if(idx!==5)return null;
+      const t=clock,hand=side?1:-1,actor=TideGlass.film(t).actor;
+      const speaking=actor===side,listening=actor<0;
+      return {x:TideGlass.origin.x+(side?2.73:1.56),y:hub.mid.y,z:TideGlass.origin.z-4.16,yaw:hand*.48,
         talking:speaking,gaze:hand*(listening?-.12:.29),incline:listening?.045:.085+.045*Math.sin(t*.92+side)};
     }
     function portrait(side,t){
@@ -516,7 +515,7 @@ window.TideCinema = (() => {
         return !i?subject(shelf,[sheet.position.x*.90,1.1,.54],[sheet.position.x+.055,.06,.10]):
           subject(shelf,[.28-f*.07,.76,.41],[.12,.05,.13]);
       }
-      if(idx===6)return i?portrait(t<3.36?0:1,t):subject(tin,[-.22+f*.17,.36,.34],[.008,.055,.03]);
+      if(idx===6)return assets.swingYard.filmShot(i,t);
       if(idx===7){
         if(!i)return t<2.8?{eye:[-38.82,6.20,-85.86],at:[-36.72,5.78,-86.40],fov:48}:{eye:[-33.16,3.62,-86.68],at:[-30.29,1.13,-87.93],fov:47};
         const view=deckview([-.96,2.86,7.18],[-1.73,2.60+.17*smooth(t/duration),6.99]);
@@ -546,7 +545,7 @@ window.TideCinema = (() => {
         let line='';for(const [at,text] of captions){if(t<at)break;line=text;}return line;
       }
       if(idx===5)return TideGlass.film(t).subtitle;
-      if(idx===6)return t<3.4?'林澈　那次你猜的是雷声。':'沈遥　铁皮饼干盒。想再听一遍才故意猜错的。';
+      if(idx===6)return TideSwing.film(t).subtitle;
       if(idx===7)return t<2.8?'阿棠　船尾收到。让我再看一眼。':'阿棠　白浪后面有截断桩。等浪落下去，我再给你们报。';
       if(idx===11){
         if(t<2.55)return '阿棠　我去船尾接绳。';
@@ -559,7 +558,7 @@ window.TideCinema = (() => {
     }
     function begin(kind){
       if(disposed||kind!=='chapter-end'||!durations[idx])return false;
-      clock=0;duration=idx===3?TideCistern.filmLength():idx===5?TideGlass.filmLength():(idx===4?window.TideArchiveMedia?.coda?.duration:null)||durations[idx];playing=true;renderedText='';
+      clock=0;duration=idx===6?TideSwingSpeech.paper.duration+.85:idx===3?TideCistern.filmLength():idx===5?TideGlass.filmLength():(idx===4?window.TideArchiveMedia?.coda?.duration:null)||durations[idx];playing=true;renderedText='';
       if(idx===11){setupFinal();newLabel.userData.repaint();}
       return true;
     }

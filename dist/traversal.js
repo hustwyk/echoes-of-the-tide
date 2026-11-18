@@ -82,12 +82,22 @@ const TideTraversal = (() => {
     return {floors,sections,style};
   }
   function spawn(s) {
-    return {x:s.x,y:s.y,z:s.z+.65,vx:0,vz:0,vy:0,yaw:0,ground:s,grounded:true,grace:.1,jumpBuffer:0,speed:0};
+    return {x:s.x,y:s.y,z:s.z+.65,vx:0,vz:0,vy:0,yaw:0,ground:s,grounded:true,grace:.1,jumpBuffer:0,speed:0,jumpAge:0,jumpRise:false,launch:0,landing:0,cast:false};
+  }
+  function netHeight(d,x,z){
+    const u=2*(x-d.x)/d.w,v=2*(z-d.z)/d.d,edge=Math.max(0,1-u*u)*Math.max(0,1-v*v);
+    let drop=d.sag;
+    for(const load of d.loads){const dx=x-load.x,dz=z-load.z;drop+=load.a*Math.exp(-(dx*dx+dz*dz)*1.65);}
+    return d.y-edge*drop;
   }
   function surfaceHeight(d,x,z){
     const a=d.axes,dx=x-d.x,dz=z-d.z;
     if(d.cutout&&dx>d.cutout.x0+.04&&dx<d.cutout.x1+.04&&dz>d.cutout.z0+.04&&dz<d.cutout.z1-.04)return -Infinity;
-    if(!a)return Math.abs(dx)<=d.w*.5+.08&&Math.abs(dz)<=d.d*.5+.08?d.y:-Infinity;
+    if(!a){
+      if(Math.abs(dx)>d.w*.5+.08||Math.abs(dz)>d.d*.5+.08)return -Infinity;
+      if(d.sag)return netHeight(d,x,z);
+      return d.y;
+    }
     const det=a.ux*a.vz-a.uz*a.vx;
     const u=(dx*a.vz-dz*a.vx)/det,v=(a.ux*dz-a.uz*dx)/det;
     if(d.gap&&v>d.gap[0]&&v<d.gap[1]&&Math.abs(u)<d.w*.5-.19)return -Infinity;
@@ -96,7 +106,7 @@ const TideTraversal = (() => {
   function surface(world,x,z,maxY) {
     let best=null,top=-Infinity;
     for(const d of world.floors)if(d.active){
-      if(!d.axes&&(d.y<=top||d.y>maxY))continue;
+      if(!d.axes&&(d.y<=top||d.y-(d.sag?d.sag+.65:0)>maxY))continue;
       const height=surfaceHeight(d,x,z);
       if(height<=maxY&&height>top){best=d;top=height;}
     }
@@ -108,7 +118,11 @@ const TideTraversal = (() => {
     const vx=(dx*Math.cos(yaw)+dz*Math.sin(yaw))/mag*5.9;
     const vz=(dz*Math.cos(yaw)-dx*Math.sin(yaw))/mag*5.9;
     const accel=1-Math.exp(-(p.grounded?18:7)*dt);
-    p.vx=mix(p.vx,vx,accel);p.vz=mix(p.vz,vz,accel);
+    if(p.cast&&!p.grounded){
+      const drag=Math.exp(-.11*dt);
+      p.vx=clamp(p.vx*drag+vx*.53*dt,-9,9);p.vz=clamp(p.vz*drag+vz*.53*dt,-11,11);
+    }else{p.vx=mix(p.vx,vx,accel);p.vz=mix(p.vz,vz,accel);}
+    p.landing=Math.max(0,p.landing-dt*2.9);p.launch=Math.max(0,p.launch-dt*3.5);
     p.speed=Math.hypot(p.vx,p.vz);
     if(p.speed>.1) {
       const angle=Math.atan2(-p.vx,-p.vz)-p.yaw;
@@ -116,7 +130,12 @@ const TideTraversal = (() => {
     }
     if(input.jump&&!operating)p.jumpBuffer=.14;
     if(p.jumpBuffer>0 && p.grace>0){
-      p.vy=7.2;p.grace=p.jumpBuffer=0;p.grounded=false;p.ground=null;
+      p.vy=7.2;p.grace=p.jumpBuffer=0;p.jumpRise=true;p.launch=1;p.jumpAge=0;p.grounded=false;p.ground=null;
+    }
+    if(p.jumpRise){
+      p.jumpAge+=dt;
+      if(input.jumpHeld===false&&p.jumpAge>.082&&p.vy>2.8){p.vy=2.8+(p.vy-2.8)*.20;p.jumpRise=false;}
+      if(p.vy<=0)p.jumpRise=false;
     }
     p.jumpBuffer-=dt;
     const oldY=p.y;
@@ -125,8 +144,9 @@ const TideTraversal = (() => {
     const top=floor?surfaceHeight(floor,p.x,p.z):-Infinity;
     const descending=floor?.axes&&p.ground===floor&&p.grounded&&oldY-top<.40;
     if(floor && p.vy<=0 && (p.y<=top+.012||descending)) {
-      p.y=top;p.vy=0;p.ground=floor;p.grounded=true;p.grace=.095;
+      if(!p.grounded)p.landing=clamp((-p.vy-1.5)/9,0,1);
+      p.y=top;p.vy=0;p.cast=false;p.jumpRise=false;p.ground=floor;p.grounded=true;p.grace=.095;
     } else {p.grounded=false;p.ground=null;p.grace-=dt;}
   }
-  return {build,spawn,move,surfaceHeight,surface,clamp,mix};
+  return {build,spawn,move,netHeight,surfaceHeight,surface,clamp,mix};
 })();

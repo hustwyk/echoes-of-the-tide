@@ -173,7 +173,7 @@ const TideBridgework=(()=>{
       }
       for(const {door,k} of doors)door.rotation.y=c.arrived?k*1.50:0;
       for(const {b,cart} of carriers)cart.position.x=b.mass*.91;
-      const lower=g.section.span;staff.visible=!!lower?.lower&&!lower.landed;
+      const lower=g.section.span;staff.visible=!!lower?.lower;
       if(staff.visible)staff.rotation.x=.04+lower.folded*1.45;
       for(const {a,m,p} of wires){
         const end=p();tip.set(end.x,end.y,end.z);axis.subVectors(tip,a);
