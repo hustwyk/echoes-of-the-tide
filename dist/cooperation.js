@@ -30,12 +30,12 @@ const TideCoop = (() => {
   }
   class Session {
     constructor(index,events={}) {
-      this.index=index;this.world=index===1?TideCableQuay.layout():index===2?TideSignal.layout():index===4?TideArchive.layout():index===9?TideLantern.layout():TideTraversal.build(index);this.events=events;
+      this.index=index;this.world=index===7?TideRelay.layout():index===1?TideCableQuay.layout():index===2?TideSignal.layout():index===4?TideArchive.layout():index===9?TideLantern.layout():TideTraversal.build(index);this.events=events;
       if(index===0)TideLandfall.build(this.world);
-      TideRigging.build(this.world);TideDrawbridge.build(this.world);if(!this.world.cableQuay&&!this.world.lantern&&!this.world.signal&&!this.world.archive)TideFieldWork.build(this.world,index);
+      TideRigging.build(this.world);TideDrawbridge.build(this.world);if(!this.world.relay&&!this.world.cableQuay&&!this.world.lantern&&!this.world.signal&&!this.world.archive)TideFieldWork.build(this.world,index);
       this.time=0;this.stage=0;this.setbacks=0;this.complete=false;this.notice='';this.noticeUntil=0;
       this.cues={light:0,angle:0,water:-4,rescue:0,ghost:0};
-      this.cable=TideCableQuay.create(this);this.signal=TideSignal.create(this);
+      this.relay=TideRelay.create(this);this.cable=TideCableQuay.create(this);this.signal=TideSignal.create(this);
       this.players=this.world.sections[0].starts.map(TideTraversal.spawn);
       this.checkpoints=this.world.sections[0].starts.slice();TidePassage.build(this);
       this.begin();
@@ -50,7 +50,7 @@ const TideCoop = (() => {
         returnGate:0,balance:0,warnUntil:0,buttonCooldown:0,releaseHeld:false,catchup:0};
       if(this.spec.type==='ride')this.state.dials[this.spec.driver]=.50;
       this.rig=TideRigging.reset(this);this.paper=TidePaper.create(this);this.optic=TideLantern.create(this);
-      if(this.optic){this.cues.light=.97;this.cues.rays=TideLantern.viewData(this).images;}TideFieldWork.reset(this);TideCableQuay.begin(this);TideLookout.reset(this);TideSignal.begin(this);TideArchive.begin(this);
+      if(this.optic){this.cues.light=.97;this.cues.rays=TideLantern.viewData(this).images;}TideFieldWork.reset(this);TideCableQuay.begin(this);TideLookout.reset(this);TideRelay.begin(this);TideSignal.begin(this);TideArchive.begin(this);
       this.events.stage?.(this);
     }
     alert(text,seconds=2.5) {
@@ -83,9 +83,10 @@ const TideCoop = (() => {
         if(this.stage+1===this.world.sections.length) {this.complete=true;this.events.finish?.(this);return;}
         this.checkpoints=section.ends.slice();this.stage++;this.begin();return;
       }
+      if(this.relay)TideRelay.step(this,dt);
       if(this.cable)TideCableQuay.update(this,dt);
       const activeSites=this.field.done?section.sites:section.field.sites;
-      this.near=this.players.map((p,i)=>this.cable?TideCableQuay.near(this,i):this.landfall?TideLandfall.near(this,i):this.archive?TideArchive.near(this,i):near(p,activeSites[i]));
+      this.near=this.players.map((p,i)=>this.relay?TideRelay.near(this,i):this.cable?TideCableQuay.near(this,i):this.landfall?TideLandfall.near(this,i):this.archive?TideArchive.near(this,i):near(p,activeSites[i]));
       if(this.signal&&this.stage===2)this.near[0]&&=this.players[0].ground===this.world.signal.head;
       const cart=this.spec.mode==='bridge'&&!section.span.seated;
       if(cart)this.near[1-this.spec.driver]=TideDrawbridge.onCart(this,1-this.spec.driver,{use:true});
@@ -95,11 +96,15 @@ const TideCoop = (() => {
       const prevStaff=section.span?.lower?TideDrawbridge.coordinates(section.span,this.players[1-this.spec.driver]):null;
       for(let side=0;side<2;side++){
         const p=this.players[side],oldZ=p.z;
+        if(this.relay&&!side&&TideRelay.climb(this,inputs[0],dt))continue;
         if(this.rig?.belay&&side!==this.spec.driver)continue;
         TideTraversal.move(p,inputs[side],dt,this.world,yaws[side],this.engaged[side]||TideRigging.lighting(this,side,inputs[side]));
         TidePassage.collide(this,p);
         if(this.world.landfall)TideLandfall.collide(this,p,oldZ);
-        if(this.cable){if(!side)TideCableQuay.restrain(this);TideCableQuay.collide(this,p);if(this.engaged[side])TideCableQuay.pose(this,side,dt);}
+        if(this.relay){
+          TideRelay.collision(this,p);if(this.engaged[side])TideRelay.stance(this,side,dt);
+          if(!side&&this.relay.top&&p.y<this.world.relay.upper.y-1.40)this.resetPerson(0,'桅顶安全索接住了你');
+        }else if(this.cable){if(!side)TideCableQuay.restrain(this);TideCableQuay.collide(this,p);if(this.engaged[side])TideCableQuay.pose(this,side,dt);}
         else if(this.landfall){if(this.engaged[side])TideLandfall.stance(this,side,dt);}
         else if(this.archive){TideArchive.collide(this,p);if(this.engaged[side])TideArchive.stance(this,side,dt);}
         else if(this.signal){if(this.engaged[side])TideSignal.stand(this,side,dt);}
@@ -116,6 +121,7 @@ const TideCoop = (() => {
       }
       if(prevStaff)TideDrawbridge.carry(this,inputs,dt,prevStaff);
       if(q.doneAt!==null)return;
+      if(this.relay){TideRelay.interact(this,inputs,dt);return;}
       if(this.cable){TideCableQuay.interact(this,inputs,dt);return;}
       if(this.landfall){TideLandfall.interact(this,inputs,dt);return;}
       if(this.archive){TideArchive.interact(this,inputs,dt);return;}
@@ -193,26 +199,6 @@ const TideCoop = (() => {
     }
     q.hold=two&&ok.every(Boolean)?q.hold+dt:0;
     if(q.hold>(strict?1.7:1.05))g.advance();
-  }
-  function radio(g,input,dt){
-    const s=g.spec,q=g.state,target=s.v[0]+Math.sin(g.time*.42)*.105;
-    const aim=g.tune(0,input,dt,.44),locked=g.engaged[0]&&Math.abs(aim-target)<.085;
-    const v=g.tune(1,input,dt,.58),choice=Math.min(2,Math.floor(v*3));
-    g.cues.angle=(aim-.5)*1.25;
-    g.set(0,'左右转天线，跟住移动的信号峰',{vis:'dial',value:aim,target,band:.085,caption:'方位 '+percent(aim)});
-    g.set(1,'选择准确的短句，在信号稳定时按跳跃键发报',{vis:'dial',value:v,caption:(locked?'已连通　':'断续　')+s.answers[choice]});
-    if(q.received){
-      g.set(0,'听到复述后按跳跃键确认本次报文',{caption:'海雁复述　'+q.word});
-      g.set(1,'保持链路，等机房确认复述',{caption:q.word});
-      if(locked&&g.engaged[1]&&g.commit(0,input))g.advance();
-      return;
-    }
-    if(g.commit(1,input)){
-      if(locked && choice===s.answer){
-        q.word=s.answers[choice];q.received=1;g.alert('海雁复述：'+q.word+'。请机房确认收悉。',3.5);
-      }
-      else {g.alert(locked?'海雁复述有误，核对原句再发':'缺字，等天线对准再发');g.sound(150,.16);}
-    }
   }
   function tide(g,input){
     const q=g.state,s=g.spec,lead=s.lead,peer=1-lead;
@@ -332,6 +318,6 @@ const TideCoop = (() => {
       if(g.cues.rescue===1 && g.commit(0,input))g.advance();
     }
   }
-  const handlers={ride,paper:TidePaper.interact,optic:alignment,radio,tide,post,rhythm,quiet,release};
+  const handlers={ride,paper:TidePaper.interact,optic:alignment,tide,post,rhythm,quiet,release};
   return {Session,roleKeys,near,ridePressure};
 })();

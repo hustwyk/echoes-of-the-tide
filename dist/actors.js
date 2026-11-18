@@ -527,6 +527,10 @@
       b['shin'+i].rotation.x=-.065-.66*Math.max(0,stride)*groundPace-air*(i===0?.65:.4);
       b['boot'+i].rotation.x=.035+.12*Math.max(0,stride)*groundPace+.12*air;
       b['thigh'+i].rotation.x+=bend;b['shin'+i].rotation.x-=2*bend;b['boot'+i].rotation.x+=bend;
+      if(motion.climbing){
+        const knee=(1+Math.sin(actor.position.y*Math.PI/.29+i*Math.PI))*.5;
+        b['thigh'+i].rotation.x=.26+.72*knee;b['shin'+i].rotation.x=-.44-1.17*knee;b['boot'+i].rotation.x=.18+.38*knee;
+      }
       const arm=b['arm'+i],forearm=b['forearm'+i];
       arm.rotation.y=0;arm.rotation.x=.065-.42*stride*groundPace+.4*air+.55*work;
       arm.rotation.z=(i===0?-1:1)*(.086+.27*air+.09*work);

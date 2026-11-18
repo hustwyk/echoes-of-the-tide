@@ -38,9 +38,9 @@ const TideMissions = (() => {
       step('quiet','背风的吊篮',['tape','tape'],'林澈：这段没风。你还记得最后一道题吗？',{length:25})
     ],
     [
-      step('radio','呼叫海雁号',['antenna','radio'],'梁青：这里是海雁，请报呼号。',{v:[.29,.65],answers:['北岬','东堤','南港'],answer:0}),
-      step('radio','发送灯机验收项',['antenna','radio'],'林澈：只验了灯机。那个“只”字，要发清楚。',{v:[.57,.35],answers:['北线可用','只验灯机','船位已定'],answer:1,rough:1}),
-      step('radio','发送更正项',['antenna','radio'],'沈遥：把北线说成恢复的人是我。',{v:[.71,.42],answers:['可以进入','全线正常','今晚未测'],answer:2,rough:2})
+      step('relay','登桅接通岸船',['antenna','radio'],'沈遥：我收踏板。林澈，你上去看看夹座里要的是哪张底联。'),
+      step('relay','把缺掉的字补齐',['antenna','radio'],'梁青：驾驶台听见了。报的时候慢一点，风比你响。'),
+      step('relay','两个人的落款',['antenna','radio'],'林澈：我签我验过的那一项。沈遥，那张通报要你自己说。')
     ],
     [
       step('tide','在同一道浪里读尺',['gauge','gauge'],'沈遥：我看上标尺。浪谷到了就告诉你。',{lead:1}),

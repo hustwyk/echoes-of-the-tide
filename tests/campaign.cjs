@@ -3,10 +3,10 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const box=vm.createContext({});
-for(const name of ['missions','traversal','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','lookout','paper','lantern','signal','archive','cooperation']){
+for(const name of ['missions','traversal','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','lookout','paper','lantern','signal','archive','relay-speech','relay','cooperation']){
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../dist',name+'.js'),'utf8'),box);
 }
-const {Session,near,surface,lookout,ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay})',box);
+const {Session,near,surface,lookout,ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay})',box);
 const empty=()=>({x:0,z:0,use:false,jump:false});
 function steer(g,i,target,keys){
   const p=g.players[i],dx=target.x-p.x,dz=target.z-p.z,dist=Math.hypot(dx,dz);
@@ -176,8 +176,41 @@ function quayInputs(g,out){
   }
   return out;
 }
+function relayInputs(g,out){
+  const r=g.relay,w=g.world.relay,p=g.players[0],axis=x=>Math.max(-1,Math.min(1,x));
+  const dest=TideRelay.target(g,0),desk=TideRelay.target(g,1),s=desk.kind==='file'?w.files[1]:desk;
+  if(r.climb||(!r.top&&dest===w.foot&&TideRelay.near(g,0))||dest===w.lift&&TideRelay.near(g,0)){
+    out[0].use=true;out[0].z=-1;
+  }else if(!r.top&&r.low&&p.y>1.25){
+    if(p.ground===w.car||!p.grounded||r.travel<.06){
+      steer(g,0,w.car,out[0]);out[0].jump=p.ground===w.lower&&r.travel<.06;
+    }
+  }else if(TideRelay.near(g,0))out[0].use=true;
+  else steer(g,0,dest,out[0]);
+  if(TideRelay.near(g,1)&&desk===s)out[1].use=true;
+  else{
+    const who=g.players[1],gap=TideRelay.point(4.08,0,.83);
+    if(s===w.desk&&who.z>gap.z-.82&&who.z<gap.z+1.40&&Math.abs(who.x-gap.x)>.16)
+      steer(g,1,{x:gap.x,y:0,z:who.z},out[1]);
+    else steer(g,1,s,out[1]);
+  }
+  if(s===w.haul&&out[1].use)out[1].x=p.ground===w.car||r.boarded?1:-1;
+  if(out[1].use&&(s.kind==='file'||s===w.desk&&!r.loaded))out[1].jump=true;
+  if(!r.top)return out;
+  if(lookout.active(g)){if(out.every(k=>k.use))aimScope(g,out);return out;}
+  const b=TideRelay.bearing(g),wind=TideRelay.winds(g);
+  if(out[0].use){out[0].x=axis((b.yaw-wind.yaw-r.yaw)*18);out[0].z=-axis((b.pitch-wind.pitch-r.pitch)*21);}
+  if(g.stage===0){out[0].jump=r.loaded&&r.lock>=1&&!r.voice;}
+  if(g.stage===1&&out[1].use){
+    const next=r.mask.indexOf(false);
+    if(next>=0){out[1].x=axis((next-r.cursor)*5);out[1].jump=Math.abs(next-r.cursor)<.25&&r.strength>.75;}
+  }
+  if(g.stage===2&&r.lock>=1&&!r.voice)out[r.signed[0]?1:0].jump=true;
+  return out;
+}
 function control(g){
   const out=[empty(),empty()],sec=g.section,s=g.spec,q=g.state;
+  if(g.relay)return relayInputs(g,out);
   if(g.cable)return quayInputs(g,out);
   if(g.landfall)return landfallInputs(g,out);
   if(g.archive)return archiveInputs(g,out);
@@ -356,6 +389,41 @@ if(require.main===module){
   function reach(g,condition){
     for(let j=0;j<60*120&&!condition()&&!g.complete;j++)g.tick(step,control(g));
     assert.ok(condition(),'Did not reach checkpoint in chapter '+(g.index+1)+' stage '+g.stage);
+  }
+  // The crew can lose exactly the negative in the second strip. Accepted words and
+  // individual signatures must survive returning to the title screen mid-report.
+  {
+    const g=new Session(7),r=g.relay,w=g.world.relay;
+    reach(g,()=>r.low);assert.equal(g.players[0].ground,w.lower);
+    const lowerSave=TideRelay.checkpoint(g),lower=new Session(7);TideRelay.restore(lower,lowerSave);
+    assert.equal(lower.players[0].ground,lower.world.relay.lower);
+    reach(lower,()=>lower.players[0].ground===lower.world.relay.car);
+    reach(g,()=>r.top||r.climb==='upper');
+    for(let j=0;j<600&&r.file<0;j++){
+      const k=control(g);k[1]=empty();const file=w.files[0];
+      if(TideRelay.near(g,1)&&TideRelay.target(g,1)===file){k[1].use=k[1].jump=true;}
+      else steer(g,1,file,k[1]);
+      g.tick(step,k);
+    }
+    assert.equal(r.file,0);reach(g,()=>r.rejected);assert.equal(r.loaded,false);
+    reach(g,()=>g.stage===1&&r.voice==='word4');
+    for(let j=0;j<240&&r.voice!=='missing';j++){
+      const k=control(g);if(r.voice==='word4')k[0].use=false;g.tick(step,k);
+    }
+    assert.equal(r.voice,'missing');assert.equal(r.mask.map(Number).join(''),'111101');
+    const copy=TideRelay.checkpoint(g),again=new Session(7);again.stage=1;again.begin();TideRelay.restore(again,copy);
+    assert.equal(again.relay.mask.map(Number).join(''),'111101');assert.ok(again.relay.tried.every(Boolean));assert.ok(again.watch.done);
+    reach(again,()=>again.relay.voice==='word4');assert.equal(again.relay.message.length,1);
+    reach(again,()=>again.relay.voice==='carback');assert.ok(again.relay.mask.every(Boolean));
+    reach(again,()=>again.stage===2&&again.relay.lock>=1);
+    for(let i=0;i<50;i++){const k=control(again);k[0].jump=false;k[1].jump=true;again.tick(step,k);}
+    assert.equal(again.relay.voice,'');assert.equal(again.relay.signed[0],false);
+    reach(again,()=>again.relay.signed[0]);const saved=TideRelay.checkpoint(again);
+    const sign=new Session(7);sign.stage=2;sign.begin();TideRelay.restore(sign,saved);
+    assert.equal(sign.relay.signed.map(Number).join(''),'10');
+    for(let j=0;j<60;j++){const k=control(sign);k[0].jump=true;k[1].jump=false;sign.tick(step,k);}
+    assert.equal(sign.relay.voice,'');assert.equal(sign.relay.signed[1],false);
+    reach(sign,()=>sign.complete);assert.equal(sign.relay.signed.map(Number).join(''),'11');
   }
   // Each head is independent. A stationary key, unpaired punch or mismatched
   // reply cannot register tape. A correct grease mark survives winding and reload.
@@ -675,5 +743,5 @@ if(require.main===module){
     quiet.tick(1/60,inputs);
   }
   assert.ok(quiet.complete&&quiet.skipTin);
-  console.log('Verified both roles, short–long keying, cable drop and preserved saddle, unlit crane window, shore return loop, ferry readback, swinging belay, floodgate collision and pin, emergency radio reception, basket mark, hydraulic sill, two drawbridge catches, folding staff, shared cable car, lantern shutters, optical carriage and saved guide positions, tape transport, wrong splices, cabinet keys, paper registration, final radio release and optional recording.');
+  console.log('Verified mast climb, transfer car, wrong file, lost negative, individual signatures, both roles, short–long keying, cable drop and preserved saddle, unlit crane window, shore return loop, ferry readback, swinging belay, floodgate collision and pin, emergency radio reception, basket mark, hydraulic sill, two drawbridge catches, folding staff, shared cable car, lantern shutters, optical carriage and saved guide positions, tape transport, wrong splices, cabinet keys, paper registration, final radio release and optional recording.');
 }

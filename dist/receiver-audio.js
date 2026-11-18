@@ -1,16 +1,18 @@
 // Both the physical field-strength needle and this audio filter follow the loop's bearing.
 const TideReceiverAudio=(()=>{
-  let loading=null;
-  function loadQuay(){
-    if(window.TideQuayAudio)return Promise.resolve(window.TideQuayAudio);
-    if(!loading)loading=new Promise(resolve=>{
-      const script=document.createElement('script');script.src='assets/cablequay-audio.js';
-      script.onload=()=>resolve(window.TideQuayAudio);
-      script.onerror=()=>{loading=null;script.remove();resolve(null);};
+  const loads={};
+  function loadData(name,path){
+    if(window[name])return Promise.resolve(window[name]);
+    if(!loads[name])loads[name]=new Promise(resolve=>{
+      const script=document.createElement('script');script.src=path;
+      script.onload=()=>resolve(window[name]);
+      script.onerror=()=>{delete loads[name];script.remove();resolve(null);};
       document.head.appendChild(script);
     });
-    return loading;
+    return loads[name];
   }
+  const loadQuay=()=>loadData('TideQuayAudio','assets/cablequay-audio.js');
+  const loadRelay=()=>loadData('TideRelayMedia','assets/relay-media.js');
   function create(ctx,output){
     const buffers={},pending=new Set();
     let preview=null,call=null,ratchet=null,previousStroke=0;
@@ -19,9 +21,10 @@ const TideReceiverAudio=(()=>{
       if(buffers[key]||pending.has(key))return;
       pending.add(key);
       try{
-        const stock=(key==='receiver'||key==='hoist')?TideBreakwaterAudio:await loadQuay();
+        const mast=key.startsWith('mast/');
+        const stock=mast?await loadRelay():(key==='receiver'||key==='hoist')?TideBreakwaterAudio:await loadQuay();
         if(!stock)return;
-        const bytes=Uint8Array.from(atob(stock[key]),v=>v.charCodeAt(0));
+        const bytes=Uint8Array.from(atob(stock[mast?key.slice(5):key]),v=>v.charCodeAt(0));
         buffers[key]=await ctx.decodeAudioData(bytes.buffer);
       }finally{pending.delete(key);}
     }
@@ -53,6 +56,13 @@ const TideReceiverAudio=(()=>{
       if(key&&!story)story=play(key,1.10,t);
     }
     function update(g){
+      if(g.relay){
+        for(const id of Object.keys(TideRelaySpeech)){const key='mast/'+id;if(!pending.has(key)&&!buffers[key])decode(key).catch(()=>{});}
+        const r=g.relay,key=r.voice?'mast/'+r.voice:'';
+        if(key!==storyKey||story&&Math.abs(ctx.currentTime-story.start-r.clock)>.50){story=end(story);storyKey=key;}
+        if(key&&!story)story=play(key,1.06,r.clock);
+        return;
+      }
       if(g.cable){quay(g);return;}
       if(!g.landfall)return;
       const a=g.landfall;
@@ -76,5 +86,5 @@ const TideReceiverAudio=(()=>{
     }
     return {update,stop};
   }
-  return {create,loadQuay};
+  return {create,loadQuay,loadRelay};
 })();

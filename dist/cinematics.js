@@ -25,6 +25,7 @@ window.TideCinema = (() => {
     let clock=0, duration=0, playing=false, disposed=false;
     let cupboard, cup, tape, tin, screw, sheet, packet, green, marker;
     let tender, cable, workroom, paperStrip, hand, newLabel, voiceCoils;
+    let sternSet;
     let renderedText='';
     const scratch=new T.Vector3(), end=new T.Vector3();
     const filmTime=()=>playing?clock:0;
@@ -174,25 +175,7 @@ window.TideCinema = (() => {
       const head=disc(m,.040,0,0,.019,.012,metal);head.rotation.z=Math.PI/2;
       box(m,.047,.001,0,.0015,.004,.027,rubber);return m;
     }
-    function report(p,rot=0) {
-      const q=group(p);q.rotation.y=rot;
-      box(q,0,.008,0,.44,.012,.61,material(0xbbaa87,0,.9));
-      label(q,0,.015,0,.426,.596,(c,w,h)=>{
-        c.fillStyle='#d3c6a8';c.fillRect(0,0,w,h);
-        c.fillStyle='#344d50';c.font='bold 32px sans-serif';c.fillText('北 岬　设备验收联',34,72);
-        c.font='17px monospace';c.fillText('NORTH CAPE / HANDOVER',35,107);
-        c.strokeStyle='#71847e';c.lineWidth=2;
-        for(let y=138;y<h-63;y+=46){c.beginPath();c.moveTo(32,y);c.lineTo(w-32,y);c.stroke();}
-        c.font='22px sans-serif';c.fillText('灯机回转　　正常',41,177);c.fillText('检查人　　　林澈',41,224);
-        c.fillText('北线　　　　待测',41,316);
-        c.fillStyle='#974e42';c.lineWidth=5;c.strokeStyle=c.fillStyle;c.strokeRect(w-163,h-172,112,60);
-        c.font='bold 35px sans-serif';c.fillText('更 正',w-153,h-132);
-        c.fillStyle='#777367';c.font='italic 22px serif';c.fillText('沈 遥',63,h-72);
-      });
-      return q;
-    }
-
-    if([3,4,5,6,7].includes(idx)){
+    if([3,4,5,6].includes(idx)){
       makeDesk(shelf,1.52,1.03);
       if(idx===3){
         cup=enamel(shelf);cup.position.set(-.16,.022,0);
@@ -225,15 +208,32 @@ window.TideCinema = (() => {
       }else if(idx===6){
         tin=biscuitTin(shelf);tin.position.set(-.16,.024,.04);
         screw=makeScrew(tin);tape=cassette(shelf,'十秒钟北岬');tape.position.set(.34,.022,-.01);
-      }else{
-        packet=report(shelf,-.08);packet.position.set(-.08,.031,.06);
-        sheet=report(shelf,.14);sheet.position.set(.12,.076,-.01);
-        box(shelf,-.07,.12,-.201,.16,.031,.048,rail);
-        const pen=rod(shelf,[.20,.05,.21],[.48,.05,.14],.009,material(0x253438,.1,.7));
-        pen.name='未写完的交接单';
+
       }
     }
 
+    if(idx===7){
+      // On the stern, the sailor brings the handheld up from below the rail.
+      sternSet=group(ship,-1.48,2.55,7.01);sternSet.rotation.y=1.33;sternSet.visible=false;
+      const shell=material(0x53645b,.29,.55),glove=material(0x55504a,.12,.82);
+      box(sternSet,0,0,0,.105,.171,.047,rubber);
+      box(sternSet,0,.008,.017,.090,.14,.028,shell);
+      for(let j=0;j<6;j++)box(sternSet,0,-.05+j*.008,.034,.069,.003,.004,rubber);
+      label(sternSet,0,.033,.035,.077,.038,printed('海雁','甲板  02','#acb298','#303a36'),false);
+      for(const [x,h] of [[-.035,.02],[.032,.027]])disc(sternSet,x,.091,0,.012,h,rail);
+      rod(sternSet,[.010,.085,-.004],[.015,.243,-.018],.0038,rubber);
+      disc(sternSet,-.034,.070,.017,.005,.01,material(0xe3a35c,.16,.45,.47));
+      part(sternSet,sphere,glove,.042,-.033,-.013,.053,.068,.034);
+      for(let i=0;i<4;i++){
+        const y=.015-i*.024;
+        rod(sternSet,[.062,y,-.012],[.066,y-.003,.021],.011,glove);
+        rod(sternSet,[.066,y-.003,.021],[.039,y-.011,.037],.010,glove);
+      }
+      rod(sternSet,[.026,.011,.037],[-.037,-.019,.039],.013,glove);
+      rod(sternSet,[.057,-.077,-.027],[.089,-.120,-.026],.038,glove);
+      rod(sternSet,[.070,-.092,-.027],[.213,-.220,.007],.045,material(0xa78445,.10,.68));
+      rod(sternSet,[.122,-.140,-.013],[.141,-.160,-.009],.047,ivory);
+    }
     if(idx===2 && assets.marker){
       marker=assets.marker;
     }else if(idx===2){
@@ -437,6 +437,11 @@ window.TideCinema = (() => {
     }
 
     function update(g,dt) {
+      if(sternSet){
+        sternSet.visible=playing;
+        sternSet.position.y=2.48+.14*smooth(clock/1.6)+.005*Math.sin(clock*2.5);
+        sternSet.rotation.z=-.18+.08*smooth(clock/1.6);
+      }
       if(disposed)return;
       const t=g.time+filmTime();
       if(idx===2){
@@ -470,10 +475,6 @@ window.TideCinema = (() => {
         const lift=playing?smooth((clock-.9)/3.4):0;
         sheet.position.set(-.46*lift,.009+Math.sin(lift*Math.PI)*.13,-.15*lift);
         sheet.rotation.set(-.14*Math.sin(lift*Math.PI),.12*lift,.018*lift);
-      }else if(idx===7){
-        sheet.rotation.set(-.06+.055*Math.sin(t*5.2),.15+.031*Math.sin(t*2.1),.014*Math.sin(t*3.1));
-        sheet.position.y=.066+.018*Math.abs(Math.sin(t*3.4));
-        packet.rotation.y=-.08;
       }else if(idx===11&&playing)finalAt(clock,dt);
     }
 
@@ -491,11 +492,11 @@ window.TideCinema = (() => {
         const p=game.players[side];return {x:p.x,y:p.y,z:p.z,yaw:p.yaw,talking:!side&&clock<2.8,
           gaze:side?-.14:.16,incline:side?.075:.045};
       }
-      if(![5,6,7].includes(idx))return null;
+      if(![5,6].includes(idx))return null;
       const t=clock,mid=hub.tram?.deck||hub.mid,hand=side?1:-1;
       const speaking=idx===5?(side===0?t<2.67:t>=2.74&&t<5.53):
         idx===6?(side===0?t<3.23:t>=3.42&&t<6.65):(side===0&&t<2.65);
-      const listening=t>=(idx===5?5.65:idx===7?2.8:7);
+      const listening=t>=(idx===5?5.65:7);
       return {x:mid.x+hand*.58,y:mid.y,z:mid.z+.29+side*.04,yaw:hand*.48,
         talking:speaking,gaze:hand*(listening?-.12:.29),incline:listening?.045:.085+.045*Math.sin(t*.92+side)};
     }
@@ -529,7 +530,11 @@ window.TideCinema = (() => {
           subject(shelf,[.28-f*.07,.76,.41],[.12,.05,.13]);
       }
       if(idx===6)return i?portrait(t<3.36?0:1,t):subject(tin,[-.22+f*.17,.36,.34],[.008,.055,.03]);
-      if(idx===7)return i?portrait(t<2.8?0:1,t):subject(shelf,[-.40,.76,.10+f*.22],[0,.046,-.02]);
+      if(idx===7){
+        if(!i)return t<2.8?{eye:[-38.82,6.20,-85.86],at:[-36.72,5.78,-86.40],fov:48}:{eye:[-33.16,3.62,-86.68],at:[-30.29,1.13,-87.93],fov:47};
+        const view=deckview([-.96,2.86,7.18],[-1.73,2.60+.17*smooth(t/duration),6.99]);
+        view.fov=46;return view;
+      }
       if(idx===11){
         if(t<2.55)return i?deckview([3.8,2.6,6.7],[8.2,1.05,4.8]):deckview([-10,4.6,-15],[0,1.55,-2.5]);
         if(t<5.2)return i?subject(tender,[2.22,2.22,4.18],[.60,1.08,2.2]):deckview([3.05,2.66,8.89],[2.29,1.38,6.41]);
@@ -555,7 +560,7 @@ window.TideCinema = (() => {
       }
       if(idx===5)return t<2.7?'林澈　我看见备注没印出来。还在这儿划了一下。':t<5.65?'沈遥　我替我们两个人，按了那个确认。':'梁青　要是还不知道，就告诉我不知道。我可以给你们报浪。';
       if(idx===6)return t<3.4?'林澈　那次你猜的是雷声。':'沈遥　铁皮饼干盒。想再听一遍才故意猜错的。';
-      if(idx===7)return t<2.8?'林澈　我只验过灯机。':'梁青　两句都收到了。阿棠，你从船尾报。';
+      if(idx===7)return t<2.8?'阿棠　船尾收到。让我再看一眼。':'阿棠　白浪后面有截断桩。等浪落下去，我再给你们报。';
       if(idx===11){
         if(t<2.55)return '阿棠　断桩露出来了。';
         if(t<5.2)return '梁青　靠上来了。接缆！';
@@ -582,6 +587,7 @@ window.TideCinema = (() => {
       return playing;
     }
     function dispose(){
+      sternSet?.removeFromParent();
       if(disposed)return;
       disposed=true;skip();root.removeFromParent();
       for(const obj of owned)obj.dispose();
