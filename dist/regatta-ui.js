@@ -69,7 +69,7 @@ const TideRegattaUI=(()=>{
         u.id.textContent=intro?'船模 '+(i?'02':'01'):'第 '+Math.min(2,b.lap+1)+' / 2 圈';
         u.button.hidden=!intro;u.button.disabled=r.ready[i];u.button.textContent=r.ready[i]?'已就位，等另一人':'准备　'+k+' / 手柄 A';
         u.marker.hidden=!driving;
-        if(driving){const to=view.target(r,i);u.marker.style.left=to.x*100+'%';u.marker.style.top=to.y*100+'%';u.marker.textContent=(to.edge?(to.x<.5?'← ':'→ '):'◇ ')+g.name;}
+        if(driving){const to=view.target(r,i);u.marker.style.left=to.x*100+'%';u.marker.style.top=to.y*100+'%';u.marker.textContent=(to.direction?to.direction+' · ':'◇ ')+g.name;}
         u.title.textContent=intro?(i?'蓝绿艇 · 沈遥':'木甲板艇 · 林澈'):b.time!==null?'已过格旗线　'+fmt(b.time):'下一门　'+g.name;
         u.text.textContent=b.messageUntil>r.clock?b.message:intro?(best[i]?'个人最快圈　'+fmt(best[i]):'穿过五道门，绕完两圈。'):(i?'方向键驾驶 · Enter 直驱 · ＼ 俯看':'WASD 驾驶 · E 直驱 · C 俯看');
         const pct=Math.round(b.charge*100);u.bar.style.width=pct+'%';u.charge.textContent='电量 '+pct+'%';
@@ -105,7 +105,7 @@ const TideRegattaUI=(()=>{
       const k=inputs(pads);if(dead||paused){last=0;return;}
       const delta=last?Math.min(.12,Math.max(0,(now-last)/1000)):0;last=now;carry+=delta;
       while(carry+1e-9>=1/60){TideRegatta.step(r,k,1/60);carry-=1/60;}
-      hud();view.draw(r,quality);
+      view.draw(r,quality);hud();
       if(sound.enabled&&sound.ctx){audio??=TideRegattaAudio.create(sound.ctx,sound.master);audio.update(r,activeVoice,voiceAge);}
       else if(audio){audio.dispose();audio=null;}
     }

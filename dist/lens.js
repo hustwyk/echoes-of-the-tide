@@ -32,12 +32,14 @@ const TideLens=(()=>{
         }`});
     const scene=new T.Scene(),geometry=new T.PlaneGeometry(2,2);
     scene.add(new T.Mesh(geometry,material));const flat=new T.Camera();
-    function render(world,camera,start,w,h,focus){
-      const dpr=renderer.getPixelRatio(),width=Math.max(1,Math.round(w*dpr)),height=Math.max(1,Math.round(h*dpr));
+    function render(world,camera,start,w,h,focus,sourceWidth=w){
+      const dpr=renderer.getPixelRatio(),width=Math.max(1,Math.round(sourceWidth*dpr)),height=Math.max(1,Math.round(h*dpr));
+      // Both halves reuse the larger half-width target. The final viewport maps
+      // its full UV range to each eye, including the narrower eye on odd windows.
       target.setSize(width,height);uniforms.pixel.value.set(1/width,1/height);
       uniforms.lens.value.set(camera.near,camera.far,focus,Math.min(12,.0105*height));
       renderer.setRenderTarget(target);renderer.render(world,camera);
-      renderer.setRenderTarget(null);renderer.setViewport(start,0,w,h);renderer.setScissor(start,0,w,h);
+      renderer.setRenderTarget(null);TideHarbor.viewport(renderer,start,w,h);
       renderer.render(scene,flat);
     }
     function dispose(){target.dispose();geometry.dispose();material.dispose();}

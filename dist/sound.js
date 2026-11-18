@@ -14,12 +14,15 @@ class HarborSound {
   }
   stopScene(){this.receiver?.stop();this.tape?.stop();this.scene?.stop();}
   cue(kind,side){if(this.enabled)this.scene?.cue(kind,side);}
-  tone(f,d=.15,wave='sine',volume=.17){
+  tone(f,d=.15,wave='sine',volume=.17,pan=0){
     if(!this.enabled||!this.ctx)return;
     const t=this.ctx.currentTime,osc=this.ctx.createOscillator(),gain=this.ctx.createGain();
     osc.type=wave;osc.frequency.value=f;gain.gain.setValueAtTime(.001,t);gain.gain.exponentialRampToValueAtTime(volume,t+.014);
-    gain.gain.exponentialRampToValueAtTime(.001,t+d+.025);osc.connect(gain).connect(this.master);osc.start(t);osc.stop(t+d+.035);
-    osc.onended=()=>{osc.disconnect();gain.disconnect();};
+    gain.gain.exponentialRampToValueAtTime(.001,t+d+.025);osc.connect(gain);
+    const stereo=pan&&this.ctx.createStereoPanner?this.ctx.createStereoPanner():null;
+    if(stereo){stereo.pan.value=pan;gain.connect(stereo).connect(this.master);}else gain.connect(this.master);
+    osc.start(t);osc.stop(t+d+.035);
+    osc.onended=()=>{osc.disconnect();gain.disconnect();stereo?.disconnect();};
   }
   radio(){this.cue('radio',1);}
 }
