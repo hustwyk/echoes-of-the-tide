@@ -356,14 +356,18 @@ const TideSoundingsGear=(()=>{
         c.beginPath();c.moveTo(x0-34,y0);c.lineTo(x0-15,y0);c.moveTo(x0+15,y0);c.lineTo(x0+34,y0);c.moveTo(x0,y0-30);c.lineTo(x0,y0-14);c.moveTo(x0,y0+14);c.lineTo(x0,y0+30);c.stroke();
         c.font='bold 29px sans-serif';c.fillStyle='#364f4c';c.fillText(i?'候选 Ⅱ':'候选 Ⅰ',x0+37,y0-11);
         c.font='21px monospace';c.fillText('底 '+TideSoundings.channels[i].bed.toFixed(2),x0+37,y0+18);
-        // Symbol to one side so it remains legible when the sliding cross covers the exact candidate.
-        if(!i){
-          c.save();c.translate(x0-65,y0+7);c.rotate(.11);c.fillStyle='#53745c';c.beginPath();c.moveTo(-10,6);c.lineTo(0,-25);c.lineTo(12,6);c.closePath();c.fill();c.strokeStyle='#48684f';c.lineWidth=4;c.beginPath();c.moveTo(0,0);c.lineTo(0,20);c.moveTo(-14,16);c.lineTo(14,16);c.stroke();c.restore();
-          c.font='23px sans-serif';c.fillStyle='#4c6555';c.fillText('旧绿浮标',x0-120,y0+59);
-        }else{
-          c.save();c.translate(x0-58,y0+8);c.strokeStyle='#6a5e41';c.lineWidth=4;c.beginPath();c.moveTo(-5,21);c.lineTo(-5,-27);c.lineTo(1,-23);c.lineTo(7,-34);c.lineTo(7,21);c.stroke();
-          c.strokeRect(-14,-5,31,4);c.strokeRect(-14,5,31,4);c.restore();c.font='23px sans-serif';c.fillStyle='#5a5b46';c.fillText('双环断桩',x0-103,y0+59);
-        }
+      }
+      // The compass sights and chart pins refer to the same physical landmarks.
+      for(const [i,name] of ['旧绿标','双环断桩'].entries()){
+        const a=TideSurveyPlot.anchor(i);c.save();c.translate(a.u*w,a.v*h);
+        c.strokeStyle=i?'#594635':'#325845';c.fillStyle=i?'#795a40':'#547957';c.lineWidth=4;
+        c.beginPath();
+        if(i){c.moveTo(-7,-5);c.lineTo(-6,-30);c.lineTo(0,-23);c.lineTo(6,-34);c.lineTo(7,-5);}
+        else{c.moveTo(-11,-8);c.lineTo(0,-32);c.lineTo(11,-8);c.closePath();}
+        c.fill();c.stroke();
+        if(i){c.strokeRect(-10,-11,20,3);c.strokeRect(-10,-19,20,3);}
+        c.beginPath();c.arc(0,0,5.4,0,TAU);c.stroke();
+        c.font='bold 22px sans-serif';c.textAlign=i?'right':'center';c.fillText(name,i?-16:0,i?-10:30);c.restore();
       }
       // Cartouche and hand-engraved compass rose.
       c.fillStyle='rgba(225,221,191,.88)';c.fillRect(31,31,507,112);c.strokeStyle='#91987f';c.strokeRect(31,31,507,112);
@@ -413,6 +417,7 @@ const TideSoundingsGear=(()=>{
       }
       band.tx.needsUpdate=true;
     }
+    const rule=TideChartRule.create(board.g,mapW,mapH);
     const readSheet=canvasSlot(520,896);
     plate(board,[.841,0,-.009],.327,.813,.021,.016,'#948e74');
     texPlane(board.g,.841,0,.018,.308,.788,readSheet.tx,textile);
@@ -486,6 +491,7 @@ const TideSoundingsGear=(()=>{
     repeatGeo.clear();torusCache.clear();
     let lastJaw=null,lastRead='',lastOverlay='';
     function update(s={}){
+      rule.update(s.rule);
       const active=s.mount===0||s.mount===1,m=active?s.mount:-1,carrying=!!s.carry&&!active;
       carryRig.visible=!active&&(carrying||s.rack!==false);installed.g.visible=active;jaw.g.visible=active;
       if(carrying&&s.staff){
@@ -503,12 +509,14 @@ const TideSoundingsGear=(()=>{
       const cm=Math.round(j*100)/100;
       if(cm!==lastJaw){jawReadout(cm);lastJaw=cm;}
       const uv=s.plot??[.50,.5],u=clamp(Number.isFinite(uv[0])?uv[0]:.5),v0=clamp(Number.isFinite(uv[1])?uv[1]:.5);
+      slide.g.visible=!s.rule?.show;
       slide.g.position.x=(u-.5)*mapW;slide.g.position.y=(.5-v0)*mapH;riderX.g.position.x=slide.g.position.x;riderY.g.position.y=slide.g.position.y;
-      plotWheels[0].g.rotation.z=-u*TAU*2.2;plotWheels[1].g.rotation.z=v0*TAU*1.7;
+      plotWheels[0].g.rotation.z=s.rule?.show?s.rule.dial:-u*TAU*2.2;
+      plotWheels[1].g.rotation.z=s.rule?.show?s.plotter.seat*TAU:v0*TAU*1.7;
       const reading=i=>typeof s.readings?.[i]==='number'&&Number.isFinite(s.readings[i])?Math.round(s.readings[i]*100)/100:null;
       const aa=reading(0),bb=reading(1),solved=!!s.solved,marked=!!s.marked;
       const rk=[aa,bb,solved].join('|');if(rk!==lastRead){drawReadings(aa,bb,solved);lastRead=rk;}
-      const bk=[rk,marked].join('|');if(bk!==lastOverlay){drawBand(marked,solved,aa??-2.7,bb??-2.7,s.sight);lastOverlay=bk;}
+      const bk=[rk,marked].join('|');if(bk!==lastOverlay){drawBand(marked,solved,aa??-2.7,bb??-2.7,s.plotter?.legacy?s.sight:null);lastOverlay=bk;}
       scopes.forEach((o,i)=>{o.g.rotation.z=(s.readings?.[i]!=null ? .74 : 0)+(i&&marked ? .39 : 0);});
       lamp(solved?1:marked?.62:.02);mic.g.rotation.z=marked?-.055:0;
     }
@@ -516,7 +524,7 @@ const TideSoundingsGear=(()=>{
       const key=kind+(Number.isInteger(index)?index:0),q=contacts.get(key);if(!q)return null;
       const out=globs.get(key);for(let i=0;i<2;i++){const g=q[i*2];g.updateWorldMatrix(true,false);out[i].copy(q[i*2+1]).applyMatrix4(g.matrixWorld);}return out;
     }
-    function dispose(){root.removeFromParent();root.clear();resources.forEach(r=>r.dispose());resources.clear();globs.clear();contacts.clear();}
+    function dispose(){rule.dispose();root.removeFromParent();root.clear();resources.forEach(r=>r.dispose());resources.clear();globs.clear();contacts.clear();}
     update();return {update,hands,dispose};
   }
   return {create};

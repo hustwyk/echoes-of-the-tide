@@ -3,12 +3,12 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const box=vm.createContext({});
-for(const name of ['missions','traversal','floating','warp-speech','warping','fender-speech','fenders','plate-speech','arrival-speech','stern-line','arrival','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','lookout','cistern-speech','cistern','glass-speech','chartroom','paper','lantern','gallery-speech','gallery','shift-speech','starter','transit-speech','transit','signal','tin-lines','tin-memory','archive','relay-speech','relay','soundings-speech','soundings','fog-speech','haul-speech','fog-recovery','fogsignal','pass-speech','lastpass','swing-speech','swing','cooperation']){
+for(const name of ['missions','traversal','floating','warp-speech','warping','fender-speech','fenders','plate-speech','arrival-speech','stern-line','arrival','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','lookout','cistern-speech','cistern','glass-speech','chartroom','paper','lantern','gallery-speech','gallery','shift-speech','starter','transit-speech','transit','signal','tin-lines','tin-memory','archive','relay-speech','relay','soundings-speech','survey-plot','soundings','fog-speech','haul-speech','fog-recovery','fogsignal','pass-speech','lastpass','swing-speech','swing','cooperation']){
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../dist',name+'.js'),'utf8'),box);
 }
 const {Session,near,surface,lookout,ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideSwing,TideCistern,TideGlass,TidePaper}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideSwing,TideCistern,TideGlass,TidePaper})',box);
 const {TideFenders,TideWarping,TideFloating,TideArrival,TideSternLine}=vm.runInContext('({TideFenders,TideWarping,TideFloating,TideArrival,TideSternLine})',box);
-const {TideTransit}=vm.runInContext('({TideTransit})',box);
+const {TideTransit,TideSurveyPlot}=vm.runInContext('({TideTransit,TideSurveyPlot})',box);
 const {TideTinMemory}=vm.runInContext('({TideTinMemory})',box);
 const {TideGallery}=vm.runInContext('({TideGallery})',box);
 const empty=()=>({x:0,z:0,use:false,jump:false});
@@ -43,9 +43,9 @@ function routeTo(g,i,site,keys) {
   else if(p.z>sec.ends[i].z+.8)steer(g,i,sec.ends[i],keys);
   else steer(g,i,site,keys);
 }
-function aimScope(g,out){
+function aimScope(g,out,target=g.watch.task.targets[g.watch.step]){
     const w=g.watch,d=w.task.watcher,cam=lookout.camera(g);
-    const target=w.task.targets[w.step],pos=lookout.point(g,target);
+    const pos=lookout.point(g,target);
     const [dx,dy,dz]=pos.map((x,j)=>x-cam.eye[j]);
     const axis=n=>Math.max(-1,Math.min(1,n*13));
     out[d].x=axis(Math.atan2(dx,-dz)-cam.yaw);
@@ -288,12 +288,21 @@ function surveyInputs(g,out){
     if(out[0].use){out[0].z=axis((r.jaw-read.height)*14);out[0].jump=read.open&&Math.abs(r.jaw-read.height)<.135&&(g.stage===1||r.ticket?.id===read.id);}
     if(out[1].use)out[1].jump=sight.open&&Math.hypot(...r.trim)<.018&&(g.stage===0||r.ticket?.id===sight.id);
   }else if(out.every(k=>k.use)){
-    if(lookout.active(g)){aimScope(g,out);}
+    if(lookout.active(g)&&!r.plotter.legacy){
+      const plot=r.plotter,cam=lookout.camera(g);
+      aimScope(g,out,g.watch.task.targets[Math.min(1,plot.reports.length)]);
+      out[1].jump&&=plot.reports.length<2;
+      const i=plot.lines.length,goal=plot.reports[i]??cam.yaw,delta=Math.atan2(Math.sin(goal-plot.dial),Math.cos(goal-plot.dial));
+      out[0].x=axis(delta*19);out[0].z=axis((i-plot.seat)*18);
+      out[0].jump=plot.reports.length>i&&Math.abs(delta)<.011&&Math.abs(i-plot.seat)<.022;
+    }else if(lookout.active(g)){aimScope(g,out);}
     else{
-      const p=TideSoundings.channels[1];
+      if(!r.plotter.legacy)aimScope(g,out,'stump');
+      const needFix=!r.plotter.legacy&&!r.plotter.pinned;
+      const p=needFix?TideSurveyPlot.crossing(...r.plotter.lines):TideSoundings.channels[1];
       out[0].x=axis((p.u-r.plot[0])*15);out[0].z=axis((p.v-r.plot[1])*15);
-      out[0].jump=!r.fixed&&Math.hypot(p.u-r.plot[0],p.v-r.plot[1])<.046;
-      out[1].jump=r.fixed&&!r.ack;
+      out[0].jump=!r.fixed&&Math.hypot(p.u-r.plot[0],p.v-r.plot[1])<(needFix?.017:.046);
+      out[1].jump=r.fixed&&!r.ack&&(r.plotter.legacy||g.watch.seen==='stump');
     }
   }
   return out;
@@ -1074,10 +1083,51 @@ if(require.main===module){
     reach(g,()=>r.readings[1]!==null);assert.equal(r.readings[1],b);
     reach(g,()=>g.stage===2&&!r.ashore);const outer=new Session(8);outer.stage=2;outer.begin();TideSoundings.restore(outer,TideSoundings.checkpoint(g));
     assert.equal(outer.players[0].ground,outer.world.soundings.piers[1]);
+    // A simultaneous pair of exact sights must intersect at the actual stern,
+    // and a parallel pair cannot produce a finite fix.
+    const sternEye=TideSoundings.stern(outer),pile=lookout.marks.stump;
+    const trueHeadings=[lookout.marks.buoy,pile].map(m=>Math.atan2(m.x-sternEye[0],sternEye[2]-m.z));
+    const exact=TideSurveyPlot.crossing(...trueHeadings);
+    assert.ok(Math.abs(exact.u-(.669+(sternEye[0]-pile.x)/TideSurveyPlot.width))<1e-10);
+    assert.ok(Math.abs(exact.v-(.38+(sternEye[2]-pile.z)/TideSurveyPlot.height))<1e-10);
+    assert.equal(TideSurveyPlot.crossing(trueHeadings[0],trueHeadings[0]),null);
+    // The stern can deliver both bearings while the plotter is still on the first
+    // stroke. A reload keeps both measured headings, including one waiting ashore.
+    const independent=new Session(8);independent.stage=2;independent.begin();
+    TideSoundings.restore(independent,TideSoundings.checkpoint(outer));
+    for(let j=0;j<14000&&independent.survey.plotter.reports.length<2;j++){
+      const k=control(independent);if(independent.engaged[0]){k[0].jump=false;k[0].x=0;}
+      independent.tick(step,k);
+    }
+    const fieldBook=TideSoundings.checkpoint(independent),live=new Session(8);
+    assert.equal(fieldBook.plotter.reports.length,2);assert.equal(fieldBook.plotter.lines.length,0);
+    live.stage=2;live.begin();TideSoundings.restore(live,fieldBook);
+    const plotter=live.survey.plotter;
+    assert.deepEqual(Array.from(plotter.reports),Array.from(fieldBook.plotter.reports));
+    const hold=(x,z,jump=false)=>live.tick(step,[{...empty(),x,z,jump,use:true},{...empty(),use:true}]);
+    hold(0,0,true);assert.match(live.notice,/读数不同/);
+    for(let j=0;j<75;j++)hold(0,1);
+    hold(0,0,true);assert.match(live.notice,/移尺脚/);assert.equal(plotter.lines.length,0);
+    reach(live,()=>plotter.lines.length===1);
+    const measured=plotter.reports[0],pencil=plotter.lines[0];
+    assert.ok(Math.abs(pencil-measured)<.020&&pencil!==measured);
+    const firstStroke=TideSoundings.checkpoint(live);
+    assert.deepEqual(Array.from(firstStroke.plotter.lines),[pencil]);
+    reach(live,()=>live.watch.done);hold(0,0,true);assert.match(live.notice,/没压住/);
+    const fix=TideSurveyPlot.crossing(...plotter.lines),otherFix=TideSurveyPlot.crossing(pencil+.009,plotter.lines[1]);
+    assert.ok(Math.hypot(fix.u-otherFix.u,fix.v-otherFix.v)>.001);
+    reach(live,()=>plotter.pinned);assert.ok(!live.survey.fixed&&!live.survey.ack);
+    const located=new Session(8);located.stage=2;located.begin();TideSoundings.restore(located,TideSoundings.checkpoint(live));
+    assert.ok(located.survey.plotter.pinned);reach(located,()=>located.survey.ack);
     reach(g,()=>g.watch?.step===1);const deck=TideSoundings.checkpoint(g);assert.equal(deck.watch,1);assert.ok(deck.ashore);
     const onboard=new Session(8);onboard.stage=2;onboard.begin();TideSoundings.restore(onboard,deck);
     assert.ok(onboard.survey.ashore&&onboard.watch.step===1);
+    const oldBook={...deck};delete oldBook.plotter;
+    const oldSurvey=new Session(8);oldSurvey.stage=2;oldSurvey.begin();TideSoundings.restore(oldSurvey,oldBook);
+    assert.ok(oldSurvey.survey.plotter.legacy&&oldSurvey.watch.step===1);
+    reach(oldSurvey,()=>oldSurvey.survey.ack);
     reach(onboard,()=>onboard.watch.done);assert.ok(onboard.survey.sight);
+    reach(onboard,()=>onboard.survey.plotter.pinned);
     const shallow=TideSoundings.channels[0],plot=onboard.survey.plot;
     for(let j=0;j<160;j++){
       const k=control(onboard);k[0].x=Math.max(-1,Math.min(1,(shallow.u-plot[0])*14));k[0].z=Math.max(-1,Math.min(1,(shallow.v-plot[1])*14));

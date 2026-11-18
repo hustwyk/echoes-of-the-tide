@@ -95,7 +95,7 @@ const TideSurveyPier=(()=>{
         pos.needsUpdate=true;
       }
       env.update(t,g.cues.water);const p=g.players[0];
-      gear.update({...r,stage:g.stage,rack:!r.taken,staff:[p.x-base.x,p.y,p.z-base.z,p.yaw],marked:g.watch?.done===true,sight:TideSoundings.sightLine(r),solved:r.fixed,time:t});
+      gear.update({...r,stage:g.stage,rack:!r.taken,staff:[p.x-base.x,p.y,p.z-base.z,p.yaw],marked:g.watch?.done===true,sight:TideSoundings.sightLine(r),solved:r.fixed,rule:TideSurveyPlot.visual(r.plotter,g.stage===2),time:t});
     }
     function hands(g,i){
       const r=g.survey,s=TideSoundings.target(g,i);
@@ -103,12 +103,13 @@ const TideSurveyPier=(()=>{
       return gear.hands(s.kind,s.index);
     }
     const view=(a,b,fov,handsOnly=false)=>({eye:[base.x+a[0],a[1],base.z+a[2]],at:[base.x+b[0],b[1],base.z+b[2]],fov,handsOnly});
-    function shot(g,i){
+    function shot(g,i,aspect){
       const r=g.survey,p=g.players[i],s=TideSoundings.target(g,i);
       if(!g.engaged[i])return null;
       if(g.stage===2){
         if(i){const cam=TideLookout.camera(g);return {...cam,fov:24,handsOnly:true};}
-        return view([-.92,4.22,4.34],[-.55,2.58,2.78],48);
+        const fov=2*Math.atan(Math.max(1.70,2.19/aspect)/3.44)*180/Math.PI;
+        return view([-.87,4.10,3.45],[-.56,2.55,2.78],fov);
       }
       if(i)return {...TideSoundings.scopeAim(g),handsOnly:true};
       if(s.kind==='rack')return view([-4.60,3.32,4.85],[-3.27,2.40,3.69],51);

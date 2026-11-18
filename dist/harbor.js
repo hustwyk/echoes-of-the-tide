@@ -86,7 +86,7 @@ const TideHarbor = (() => {
       if(!this.scene)return;
       this.staticPiers?.dispose();this.staticPiers=null;
       this.galleryWall?.dispose();this.galleryBelay?.dispose();this.gallerySlip?.dispose();this.galleryGear?.dispose();this.galleryYard?.dispose();
-      this.shoreScans?.dispose();this.shoreScans=null;this.arrivalRig?.dispose();this.contactSurf?.dispose();this.boat?.dispose();this.fenderYard?.dispose();this.seaReflection?.dispose();this.pointing?.dispose();this.sightlines?.dispose();this.footlight?.dispose();this.swingYard?.dispose();this.cisternRoom?.dispose();this.glassRoom?.dispose();this.fogHouse?.dispose();this.tideStation?.dispose();this.relayStation?.dispose();this.cableYard?.dispose();this.floodRoom?.dispose();this.childDuo?.dispose();this.screwTable?.dispose();this.summerRoom?.dispose();this.archiveStudio?.dispose();this.transitRig?.dispose();this.transitGlass?.dispose();this.transitOptics?.dispose();this.signalhouse?.dispose();this.lanternroom?.dispose();this.bridgework?.dispose();this.dockside?.dispose();this.cinema?.dispose();this.fieldProps?.dispose();this.coast?.dispose();
+      this.shoreScans?.dispose();this.shoreScans=null;this.arrivalRig?.dispose();this.contactSurf?.dispose();this.boat?.dispose();this.fenderYard?.dispose();this.seaReflection?.dispose();this.pointing?.dispose();this.sightlines?.dispose();this.footlight?.dispose();this.swingYard?.dispose();this.cisternRoom?.dispose();this.glassRoom?.dispose();this.fogHouse?.dispose();this.tideStation?.dispose();this.sternCompass?.dispose();this.relayStation?.dispose();this.cableYard?.dispose();this.floodRoom?.dispose();this.childDuo?.dispose();this.screwTable?.dispose();this.summerRoom?.dispose();this.archiveStudio?.dispose();this.transitRig?.dispose();this.transitGlass?.dispose();this.transitOptics?.dispose();this.signalhouse?.dispose();this.lanternroom?.dispose();this.bridgework?.dispose();this.dockside?.dispose();this.cinema?.dispose();this.fieldProps?.dispose();this.coast?.dispose();
       for(const asset of this.custom)asset.dispose();
       this.custom.clear();this.lifeline=null;this.scene.clear();this.scene=null;this.equipment.releaseDecks();
       this.lens?.dispose();this.lens=null;this.partnerLens?.dispose();this.partnerLens=null;
@@ -139,6 +139,7 @@ const TideHarbor = (() => {
       this.cisternRoom=g.cistern?TideCisternRoom.create(this.scene,g):null;
       this.glassRoom=g.glass?TideGlassRoom.create(this.scene,g):null;
       this.fogHouse=g.fog?TideFoghouse.create(this.scene,g):null;
+      this.sternCompass=null;
       this.tideStation=g.survey?TideSurveyPier.create(this.scene,g):null;
       this.relayStation=g.relay?TideRelayStation.create(this.scene,g):null;
       this.cableYard=g.cable?TideCableYard.create(this.scene,g,this.equipment,this.actors):null;
@@ -369,7 +370,7 @@ const TideHarbor = (() => {
           at:[ledge.x+.15,(p.y+ledge.y)*.5+1.05,ledge.z+1.10]}:null;
         const cableShot=ready&&g.cable?this.cableYard.shot(g,i):null;
         const tapeShot=ready&&g.archive?TideArchive.shot(g,i):null;
-        const relayShot=ready&&g.fog?this.fogHouse.shot(g,i,this.sightlines):ready&&g.survey?this.tideStation.shot(g,i):ready&&g.relay?this.relayStation.shot(g,i):null;
+        const relayShot=ready&&g.fog?this.fogHouse.shot(g,i,this.sightlines):ready&&g.survey?this.tideStation.shot(g,i,vw/height):ready&&g.relay?this.relayStation.shot(g,i):null;
         const berthShot=TideFenders.active(g)&&ready?TideFenders.shot(g,i,yaw,this.pitch[i]):null;
         const atTin=g.section.tram&&!g.section.tram.heard&&g.engaged[i]&&g.state.taps?.length;
         const pocketShot=ready&&(g.state.pocket||atTin)?this.bridgework?.pocketShot(i):null;
@@ -400,6 +401,12 @@ const TideHarbor = (() => {
         this.transitGlass?.update(g,cam,i,cam.aspect,Boolean(shot?.transit));
         if(shot?.transit)cam.layers.enable(TideTransitOptics.layer);else cam.layers.disable(TideTransitOptics.layer);
         this.seaReflection?.use(i,cam,vw,height,t,this.quality);
+        if(g.survey&&g.stage===2){
+          const compassView=i===1&&ready&&g.engaged[1]&&!cinemaShot&&!g.survey.plotter.legacy;
+          if(compassView)this.sternCompass??=TideSternCompass.create(this.scene);
+          const reports=g.survey.plotter.reports;
+          this.sternCompass?.view(cam,compassView,compassView?TideLookout.camera(g).yaw:0,reports.at(-1));
+        }
         viewport(e,start,vw,height);
         if(shot?.focus&&this.quality>=.85&&e.capabilities.isWebGL2){
           const lens=layout.separate&&i===1?(this.partnerLens??=TideLens.create(e)):(this.lens??=TideLens.create(e));

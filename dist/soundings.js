@@ -83,7 +83,7 @@ const TideSoundings=(()=>{
   function create(g){
     return g.world.soundings?{carry:false,mount:-1,taken:false,jaw:-1.54,trim:[-.037,.041],readings:[null,null],
       ticket:null,plot:[.50,.54],fixed:false,voice:'',clock:0,subtitle:'',line:-1,settle:'',pending:[],safeLand:0,
-      sight:null,ack:false,ashore:false}:null;
+      sight:null,plotter:TideSurveyPlot.create(),ack:false,ashore:false}:null;
   }
   function begin(g){
     const r=g.survey;if(!r)return;
@@ -216,6 +216,11 @@ const TideSoundings=(()=>{
   function depth(g){const r=g.survey;return Math.min(...r.readings.filter(Number.isFinite));}
   const channels=[{u:.31,v:.66,bed:-3.78},{u:.71,v:.37,bed:-5.36}];
   function sightLine(r){
+    const p=r.plotter;
+    if(!p.legacy&&p.lines.length===2){
+      const fix=TideSurveyPlot.crossing(...p.lines),back=TideSurveyPlot.line(1,p.lines[1]);
+      return fix?{...fix,du:-back.du,dv:-back.dv}:null;
+    }
     if(!r.sight)return null;
     const {x,z,yaw}=r.sight;
     return {u:.669+(x-TideLookout.marks.stump.x)/32,v:.38+(z-TideLookout.marks.stump.z)/28,
@@ -224,6 +229,7 @@ const TideSoundings=(()=>{
   function chart(g,input,dt){
     const r=g.survey,w=g.watch;
     if(TideLookout.active(g)){
+      if(!r.plotter.legacy){TideSurveyPlot.observe(g,input,dt,say,secure);return;}
       const previous=w.step,before=w.marked;
       TideLookout.interact(g,input,dt);
       if(!before&&w.marked==='stump'){
@@ -232,26 +238,32 @@ const TideSoundings=(()=>{
       if(w.step!==previous){if(w.done)say(g,'rings');secure(g);}
       return;
     }
+    if(!r.plotter.legacy)TideLookout.observe(g,input,dt);
     if(!r.fixed&&g.engaged[0]){
       r.plot[0]=clamp(r.plot[0]+input[0].x*dt*.38,.05,.95);
       r.plot[1]=clamp(r.plot[1]+input[0].z*dt*.38,.06,.94);
     }
+    if(!r.plotter.legacy&&!r.plotter.pinned){TideSurveyPlot.pin(g,input,say,secure);return;}
     const dist=channels.map(c=>Math.hypot(c.u-r.plot[0],c.v-r.plot[1])),i=dist[1]<dist[0]?1:0;
-    const line=sightLine(r),offset=line?Math.abs((r.plot[0]-line.u)*32*line.dv*28-(r.plot[1]-line.v)*28*line.du*32):0;
+    const scale=r.plotter.legacy?32*28:TideSurveyPlot.width*TideSurveyPlot.height,line=sightLine(r);
+    const offset=line?Math.abs((r.plot[0]-line.u)*line.dv-(r.plot[1]-line.v)*line.du)*scale:0;
     const near=dist[i]<.060,under=depth(g)-channels[i].bed,water=depth(g);
     g.set(0,r.fixed?'保持图钉在侧槽，等船尾确认转向处。':'握住图台，移动透明十字。按双环断桩找测深点，把两次读数中更低的一笔压到图上。',{
       caption:'甲 '+r.readings[0].toFixed(2)+'　乙 '+r.readings[1].toFixed(2)+(near?'　·　槽深 '+under.toFixed(2)+' m':'　·　移到测深点')});
-    g.set(1,r.fixed?'海图已钉好。在电台按确认，向驾驶台报出通行水深。':'守在船尾观察，给林澈报出两道铁箍。渡轮吃水连余量需要 1.84 米。',{
-      caption:'船尾双环　·　最低水位 '+water.toFixed(2)+' m　·　'+(r.fixed?'等待发报':'等待岸上叠图')});
+    const exposedPile=w.seen==='stump',waiting=r.plotter.legacy?'在电台按确认，向驾驶台报出通行水深。':'继续转镜。等浪退、十字里看得清双环断桩，再按确认向驾驶台报水深。';
+    g.set(1,r.ack?'驾驶台在复述。':r.fixed?'海图已钉好。'+waiting:'守住船尾视线，让岸上核对双环断桩。渡轮吃水连余量需要 1.84 米。',{
+      caption:(r.fixed&&!r.plotter.legacy?(exposedPile?'双环在十字内':'等浪退，十字对桩'):'船尾双环')+'　·　最低水位 '+water.toFixed(2)+' m'});
     if(r.ack)return;
     if(!r.fixed&&g.commit(0,input)){
       if(!near){g.alert('图针没压在测深点上。看断桩符号旁边的等深线。');return;}
       if(under<1.84){if(r.voice!=='shallow')say(g,'shallow');g.alert('浪谷里龙骨余量不足，检查双环断桩旁的槽口。');return;}
-      if(offset>2.35){g.alert('图针离开船尾的实测方位线，往双环桩那一侧移一点。');return;}
+      if(offset>(r.plotter.legacy?2.35:3.1)){g.alert('图针离开船尾的实测方位线，往双环桩那一侧移一点。');return;}
       if(!g.engaged[1]){g.alert('船尾还没有人在听。');return;}
       r.fixed=true;secure(g);g.sound(521,.16);return;
     }
-    if(r.fixed&&g.engaged[0]&&g.commit(1,input)){
+    if(r.fixed&&g.commit(1,input)){
+      if(!g.engaged[0]){g.alert('读图的人还没扶住图台。等岸台就位再报。',1.6);return;}
+      if(!r.plotter.legacy&&!exposedPile){g.alert('船尾还看不清双环。保持观测，等桩顶从白沫里露出来。',1.8);return;}
       r.ack=true;secure(g);say(g,'safe','advance');
     }
   }
@@ -266,7 +278,7 @@ const TideSoundings=(()=>{
   function checkpoint(g){
     const r=g.survey;if(!r?.taken)return null;
     return {taken:true,carry:r.carry,mount:r.mount,safeLand:r.safeLand,readings:r.readings.slice(),jaw:r.jaw,
-      watch:g.watch?.step||0,plot:r.plot.slice(),fixed:r.fixed,ack:r.ack,sight:r.sight,ashore:r.ashore};
+      watch:g.watch?.step||0,plotter:TideSurveyPlot.checkpoint(r.plotter),plot:r.plot.slice(),fixed:r.fixed,ack:r.ack,sight:r.sight,ashore:r.ashore};
   }
   function restore(g,s){
     const r=g.survey,w=g.world.soundings;if(!r||!s?.taken)return;
@@ -280,8 +292,10 @@ const TideSoundings=(()=>{
     Object.assign(g.players[0],{x:a.x,y:a.y,z:a.z,ground:g.stage===2&&r.ashore?w.upper:r.safeLand>=2?w.piers[r.safeLand-2]:r.safeLand===1?w.sill:w.upper});
     if(g.stage===2){
       g.watch.step=clamp(s.watch|0,0,2);g.watch.done=g.watch.step===2;
+      TideSurveyPlot.restore(r.plotter,s.plotter,g.watch);
+      r.announced=r.plotter.reports.length>0||g.watch.step>0;
       if(Array.isArray(s.plot)&&s.plot.length===2&&s.plot.every(Number.isFinite))r.plot=s.plot.map(x=>clamp(x,0,1));
-      r.sight=s.sight&&[s.sight.x,s.sight.z,s.sight.yaw].every(Number.isFinite)?s.sight:null;r.fixed=g.watch.done&&s.fixed===true;r.ack=r.fixed&&s.ack===true;
+      r.sight=s.sight&&[s.sight.x,s.sight.z,s.sight.yaw].every(Number.isFinite)?s.sight:null;r.fixed=g.watch.done&&(r.plotter.legacy||r.plotter.pinned)&&s.fixed===true;r.ack=r.fixed&&s.ack===true;
       if(r.ack)say(g,'safe','advance');
     }else if(r.readings[g.stage]!=null){if(g.stage===0)g.advance();else say(g,'overlay','advance');}
   }

@@ -32,6 +32,7 @@ const TideReceiverAudio=(()=>{
     const buffers={},pending=new Set();
     let air=null,echo=null,swingSource=null,swingSerial=0,swingFoley=null;
     let haulSource=null,haulSerial=0,haulFoley=null;
+    let plotSource=null,plotSerial=0,plotFoley=null;
     let starter=null;
     const starterHits=new Map();
     let plateSource=null,plateSerial=0,plateFoley=null;
@@ -63,7 +64,7 @@ const TideReceiverAudio=(()=>{
       const source=ctx.createBufferSource(),gain=ctx.createGain(),filter=ctx.createBiquadFilter();
       source.buffer=buffer;source.loop=repeat;
       if(repeat){source.loopStart=key==='horn/diaphone'?.18:.04;source.loopEnd=key==='horn/diaphone'?1.7:2.2;}
-      const pan=key.startsWith('boat/')?TideArrivalSpeech[key.slice(5)]?.pan:undefined;
+      const pan=key.startsWith('boat/')?TideArrivalSpeech[key.slice(5)]?.pan:key.startsWith('tide/')?TideSoundingsSpeech[key.slice(5)]?.pan:undefined;
       const placement=Number.isFinite(pan)?ctx.createStereoPanner?.():null;
       filter.type='lowpass';filter.frequency.value=placement?8300:6400;gain.gain.value=volume;
       source.connect(filter).connect(gain);
@@ -87,7 +88,7 @@ const TideReceiverAudio=(()=>{
       if(clip){clip.gain.gain.setTargetAtTime(.0001,ctx.currentTime,.012);try{clip.source.stop(ctx.currentTime+.045);}catch{}}
       return null;
     }
-    function stop(){for(const hit of starterHits.values())hit.clip=end(hit.clip);plateFoley=end(plateFoley);haulFoley=end(haulFoley);arrivalFoley=end(arrivalFoley);swingFoley=end(swingFoley);air=end(air);if(echo){for(const node of Object.values(echo))node.disconnect();echo=null;}preview=end(preview);call=end(call);ratchet=end(ratchet);previousStroke=0;story=end(story);storyKey='';relay=end(relay);lastKey=false;}
+    function stop(){plotFoley=end(plotFoley);for(const hit of starterHits.values())hit.clip=end(hit.clip);plateFoley=end(plateFoley);haulFoley=end(haulFoley);arrivalFoley=end(arrivalFoley);swingFoley=end(swingFoley);air=end(air);if(echo){for(const node of Object.values(echo))node.disconnect();echo=null;}preview=end(preview);call=end(call);ratchet=end(ratchet);previousStroke=0;story=end(story);storyKey='';relay=end(relay);lastKey=false;}
     function quay(g){
       const a=g.cable,button=a.down||a.returnDown;
       if(button&&!lastKey){relay=end(relay);relay=play('relay',.72);}
@@ -171,6 +172,14 @@ const TideReceiverAudio=(()=>{
           if(r.down&&!air)air=play(key,.56,0,true);
           if(!r.down&&air)air=end(air);
           if(air){air.filter.frequency.setTargetAtTime(840+r.valve*1480,ctx.currentTime,.023);air.gain.gain.setTargetAtTime(.19+.47*r.pressure,ctx.currentTime,.023);}
+        }
+        if(g.survey){
+          const plot=g.survey.plotter;
+          if(plotSource!==plot){plotSource=plot;plotSerial=0;}
+          if(plot.serial!==plotSerial&&plot.cue&&buffers['tide/'+plot.cue]){
+            plotSerial=plot.serial;plotFoley=end(plotFoley);
+            plotFoley=play('tide/'+plot.cue,plot.cue==='plotPin'?.68:.82,Math.max(0,g.time-plot.at));
+          }
         }
         const starting=g.signal&&g.stage===0;
         if(starting)starterAudio(g);
