@@ -4,7 +4,7 @@ window.TideCinema = (() => {
   'use strict';
   const T = window.THREE;
   const TAU = Math.PI * 2;
-  const durations = {2:6.2,3:5.4,4:6.1,5:8.6,6:7.1,7:6.0,11:15.3};
+  const durations = {2:6.2,3:5.4,4:14.5,5:8.6,6:7.1,7:6.0,11:15.3};
   const clamp = T.MathUtils.clamp;
   const lerp = T.MathUtils.lerp;
   const smooth = n => {n=clamp(n,0,1);return n*n*(3-2*n);};
@@ -20,6 +20,7 @@ window.TideCinema = (() => {
     // Beside the last instrument, beyond the operator's normal standing space.
     const at=hub.sites[idx===7?1:0];
     shelf.position.set(at.x+.98,at.y+.85,at.z-1.15);
+    if(idx===4)shelf.position.set(0,.85,-3.42);
     if(idx===5){shelf.position.x+=2.15;shelf.position.y+=.23;}
     let clock=0, duration=0, playing=false, disposed=false;
     let cupboard, cup, tape, tin, screw, sheet, packet, green, marker;
@@ -201,7 +202,7 @@ window.TideCinema = (() => {
         box(shelf,.06,.043,.02,.67,.082,.40,rubber);
         box(shelf,-.19,.09,.04,.073,.026,.22,ivory);
         disc(shelf,.27,.10,.08,.036,.035,metal);
-        label(shelf,.05,.092,-.139,.35,.066,printed('双轨监听','01  ◼   02  ◼   ◀◀','#60746d','#dde1c9'));
+        label(shelf,.05,.092,-.139,.35,.066,printed('合听副本','机房  +  电台','#60746d','#dde1c9'));
         cup=enamel(shelf);cup.position.set(-.55,.02,-.12);
       }else if(idx===5){
         // The photocopy physically covers the original survey's pencil annotation.
@@ -458,7 +459,7 @@ window.TideCinema = (() => {
         }
       }else if(idx===4 || idx===6){
         if(hub.tram){const d=hub.tram.deck;shelf.position.set(d.x,d.y+.85,d.z-.88);}
-        const spin=(playing?1:Math.max(.16,g.state.dials[0]||0))*(t*2.7);
+        const spin=g.archive?((g.archive.review||0)+(playing?clock:0))*2.7:(playing?1:Math.max(.16,g.state.dials[0]||0))*(t*2.7);
         tape.userData.spools.forEach(r=>r.rotation.y=spin);
         if(screw){
           const roll=.12*Math.sin(t*2.8)*Math.cos(t*.24);
@@ -485,7 +486,12 @@ window.TideCinema = (() => {
     // Mark the partners on the shared landing for the short exchange after a task.
     // The active game keeps ownership of both actors and resumes from its checkpoints.
     function performance(side){
-      if(!playing||![5,6,7].includes(idx))return null;
+      if(!playing)return null;
+      if(idx===4){
+        const p=game.players[side];return {x:p.x,y:p.y,z:p.z,yaw:p.yaw,talking:!side&&clock<2.8,
+          gaze:side?-.14:.16,incline:side?.075:.045};
+      }
+      if(![5,6,7].includes(idx))return null;
       const t=clock,mid=hub.tram?.deck||hub.mid,hand=side?1:-1;
       const speaking=idx===5?(side===0?t<2.67:t>=2.74&&t<5.53):
         idx===6?(side===0?t<3.23:t>=3.42&&t<6.65):(side===0&&t<2.65);
@@ -510,8 +516,12 @@ window.TideCinema = (() => {
       }
       if(idx===3)return !i?subject(shelf,[-.46+f*.17,.47,.54],[-.16,.12+.18*Math.sin(f*Math.PI),.07]):
         subject(shelf,[.58,.50,.40],[.22,.07,-.035]);
-      if(idx===4)return !i?subject(shelf,[-.30+f*.22,.55,.41],[.06,.10,-.014]):
-        subject(shelf,[.42-f*.11,.35,-.43],[.085,.12,.017]);
+      if(idx===4){
+        if(!i&&t<3.0)return portrait(0,t);
+        if(i&&t>3.0)return portrait(1,t);
+        if(!i)return {eye:[-4.41,1.97,-3.89],at:[-4.53,1.51,-4.67],fov:46,handsOnly:true};
+        return subject(shelf,[.39-f*.12,.43,.48],[.06,.10,-.014]);
+      }
       if(idx===5){
         if(!i&&t>=2.7)return portrait(1,t);
         if(i&&t<2.7)return portrait(0,t);
@@ -539,7 +549,10 @@ window.TideCinema = (() => {
       const t=clock;
       if(idx===2)return t<2.8?'梁青　灯灭了，我看见了。':'沈遥　她已经漂进内流。我们得找到另一条路。';
       if(idx===3)return t<2.7?'林澈　杯底还有两个名字。':'沈遥　柜顶上，那是值班带。';
-      if(idx===4)return t<2.8?'灯机房　回转正常。':'测潮员　北线……还要复测。';
+      if(idx===4){
+        const captions=window.TideArchiveMedia?.coda?.captions||[[0,'林澈　丙三柜。我去拿原图。'],[3.0,'梁青　阿棠，从船尾再看一眼。'],[6.2,'阿棠　旧标和白浪，叠在一起了。'],[10,'梁青　我这边错开半扇窗。两处都记上。']];
+        let line='';for(const [at,text] of captions){if(t<at)break;line=text;}return line;
+      }
       if(idx===5)return t<2.7?'林澈　我看见备注没印出来。还在这儿划了一下。':t<5.65?'沈遥　我替我们两个人，按了那个确认。':'梁青　要是还不知道，就告诉我不知道。我可以给你们报浪。';
       if(idx===6)return t<3.4?'林澈　那次你猜的是雷声。':'沈遥　铁皮饼干盒。想再听一遍才故意猜错的。';
       if(idx===7)return t<2.8?'林澈　我只验过灯机。':'梁青　两句都收到了。阿棠，你从船尾报。';
@@ -554,7 +567,7 @@ window.TideCinema = (() => {
     }
     function begin(kind){
       if(disposed||kind!=='chapter-end'||!durations[idx])return false;
-      clock=0;duration=durations[idx];playing=true;renderedText='';
+      clock=0;duration=(idx===4?window.TideArchiveMedia?.coda?.duration:null)||durations[idx];playing=true;renderedText='';
       if(idx===11){setupFinal();newLabel.userData.repaint();}
       return true;
     }

@@ -4,13 +4,11 @@ const TideFieldWork=(()=>{
   const clamp=TideTraversal.clamp;
   const designs={
     cable:{pair:['电缆挂钩','收线轮'],first:['提起湿电缆','收紧上廊卷筒'],response:'支路已架离水面'},
-    tape:{pair:['触点拾音头','监听插口'],first:['手摇磁带寻找闭合声','监听回话的起点'],response:'两轨找到共同起点'},
     paper:{pair:['验收联','潮图底片'],first:['揭起纸角，让打孔透光','从灯箱另一侧寻找对应印痕'],response:'底片已固定，可以去透光台'},
     radio:{pair:['桅杆转台','发报稿夹'],first:['锁住桅杆底座','从夹页里抽出当前报文'],response:'接上桅杆馈线'},
     tide:{pair:['下标尺固定脚','上标尺基准'],first:['固定贴近水面的尺脚','对照上端的读数'],response:'同一把标尺已经归零'},
     optic:{pair:['凸轮定位销','检视镜'],first:['扣住凸轮上的基准孔','透过检视镜找重影'],response:'已取得侧镜基准'}
   };
-  const words=['机房','回转','未测'];
   function build(world,index) {
     const decks=world.floors;
     for(let k=0;k<world.sections.length;k++){
@@ -53,14 +51,6 @@ const TideFieldWork=(()=>{
         g.set(0,taut?'现在按住操作键，把电缆挂高':'等待收线轮拉直电缆',{vis:'dial',value:f.hold/1.45,caption:'挂钩锁定'});
         g.set(1,'按住操作键，左右调节收线轮张力',{vis:'dial',value:t,target:goal[1],band:w,caption:taut?'电缆已绷紧':'观察张力'});
         done=f.hold>1.45;break;
-      }
-      case 'tape':{
-        const phase=(g.time%3.3)/3.3,trigger=.24+step*.19;
-        if(tap(0)&&Math.abs(phase-trigger)<.115){f.phase=g.time;f.trained=true;g.sound(390,.10);}
-        if(f.trained&&g.time-f.phase>2.2)f.trained=false;
-        g.set(0,'看到继电器触点合拢时，按跳跃键取样',{vis:'wave',value:phase,target:trigger,band:.115,caption:'机械触点'});
-        g.set(1,'同伴取样后按跳跃键接上对应回话',{vis:'wave',value:phase,caption:f.trained?'听见「'+words[step]+'」· 现在接入':'等待触点闭合'});
-        done=f.trained&&tap(1);break;
       }
       case 'paper':{
         const level=f.values[0],lit=use[0]&&Math.abs(level-goal[0])<.10;

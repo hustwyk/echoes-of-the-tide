@@ -5,7 +5,7 @@ const journal=[];
 try {
   progress=Math.max(0,Math.min(levels.length,Math.floor(Number(localStorage.getItem('tide-progress'))||0)));
   const save=JSON.parse(localStorage.getItem('tide-3d-checkpoint'));
-  if(save && Number.isInteger(save.index) && save.index===progress && Number.isInteger(save.stage) && (save.stage>0||save.stage===0&&save.index===9&&save.lantern?.far===true) && save.stage<TideMissions.chapters[save.index]?.length)resume=save;
+  if(save && Number.isInteger(save.index) && save.index===progress && Number.isInteger(save.stage) && (save.stage>0||save.stage===0&&(save.index===9&&save.lantern?.far===true||save.index===4&&save.archive?.count>0)) && save.stage<TideMissions.chapters[save.index]?.length)resume=save;
 } catch {}
 const sound=new HarborSound();
 let wantsAudio=true;try{wantsAudio=localStorage.getItem('tide-audio')!=='off';}catch{}
@@ -49,9 +49,9 @@ function campaign() {
 
 function savePoint(g){
   if(g.index!==progress)return;
-  const mark=TideLantern.checkpoint(g),signal=TideSignal.checkpoint(g);
-  if(!g.stage&&!mark)return;
-  resume={index:g.index,stage:g.stage,...(mark?{lantern:mark}:{}),...(signal?{signal}:{})};
+  const mark=TideLantern.checkpoint(g),signal=TideSignal.checkpoint(g),archive=TideArchive.checkpoint(g);
+  if(!g.stage&&!mark&&!archive)return;
+  resume={index:g.index,stage:g.stage,...(mark?{lantern:mark}:{}),...(signal?{signal}:{}),...(archive?{archive}:{})};
   try{localStorage.setItem('tide-3d-checkpoint',JSON.stringify(resume));}catch{}
 }
 function clearInput(){
@@ -89,13 +89,14 @@ function onStage(g){
 function openLevel(n,stage=0,mark=null){
   if(info.open)info.close();
   if(!game.open)game.showModal();
-  sound.scene?.stop();window.speechSynthesis?.cancel();$('film').hidden=true;$('pause').disabled=true;
+  sound.stopScene();window.speechSynthesis?.cancel();$('film').hidden=true;$('pause').disabled=true;
   journal.length=0;
   clearInput();index=n;mode='loading';
   $('split').hidden=true;showStatus('正在准备场景');
   overlay.innerHTML='<div class="story"><h3>正在进入北岬</h3></div>';
   try{
     view??=new TideHarbor.WorldView(canvas);
+    if(n===4)TideTapeAudio.load();
     session=new TideCoop.Session(n,{
       stage:onStage,checkpoint:savePoint,alert:line=>{
         if(/^(林澈|沈遥|阿棠|梁青|海雁复述|值班员|测潮员|哐啷)/.test(line)){
@@ -111,7 +112,7 @@ function openLevel(n,stage=0,mark=null){
         deck.active=true;if(deck.hinge!==undefined){deck.unlocked=true;deck.hinge=1;}
       }
     }
-    if(mark){if(session.signal)TideSignal.restore(session,mark);else TideLantern.restore(session,mark);savePoint(session);}
+    if(mark){if(session.archive)TideArchive.restore(session,mark);else if(session.signal)TideSignal.restore(session,mark);else TideLantern.restore(session,mark);savePoint(session);}
     view.load(session);
   }catch(err){
     console.error(err);mode='error';
@@ -135,7 +136,7 @@ function startPlaying(announce){
   TideHud.update(session,padSlots);redraw=0;
 }
 function finishLevel(g){
-  $('pause').disabled=true;clearInput();sound.scene?.stop();window.speechSynthesis?.cancel();
+  $('pause').disabled=true;clearInput();sound.stopScene();window.speechSynthesis?.cancel();
   progress=Math.max(progress,index+1);
   if(resume?.index===index)resume=null;
   try{
@@ -151,6 +152,10 @@ function finishLevel(g){
 }
 function drawFilm(dt){
   const film=view.cinema, before=film.time;
+  if(index===4&&sound.enabled){
+    const recordingTime=sound.tape?.filmTime(film.time);
+    if(recordingTime!=null)dt=Math.max(0,recordingTime-film.time);
+  }
   if(!film.step(dt)){showDebrief(session);return;}
   if(index===11 && before<5.2 && film.time>=5.2)sound.cue('ending');
   view.draw(session,dt,false);
@@ -158,11 +163,11 @@ function drawFilm(dt){
   const line=film.subtitle();
   if($('subtitle').textContent!==line){
     $('subtitle').textContent=line;
-    if(voice&&sound.enabled&&line) say(line.split('　').at(-1));
+    if(index!==4&&voice&&sound.enabled&&line) say(line.split('　').at(-1));
   }
 }
 function showDebrief(g){
-  mode='won';$('film').hidden=true;$('split').hidden=true;
+  sound.tape?.stop();mode='won';$('film').hidden=true;$('split').hidden=true;
   const final=index===11;showStatus(final?'救援完成':'已保存章节进度');
   const coda='天亮后，两人把旧报告和自己的更正发给港口、渡轮与事故家属。阿棠寄来十秒钟的声音：绳子绷紧，杯盖落地，有人笑。沈遥在新带盒上写下了「北岬，第二盘」。';
   overlay.innerHTML='<div class="story"><small>无线电回话</small><h3>'+(final?'天亮之后':'行动完成')+'</h3><p>'+levels[index].after+'</p>'+(final?'<p>'+coda+'</p>':'')+'<p class="hint">用时 '+timeLabel(g.time)+'　·　安全索回收 '+g.setbacks+' 次</p><button class="primary">'+(final?'返回行动档案':'前往下一关')+'　›</button></div>';
@@ -174,7 +179,7 @@ function timeLabel(t){return Math.floor(t/60)+':'+String(Math.floor(t%60)).padSt
 function pause(){
   if(mode==='paused'){startPlaying(false);return;}
   if(mode!=='playing')return;
-  mode='paused';clearInput();sound.scene?.stop();window.speechSynthesis?.cancel();
+  mode='paused';clearInput();sound.stopScene();window.speechSynthesis?.cancel();
   $('pause').textContent='继续';
   overlay.innerHTML='<div class="story"><h3>行动暂停</h3><p>'+levels[index].name+'　/　'+session.spec.title+'</p><p class="hint">站到彩色光圈内，按住操作键使用设备。操作时可左右微调，按跳跃键确认。拖动各自的画面调整视角，双击可回正。</p><div class="pause-options"><button id="unpause">继续行动</button><button id="retry">重试此段</button><button id="quit">返回档案</button><button id="voice"></button><button id="quality"></button></div></div>';
   addJournal(overlay.querySelector('.story'),journal);
@@ -257,7 +262,7 @@ function frame(now){
   }
   if(mode!=='playing')return;
   view.draw(session,dt);
-  if(sound.enabled)sound.scene?.update(session,dt);
+  if(sound.enabled){sound.scene?.update(session,dt);sound.tape?.update(session);}
   if(!redraw||now-redraw>55){
     TideHud.update(session,padSlots);
     showStatus(session.noticeUntil>session.time?session.notice.replace(/\n/g,'　'):session.spec.title+'　·　靠近角色颜色的目标');
@@ -267,7 +272,7 @@ function frame(now){
 }
 requestAnimationFrame(frame);
 
-$('start').onclick=()=>openLevel(progress===12?0:progress,resume?.index===progress?resume.stage:0,resume?.index===progress?resume.lantern||resume.signal:null);
+$('start').onclick=()=>openLevel(progress===12?0:progress,resume?.index===progress?resume.stage:0,resume?.index===progress?resume.lantern||resume.signal||resume.archive:null);
 $('skip').onclick=()=>{if(mode==='cinema'){view.cinema.skip();showDebrief(session);}};
 $('pause').onclick=pause;$('sound').onclick=$('field-audio').onclick=toggleAudio;
 $('expand').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else if(game.requestFullscreen)await game.requestFullscreen();}catch{showStatus('当前窗口已使用可用的最大画面');}};
@@ -283,8 +288,8 @@ document.addEventListener('keydown',e=>{
 });
 document.addEventListener('keyup',e=>keys.delete(e.code));
 window.addEventListener('blur',()=>{if(mode==='playing')pause();else clearInput();});
-document.addEventListener('visibilitychange',()=>{if(document.hidden&&mode==='playing')pause();clearInput();});
-game.addEventListener('close',()=>{if(!game.open){mode='menu';clearInput();sound.scene?.stop();window.speechSynthesis?.cancel();view?.free();session=null;}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&mode==='playing')pause();if(document.hidden&&mode==='cinema')sound.tape?.stop();clearInput();});
+game.addEventListener('close',()=>{if(!game.open){mode='menu';clearInput();sound.stopScene();window.speechSynthesis?.cancel();view?.free();session=null;}});
 game.addEventListener('cancel',e=>{
   if(mode==='cinema'){e.preventDefault();$('skip').click();}
   else if(mode==='playing'||mode==='paused'){e.preventDefault();pause();}
