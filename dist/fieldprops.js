@@ -314,41 +314,7 @@ window.TideFieldProps=(()=>{
         bubble.scale.setScalar(.10+.49*phase);bubble.visible=phase<.78;
       });
     }
-    function archiveStrip(g){
-      const s=g.section.sites,p=offset(s[0],1.12,1.13,-1.4);
-      stand(offset(p,0,-1.13,0),1.5,1.02);bolted(p,1.53,.72,.15,iron);
-      const strip=texture(768,288,(c,W,H)=>{
-        c.fillStyle='#192e32';c.fillRect(0,0,W,H);
-        c.font='bold 20px monospace';c.fillStyle='#c7cbb7';c.fillText('A   MECHANISM',22,36);c.fillText('B   RADIO',22,168);
-        for(let track=0;track<2;track++){
-          c.strokeStyle=track?'#a3d9c2':'#ecc490';c.lineWidth=2;c.beginPath();
-          for(let x=0;x<W;x++){
-            const envelope=.18+Math.pow(Math.abs(Math.sin(x*.012+track*2)),5)*.82;
-            const y=82+track*124+Math.sin(x*(track?.19:.38))*Math.cos(x*.07)*envelope*31;
-            if(x===0)c.moveTo(x,y);else c.lineTo(x,y);
-          }c.stroke();
-          c.strokeStyle='#567a79';c.lineWidth=1;
-          for(let j=0;j<30;j++)c.strokeRect(j*26,114+track*124,1,j%5?5:13);
-        }
-      });
-      mesh(plane,local(new T.MeshStandardMaterial({map:strip,emissive:0x182122})),offset(p,0,0,.083),1.4,.56);
-      const heads=[0,1].map((i)=>mesh(cube,emit(i?cool:hot),offset(p,0,.13-i*.27,.094),.013,.220,.006));
-      const reels=[];
-      for(const dx of [-.42,.42]){
-        const p2=offset(s[1],dx,1.09,-1.61);
-        tube(offset(p2,0,0,-.03),.23,.09,seal,Math.PI/2);rim(p2,.215,worn);
-        const r=new T.Group();section.add(r);r.position.copy(offset(p2,0,0,.017));
-        for(let k=0;k<3;k++)shaft(r,v(0,0,0),v(Math.cos(k*TAU/3)*.202,Math.sin(k*TAU/3)*.202,0),.020,worn);
-        reels.push(r);
-      }
-      rod(offset(s[1],-.42,.892,-1.59),offset(s[1],.42,.892,-1.59),.009,'#4c3025');
-      animation.push(s=>{
-        for(let i=0;i<2;i++){
-          heads[i].position.x=p.x+(s.state.dials[i]-.5)*1.38;
-          reels[i].rotation.z=TAU*2*s.state.dials[i];
-        }
-      });
-    }
+
     function chartSheet(copy,stage){
       return texture(860,540,(c,w,h)=>{
         let seed=(copy?781:1061)+stage*481;
@@ -632,18 +598,6 @@ window.TideFieldProps=(()=>{
           }
           hose.instanceMatrix.needsUpdate=true;drum.rotation.z=TAU*(f.done?goal[1]:f.values[1]);
         });
-      }else if(kind==='tape'){
-        const p=offset(left,0,.78,0);stand(left,.73,.79);
-        bolted(p,.90,.51,.13,iron);rod(offset(p,-.29,-.10,.102),offset(p,.29,-.10,.102),.020,brass);
-        const contact=new T.Group();section.add(contact);contact.position.copy(offset(p,-.30,-.03,.13));
-        shaft(contact,v(0,0,0),v(.47,.045,0),.026,copper);
-        const l=pilot(offset(p,.30,.11,.11),hot,.049);
-        const r=pilot(offset(right,0,1.07,0),cool,.075);
-        animation.push(s=>{
-          const phase=(s.time%3.3)/3.3,trig=.24+s.stage*.19;
-          const closed=Math.abs(phase-trig)<.115;
-          contact.rotation.z=closed?-.19:.39;l(closed);r(s.field.trained||s.field.done);
-        });
       }else if(kind==='paper'){
         for(let i=0;i<2;i++){
           const base=i?right:left,p=offset(base,0,.95,0);
@@ -702,7 +656,7 @@ window.TideFieldProps=(()=>{
       }
     }
     const builders={ride:tug,cable:harborsideCable,
-      tape:archiveStrip,paper:lightTable,radio:relay,tide:soundings,post:soundings,optic:optics,rhythm:signals,release:signals};
+      paper:lightTable,radio:relay,tide:soundings,post:soundings,optic:optics,rhythm:signals,release:signals};
     function clearSection(){
       animation.length=0;
       if(section){section.removeFromParent();section.clear();}

@@ -31,8 +31,8 @@ const TideCoop = (() => {
   }
   class Session {
     constructor(index,events={}) {
-      this.index=index;this.world=index===2?TideSignal.layout():index===9?TideLantern.layout():TideTraversal.build(index);this.events=events;
-      TideRigging.build(this.world);TideDrawbridge.build(this.world);if(!this.world.lantern&&!this.world.signal)TideFieldWork.build(this.world,index);
+      this.index=index;this.world=index===2?TideSignal.layout():index===4?TideArchive.layout():index===9?TideLantern.layout():TideTraversal.build(index);this.events=events;
+      TideRigging.build(this.world);TideDrawbridge.build(this.world);if(!this.world.lantern&&!this.world.signal&&!this.world.archive)TideFieldWork.build(this.world,index);
       this.time=0;this.stage=0;this.setbacks=0;this.complete=false;this.notice='';this.noticeUntil=0;
       this.cues={light:0,angle:0,water:-4,rescue:0,ghost:0};
       this.signal=TideSignal.create(this);
@@ -50,7 +50,7 @@ const TideCoop = (() => {
         returnGate:0,balance:0,warnUntil:0,buttonCooldown:0,releaseHeld:false,catchup:0};
       if(this.spec.type==='ride')this.state.dials[this.spec.driver]=.50;
       this.rig=TideRigging.reset(this);this.paper=TidePaper.create(this);this.optic=TideLantern.create(this);
-      if(this.optic){this.cues.light=.97;this.cues.rays=TideLantern.viewData(this).images;}TideFieldWork.reset(this);TideLookout.reset(this);TideSignal.begin(this);
+      if(this.optic){this.cues.light=.97;this.cues.rays=TideLantern.viewData(this).images;}TideFieldWork.reset(this);TideLookout.reset(this);TideSignal.begin(this);TideArchive.begin(this);
       this.events.stage?.(this);
     }
     alert(text,seconds=2.5) {
@@ -83,7 +83,7 @@ const TideCoop = (() => {
         this.checkpoints=section.ends.slice();this.stage++;this.begin();return;
       }
       const activeSites=this.field.done?section.sites:section.field.sites;
-      this.near=this.players.map((p,i)=>near(p,activeSites[i]));
+      this.near=this.players.map((p,i)=>this.archive?TideArchive.near(this,i):near(p,activeSites[i]));
       if(this.signal&&this.stage===2)this.near[0]&&=this.players[0].ground===this.world.signal.head;
       const cart=this.spec.mode==='bridge'&&!section.span.seated;
       if(cart)this.near[1-this.spec.driver]=TideDrawbridge.onCart(this,1-this.spec.driver,{use:true});
@@ -95,7 +95,8 @@ const TideCoop = (() => {
         const p=this.players[side];
         TideTraversal.move(p,inputs[side],dt,this.world,yaws[side],this.engaged[side]||TideRigging.lighting(this,side,inputs[side]));
         TidePassage.collide(this,p);
-        if(this.signal){if(this.engaged[side])TideSignal.stand(this,side,dt);}
+        if(this.archive){TideArchive.collide(this,p);if(this.engaged[side])TideArchive.stance(this,side,dt);}
+        else if(this.signal){if(this.engaged[side])TideSignal.stand(this,side,dt);}
         else if(this.optic){TideLantern.collide(p);if(this.engaged[side])TideLantern.stance(this,side,dt);}
         else if(this.engaged[side]&&!(cart&&side!==this.spec.driver))approachInstrument(this,side,activeSites[side],dt);
         if(p.y<Math.min(...section.starts.map(d=>d.y),...section.ends.map(d=>d.y))-4.2) {
@@ -106,6 +107,7 @@ const TideCoop = (() => {
       }
       if(prevStaff)TideDrawbridge.carry(this,inputs,dt,prevStaff);
       if(q.doneAt!==null)return;
+      if(this.archive){TideArchive.interact(this,inputs,dt);return;}
       if(this.optic){TideLantern.interact(this,inputs,dt);return;}
       if(this.signal){if(!TideLookout.interact(this,inputs,dt))TideSignal.interact(this,inputs,dt);return;}
       if(!TideFieldWork.interact(this,inputs,dt)&&!TideLookout.interact(this,inputs,dt))handlers[this.spec.type](this,inputs,dt);
@@ -172,25 +174,23 @@ const TideCoop = (() => {
     }
   }
   function alignment(g,input,dt){
-    const q=g.state,s=g.spec,mode=s.type;
-    const tolerance=mode==='optic'?.052:.072;
-    const strict=mode==='optic' && g.index===11;
+    const q=g.state,s=g.spec;
+    const tolerance=.052;
+    const strict=g.index===11;
     const targets=s.v.map((v,i)=>clamp(v+(strict?.095*Math.sin(g.time*.49+i):0),0,1));
     const vals=[g.tune(0,input,dt),g.tune(1,input,dt)];
     const ok=vals.map((v,i)=>Math.abs(v-targets[i])<tolerance);
     const two=g.engaged.every(Boolean);
-    if(mode==='optic'){g.cues.light=.95;g.cues.angle=(vals[0]-.5)*.9;g.cues.ghost=Math.abs(vals[1]-targets[1])*.48;}
-    const instructions=mode==='tape'?['左右倒带，找到继电器闭合处','微调接收频率，让回话显形']:['转动手轮，按同伴读数调光','调整焦距，观察光束落点'];
+    g.cues.light=.95;g.cues.angle=(vals[0]-.5)*.9;g.cues.ghost=Math.abs(vals[1]-targets[1])*.48;
+    const instructions=['转动手轮，按同伴读数调光','调整焦距，观察光束落点'];
     for(let i=0;i<2;i++){
       const peer=1-i;
-      g.set(i,instructions[i],{vis:mode==='tape'?'wave':'optic',
+      g.set(i,instructions[i],{vis:'optic',
         value:vals[i],target:null,band:tolerance,
         peer:vals[peer],peerTarget:targets[peer],caption:'本端 '+percent(vals[i])+'　·　同伴应调至 '+percent(targets[peer]),ok:ok[i]});
     }
     q.hold=two&&ok.every(Boolean)?q.hold+dt:0;
-    if(q.hold>(strict?1.7:1.05)){
-      if(s.clip)g.alert(s.clip,3);g.advance();
-    }
+    if(q.hold>(strict?1.7:1.05))g.advance();
   }
   function radio(g,input,dt){
     const s=g.spec,q=g.state,target=s.v[0]+Math.sin(g.time*.42)*.105;
@@ -330,6 +330,6 @@ const TideCoop = (() => {
       if(g.cues.rescue===1 && g.commit(0,input))g.advance();
     }
   }
-  const handlers={ride,cable,tape:alignment,paper:TidePaper.interact,optic:alignment,radio,tide,post,rhythm,quiet,release};
+  const handlers={ride,cable,paper:TidePaper.interact,optic:alignment,radio,tide,post,rhythm,quiet,release};
   return {Session,roleKeys,near,ridePressure};
 })();

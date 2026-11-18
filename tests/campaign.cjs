@@ -3,10 +3,10 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const box=vm.createContext({});
-for(const name of ['missions','traversal','passage','rigging','drawbridge','fieldwork','lookout','paper','lantern','signal','cooperation']){
+for(const name of ['missions','traversal','passage','rigging','drawbridge','fieldwork','lookout','paper','lantern','signal','archive','cooperation']){
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../dist',name+'.js'),'utf8'),box);
 }
-const {Session,near,surface,lookout,ridePressure,TideLantern,TideSignal}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure,TideLantern,TideSignal})',box);
+const {Session,near,surface,lookout,ridePressure,TideLantern,TideSignal,TideArchive}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure,TideLantern,TideSignal,TideArchive})',box);
 const empty=()=>({x:0,z:0,use:false,jump:false});
 function steer(g,i,target,keys){
   const p=g.players[i],dx=target.x-p.x,dz=target.z-p.z,dist=Math.hypot(dx,dz);
@@ -83,8 +83,41 @@ function signalInputs(g,out){
   }
   return out;
 }
+function archiveInputs(g,out){
+  const a=g.archive,roll=TideArchive.rolls[g.stage],sample=TideArchive.samples(g);
+  const pin=roll.pins[Math.min(a.count,roll.pins.length-1)],lead=g.stage===2?1:0;
+  for(let i=0;i<2;i++){
+    const k=out[i],p=g.players[i],side=i?1:-1,site=g.section.sites[i];
+    if(!TideArchive.near(g,i)){
+      const far=a.location[i]!=='desks'&&p.z>-.10&&p.x*side<3.57;
+      const behind=a.location[i]==='desks'&&p.z<1.39;
+      steer(g,i,far?{x:side*3.84,y:0,z:2.05}:behind?{x:side*3.68,y:0,z:2.06}:site,k);
+      continue;
+    }
+    if(a.keys){
+      k.use=true;
+      if(!i){k.x=a.keys.col<2?1:0;k.z=a.keys.row<2?1:0;k.jump=!a.keys.held&&a.keys.col===2&&a.keys.row===2;}
+      else k.jump=a.keys.held;
+      continue;
+    }
+    if(a.review!==null)continue;
+    k.use=true;
+    if(!a.sourceLoaded){k.jump=!a.mounted[i];continue;}
+    if(a.count===roll.pins.length)continue;
+    const diff=pin[0]-sample[i],axis=x=>Math.max(-1,Math.min(1,x));
+    const mayPunch=i===lead?!a.pending:!!a.pending;
+    if(i===0)k.x=Math.abs(diff)>.16?axis(diff*2.2):0;
+    else{
+      k.z=Math.abs(diff)>.16?-axis(diff*4):0;
+      k.x=axis((pin[1]-a.tuning)*11);
+    }
+    k.jump=mayPunch&&Math.abs(diff)<.20&&(!i||Math.abs(a.tuning-pin[1])<.08);
+  }
+  return out;
+}
 function control(g){
   const out=[empty(),empty()],sec=g.section,s=g.spec,q=g.state;
+  if(g.archive)return archiveInputs(g,out);
   if(g.signal)return signalInputs(g,out);
   if(g.optic){
     const o=g.optic,k=o.phase;
@@ -126,7 +159,6 @@ function control(g){
       const move=(i,v)=>{out[i].x=Math.max(-1,Math.min(1,(v-f.values[i])*25));};
       switch(s.type){
         case 'cable':move(1,.74-.13*step);break;
-        case 'tape':out[0].jump=Math.abs((g.time%3.3)/3.3-.24-step*.19)<.07;out[1].jump=f.trained;break;
         case 'paper':move(0,.28+.16*step);out[1].jump=true;break;
         case 'radio':out[0].jump=true;move(1,(step+.5)/3);out[1].jump=true;break;
         case 'tide':out[1].jump=true;break;
@@ -215,7 +247,7 @@ function control(g){
       else{out[r].x=axis(p.angle);out[r].z=axis(p.light-p.lightTarget);out[r].jump=p.revealed;}
       break;
     }
-    case 'tape':case 'optic':
+    case 'optic':
       for(let i=0;i<2;i++)trim(i,s.v[i]+(g.index===11?.095*Math.sin(g.time*.49+i):0));break;
     case 'radio':out[0].jump=q.received>0;trim(0,s.v[0]+Math.sin(g.time*.42)*.105);trim(1,(s.answer+.5)/3);
       out[1].jump=Math.floor(q.dials[1]*3)===s.answer && Math.abs(q.dials[0]-s.v[0]-Math.sin(g.time*.42)*.105)<.075;break;
@@ -264,6 +296,55 @@ if(require.main===module){
     for(let j=0;j<60*120&&!condition()&&!g.complete;j++)g.tick(step,control(g));
     assert.ok(condition(),'Did not reach checkpoint in chapter '+(g.index+1)+' stage '+g.stage);
   }
+  // Each head is independent. A stationary key, unpaired punch or mismatched
+  // reply cannot register tape. A correct grease mark survives winding and reload.
+  const recorder=new Session(4);
+  reach(recorder,()=>recorder.engaged.every(Boolean));
+  const press=(side,jump=false)=>[0,1].map(i=>({...empty(),use:true,jump:i===side&&jump}));
+  for(let n=0;n<240;n++)recorder.tick(step,press(-1,true));
+  assert.equal(recorder.archive.count,0);
+  function shuttle(g,side,to,tune,commit=false){
+    const r=g.archive,axis=n=>Math.max(-1,Math.min(1,n));
+    for(let n=0;n<3000;n++){
+      const pos=TideArchive.samples(g)[side],diff=to-pos,k=press(-1);
+      if(!side)k[0].x=Math.abs(diff)>.11?axis(diff*2.2):0;
+      else{k[1].z=Math.abs(diff)>.11?-axis(diff*3.5):0;k[1].x=axis((tune-r.tuning)*10);}
+      if(Math.abs(diff)<.14&&(!side||Math.abs(tune-r.tuning)<.025)){
+        k[side].jump=commit;g.tick(step,k);return;
+      }
+      g.tick(step,k);
+    }
+    assert.fail('Tape head failed to find requested event.');
+  }
+  shuttle(recorder,1,3,.49,true);assert.equal(recorder.archive.count,0);
+  shuttle(recorder,0,3,0,true);assert.equal(recorder.archive.pending.index,0);
+  shuttle(recorder,1,9.4,.53,true);assert.equal(recorder.archive.pending,null);assert.equal(recorder.archive.count,0);
+  reach(recorder,()=>recorder.archive.count===1);
+  const grease=TideArchive.checkpoint(recorder),savedTape=new Session(4);TideArchive.restore(savedTape,grease);
+  assert.equal(savedTape.archive.count,1);
+  reach(savedTape,()=>savedTape.stage===1&&savedTape.archive.fetched.some(Boolean));
+  const packed=TideArchive.checkpoint(savedTape),shelfCopy=new Session(4);
+  shelfCopy.stage=1;shelfCopy.begin();TideArchive.restore(shelfCopy,packed);
+  assert.deepEqual(TideArchive.checkpoint(shelfCopy),packed);
+  reach(savedTape,()=>savedTape.archive.sourceLoaded&&savedTape.near.every(Boolean));
+  shuttle(savedTape,0,3.4,0,true);shuttle(savedTape,1,3.4,.9,true);
+  assert.equal(savedTape.archive.count,0);assert.ok(savedTape.archive.pending);
+  shuttle(savedTape,1,3.4,.38,true);assert.equal(savedTape.archive.count,1);
+  reach(savedTape,()=>savedTape.stage===2&&savedTape.archive.review!==null);
+  for(let n=0;n<90;n++)savedTape.tick(step,press(-1));
+  assert.equal(savedTape.archive.review,0);
+  const released=[empty(),empty()];
+  for(let n=0;n<450;n++)savedTape.tick(step,released);
+  assert.ok(savedTape.archive.review>7&&savedTape.archive.review<8&&!savedTape.archive.keys);
+  reach(savedTape,()=>!!savedTape.archive.keys);
+  const keysSave=TideArchive.checkpoint(savedTape),restoredKeys=new Session(4);
+  restoredKeys.stage=2;restoredKeys.begin();TideArchive.restore(restoredKeys,keysSave);
+  assert.ok(restoredKeys.archive.keys&&restoredKeys.archive.count===3);
+  reach(restoredKeys,()=>TideArchive.near(restoredKeys,0)&&TideArchive.near(restoredKeys,1));
+  restoredKeys.tick(step,press(0,true));assert.ok(restoredKeys.archive.keys.held);
+  restoredKeys.tick(step,press(1,true));
+  assert.ok(!restoredKeys.archive.keys.held&&!restoredKeys.complete&&!restoredKeys.archive.keys.accepted);
+  reach(restoredKeys,()=>restoredKeys.complete);assert.ok(restoredKeys.archive.keys.accepted);
   const station=new Session(2),range=station.signal,w=station.world.signal;
   reach(station,()=>station.near.every(Boolean));
   for(let n=0;n<300;n++)station.tick(step,[{...empty(),use:true,z:1},{...empty(),use:true,jump:true}]);
@@ -441,5 +522,5 @@ if(require.main===module){
     quiet.tick(1/60,inputs);
   }
   assert.ok(quiet.complete&&quiet.skipTin);
-  console.log('Verified both roles, basket mark, hydraulic sill, two drawbridge catches, folding staff, shared cable car, lantern shutters, optical carriage and saved guide positions, paper registration, final radio release and optional recording.');
+  console.log('Verified both roles, basket mark, hydraulic sill, two drawbridge catches, folding staff, shared cable car, lantern shutters, optical carriage and saved guide positions, tape transport, wrong splices, cabinet keys, paper registration, final radio release and optional recording.');
 }

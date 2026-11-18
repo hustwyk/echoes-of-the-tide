@@ -13,6 +13,29 @@ const TideHud=(()=>{
     c.strokeStyle='#254044';c.lineWidth=1;
     for(let x=0;x<w;x+=30)line(c,'#294243',x,0,x,h,1);
     for(let y=0;y<h;y+=20)line(c,'#294243',0,y,w,y,1);
+    if(r.vis==='archive'){
+      const wave=window.TideArchiveMedia?.[r.wave]?.[r.side]?.wave;
+      const scale=r.scale||1,zero=r.zero||0,horizon=7.2,counter=zero+r.head*scale;
+      const start=Math.min(zero+15*scale-horizon,Math.max(0,counter-horizon*.42));
+      const screen=t=>(zero+t*scale-start)*w/horizon;
+      c.fillStyle=i?'#5b9991':'#af8b5b';
+      for(let t=Math.ceil(start);t<=start+horizon;t++)line(c,'#465958',(t-start)*w/horizon,8,(t-start)*w/horizon,73,1);
+      if(wave){
+        for(let x=0;x<w;x+=2){
+          const t=(start+x*horizon/w-zero)/scale;if(t<0)continue;
+          const v=wave[Math.min(wave.length-1,Math.floor(t*wave.length/15))]/255;
+          const height=(3+v*31)*(.4+.6*r.clarity);
+          c.fillRect(x,41-height,1.6,2*height);
+        }
+      }
+      for(const at of r.marks){
+        const x=screen(at);line(c,'#c29455',x,0,x,h,3);
+        c.fillStyle='#e2b77e';c.fillRect(x-5,0,10,8);
+      }
+      if(r.provisional!=null)line(c,'#f0e7c0',screen(r.provisional),0,screen(r.provisional),h,2);
+      line(c,pix[i],screen(r.head),0,screen(r.head),h,3);
+      return;
+    }
     if(r.vis==='chart'){
       for(let layer=0;layer<2;layer++){
         const off=layer?(r.value-(r.target??.5))*135:0;
@@ -46,13 +69,17 @@ const TideHud=(()=>{
       const here=close||g.signal&&g.stage===2&&i===0&&!g.signal.pinned||riding||!!g.section.tram,tag=TideHarbor.targetFor(g,i).name;
       const title=g.state.doneAt!==null?'已完成 · '+s.title:(g.stage+1)+' / '+g.world.sections.length+'　'+s.title;
       set(v.querySelector('.tool'),title);
-      set(v.querySelector('.instruction'),here?r.text||'靠近设备开始操作':g.signal?'前往'+tag:g.optic?'沿塔顶外环前往'+tag:'前往'+tag+'，沿灯带通过栈桥');
+      set(v.querySelector('.instruction'),here?r.text||'靠近设备开始操作':g.archive?'前往'+tag:g.signal?'前往'+tag:g.optic?'沿塔顶外环前往'+tag:'前往'+tag+'，沿灯带通过栈桥');
       const m=v.querySelector('.meter'),reading=v.querySelector('.reading');
       m.hidden=!here||!r.vis;reading.hidden=!here||!r.caption;
       if(!m.hidden)meter(m,r,i,g.time);
       set(reading,r.caption||'');
       const tips=pads[i]!=null?'左摇杆移动　A 跳跃/确认　RT 操作　右摇杆视角':k.use+' 操作　'+k.jump+' 跳跃 / 操作中确认　'+k.trim+' 微调';
-      set(v.querySelector('.control-hint'),tips);
+      const work=g.archive&&here&&g.archive.sourceLoaded&&g.archive.review===null;
+      const bindings=pads[i]!=null?(i?'RT 操作　上下走带　左右调谐　A 压针':'RT 操作　左右快拨　前推慢放　后拉刹带　A 压针'):
+        (i?'Enter 操作　↑ 前进 / ↓ 倒带　← → 调谐　/ 压针':'E 操作　A / D 快拨　W 慢放　S 刹带　空格压针');
+      const rack=g.archive?.keys&&here;
+      set(v.querySelector('.control-hint'),rack?(i?'向前重听　操作中确认登记':'左右选列，前后选层　操作中确认提起 / 放回'):work?bindings:tips);
     }
   }
   return {build,update};

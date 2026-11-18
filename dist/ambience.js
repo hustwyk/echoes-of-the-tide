@@ -449,7 +449,7 @@ window.TideAudioScene = (() => {
       }
       for (let i = 0; i < 2; i++) {
         motion(g,clamp(Number(dt) || 0,0,.16),now,i);
-        instruments(g,now,i);
+        if(!g.archive)instruments(g,now,i);
       }
       changes(g,now);
       if (now >= mix.nextMix) {
