@@ -165,7 +165,7 @@ const TideHarbor = (() => {
       this.transitRig=g.signal?TideTransitRig.create(this.scene,g):null;
       this.transitGlass=g.signal?TideTransitGlass.create(this.scene):null;
       this.transitOptics=g.signal?TideTransitOptics.create(this.scene,g):null;
-      this.signalhouse=g.signal?TideSignalHouse.create(this.scene,g,this.equipment):null;
+      this.signalhouse=g.signal?TideSignalHouse.create(this.scene,g,this.equipment,this.renderer.capabilities.isWebGL2):null;
       this.childDuo=this.screwTable=this.summerRoom=null;
       this.archiveStudio=g.archive?TideArchiveStudio.create(this.scene,g,this.renderer):null;
       this.galleryWall=g.world.gallery?TideGalleryWall.create(this.scene,g):null;
