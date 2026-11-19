@@ -1,7 +1,7 @@
 // The machinery, working grips and lamp share the local frame of the station's traversable surfaces.
 const TideSignalHouse=(()=>{
   const T=THREE,TAU=2*Math.PI;
-  function create(scene,g,equipment){
+  function create(scene,g,equipment,skinClutch=true){
     const owned=new Set(),own=a=>(owned.add(a),a),root=new T.Group(),origin=TideSignal.point(0,0,0);
     root.position.set(origin.x,0,origin.z);root.rotation.y=TideSignal.yaw;scene.add(root);
     const paint=TideSteel.material(0,own,true),plate=TideSteel.material(1,own);
@@ -71,7 +71,7 @@ const TideSignalHouse=(()=>{
     rails(-6.53,17.78,-6.53,10,0);rails(6.53,17.78,6.53,10,0);
     rails(-6.53,8.5,-6.53,5.65,.66);rails(-6.45,5.6,-1.10,5.6,.66);
     rails(6.42,8.55,6.42,2.80,.66);rails(2.05,2.70,6.40,2.70,.66);
-    const benches=[TideStarterBench.create(root,own),TideClutchBench.create(root,own)];
+    const benches=[TideStarterBench.create(root,own),TideClutchBench.create(root,own,skinClutch)];
     const pegs=(parent,a,b)=>[group(parent,...a),group(parent,...b)];
     const install=(s,type,i)=>{
       const pos=TideSignal.local(s),dev=equipment.device(type,i);

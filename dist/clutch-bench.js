@@ -2,7 +2,7 @@
 const TideClutchBench=(()=>{
   const T=THREE,PI=Math.PI,TAU=PI*2,clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
   const sx=3.70,sz=12.11,V=(x=0,y=0,z=0)=>new T.Vector3(x,y,z);
-  function create(parent,register){
+  function create(parent,register,skinClutch=true){
     const retained=new Set(),keep=o=>{if(register)register(o);else retained.add(o);return o;};
     const root=new T.Group();root.name='北岬机房 · 离合试灯台';
     let seed=0x2ac174a;const rng=()=>((seed=(Math.imul(1664525,seed)+1013904223)>>>0)/4294967296);
@@ -37,7 +37,8 @@ const TideClutchBench=(()=>{
       sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nvarying vec2 vMachining;')
       .replace('#include <metalnessmap_fragment>','#include <metalnessmap_fragment>\nmetalnessFactor*=vMachining.x;')
       .replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\nroughnessFactor*=vMachining.y;');};
-    const bones=[],bind=new Map(),fixed={p:[],n:[],uv:[],i:[],c:[],m:[]},moving={p:[],n:[],uv:[],i:[],c:[],m:[],ids:[],weights:[]},axisY=V(0,1,0),vv=V(),nn=V(),M=new T.Matrix4(),N=new T.Matrix3(),quat=new T.Quaternion(),one=V(1,1,1);
+    const geometryData=()=>({p:[],n:[],uv:[],i:[],c:[],m:[]});
+    const rigidParts=new Map(),bones=[],bind=new Map(),fixed=geometryData(),moving={...geometryData(),ids:[],weights:[]},axisY=V(0,1,0),vv=V(),nn=V(),M=new T.Matrix4(),N=new T.Matrix3(),quat=new T.Quaternion(),one=V(1,1,1);
     const tree=new T.Bone();tree.name='机台连杆系';bones.push(tree);bind.set(tree,new T.Matrix4());
     function hinge(name,x,y,z,par=tree,tilt=0){
       const b=new T.Bone();b.name=name;b.position.set(x,y,z);b.rotation.x=tilt;par.add(b);bones.push(b);
@@ -46,12 +47,17 @@ const TideClutchBench=(()=>{
     const templates=new Map(),geo=(id,make)=>{if(!templates.has(id))templates.set(id,make());return templates.get(id);};
     const unitBox=geo('box',()=>new T.BoxGeometry(1,1,1)),sphere=geo('ball',()=>new T.SphereGeometry(1,22,12));
     function stamp(b,g,type,loc,scale=one,rot=[0,0,0]){
-      const bucket=b?moving:fixed,idx=b?bones.indexOf(b):0;M.compose(loc,rot.isQuaternion?rot:quat.setFromEuler(new T.Euler(...rot)),scale);if(b)M.premultiply(bind.get(b));N.getNormalMatrix(M);
+      let bucket=b?moving:fixed;
+      if(b&&!skinClutch){
+        if(!rigidParts.has(b))rigidParts.set(b,geometryData());
+        bucket=rigidParts.get(b);
+      }
+      const idx=b&&skinClutch?bones.indexOf(b):0;M.compose(loc,rot.isQuaternion?rot:quat.setFromEuler(new T.Euler(...rot)),scale);if(b)M.premultiply(bind.get(b));N.getNormalMatrix(M);
       const off=bucket.p.length/3,cs=metal[type]||type,color=new T.Color(cs[0]),cp=g.attributes.position,cn=g.attributes.normal;
       for(let j=0;j<cp.count;j++){vv.fromBufferAttribute(cp,j).applyMatrix4(M);nn.fromBufferAttribute(cn,j).applyMatrix3(N).normalize();
         bucket.p.push(vv.x,vv.y,vv.z);bucket.n.push(nn.x,nn.y,nn.z);const ax=Math.abs(nn.x),ay=Math.abs(nn.y),az=Math.abs(nn.z);
         const u=ax>ay&&ax>az?vv.z:vv.x,v=ay>az&&ay>ax?-vv.z:vv.y;
-        bucket.uv.push(u*2.9,v*2.9);bucket.c.push(color.r,color.g,color.b);bucket.m.push(cs[1],cs[2]);if(b){bucket.ids.push(idx,0,0,0);bucket.weights.push(1,0,0,0);}}
+        bucket.uv.push(u*2.9,v*2.9);bucket.c.push(color.r,color.g,color.b);bucket.m.push(cs[1],cs[2]);if(b&&skinClutch){bucket.ids.push(idx,0,0,0);bucket.weights.push(1,0,0,0);}}
       if(g.index)for(const j of g.index.array)bucket.i.push(off+j);else for(let j=0;j<cp.count;j++)bucket.i.push(off+j);
     }
     const box=(b,t,x,y,z,w,h,d,rx=0,ry=0,rz=0)=>stamp(b,unitBox,t,V(x,y,z),V(w,h,d),[rx,ry,rz]);
@@ -264,12 +270,28 @@ const TideClutchBench=(()=>{
     const markings=new T.Mesh(ga,atlasMat);markings.name='铆印与刻度';markings.receiveShadow=true;root.add(markings);
     function merged(s,skin){const g=keep(new T.BufferGeometry());for(const [name,ar,dim] of [['position',s.p,3],['normal',s.n,3],['uv',s.uv,2],['color',s.c,3],['machining',s.m,2]])g.setAttribute(name,new T.Float32BufferAttribute(ar,dim));
       g.setIndex(s.i);if(skin){g.setAttribute('skinIndex',new T.Uint16BufferAttribute(s.ids,4));g.setAttribute('skinWeight',new T.Float32BufferAttribute(s.weights,4));}g.computeBoundingBox();g.computeBoundingSphere();return g;}
-    const stand=new T.Mesh(merged(fixed,false),mat),machine=new T.SkinnedMesh(merged(moving,true),mat);
-    stand.name='灰铸铁机架与油盘';machine.name='同步离合系';stand.castShadow=stand.receiveShadow=machine.castShadow=machine.receiveShadow=true;
-    machine.add(tree);machine.updateMatrixWorld(true);const skeleton=keep(new T.Skeleton(bones));machine.bind(skeleton);
-    // Travel stays inside this compact conservative box at every shift and trim position.
-    machine.boundingBox=new T.Box3(V(-.58,.65,-.405),V(.74,1.61,.47));machine.boundingSphere=machine.boundingBox.getBoundingSphere(new T.Sphere());
-    root.add(stand,machine);root.position.set(sx,0,sz);parent.add(root);for(const g of templates.values())g.dispose();templates.clear();
+    const stand=new T.Mesh(merged(fixed,false),mat);
+    stand.name='灰铸铁机架与油盘';stand.castShadow=stand.receiveShadow=true;
+    root.add(stand);
+    if(skinClutch){
+      const machine=new T.SkinnedMesh(merged(moving,true),mat);
+      machine.name='同步离合系';machine.castShadow=machine.receiveShadow=true;
+      machine.add(tree);machine.updateMatrixWorld(true);
+      machine.bind(keep(new T.Skeleton(bones)));
+      machine.boundingBox=new T.Box3(V(-.58,.65,-.405),V(.74,1.61,.47));machine.boundingSphere=machine.boundingBox.getBoundingSphere(new T.Sphere());
+      root.add(machine);
+    }else{
+      // Each metal part has a single pivot. On WebGL 1 animate that pivot
+      // directly, preserving the mesh, bind-pose texture coordinates and shadows.
+      root.add(tree);
+      for(const [pivot,surfaces] of rigidParts){
+        const g=merged(surfaces,false);
+        g.applyMatrix4(bind.get(pivot).clone().invert());
+        const part=new T.Mesh(g,mat);part.name=pivot.name;
+        part.castShadow=part.receiveShadow=true;pivot.add(part);
+      }
+    }
+    root.position.set(sx,0,sz);parent.add(root);for(const g of templates.values())g.dispose();templates.clear();
     const pL=V(),pF=V(),diff=V(),forkTop=.263,travel=.083,barQ=new T.Quaternion();
     const wheelQ=new T.Quaternion().setFromAxisAngle(V(1,0,0),-.18),rotZ=new T.Quaternion(),Z=V(0,0,1);
     function update(r,t=0){if(!r)return;
