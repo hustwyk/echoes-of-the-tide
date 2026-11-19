@@ -76,3 +76,6 @@ main>footer a{color:#a9c6c1;text-underline-offset:3px}
 .scene-load progress{height:5px;width:100%;flex:1;accent-color:#d7ab73}
 
 .scene-load .load-back{padding:4px 2px;background:transparent;color:var(--muted);font-size:12px;border:0;text-decoration:underline;text-underline-offset:3px}
+
+.viewport.bay-watch .instrument{bottom:auto;top:50px}
+@media(max-height:520px){.viewport.bay-watch .instrument{top:36px}.viewport.bay-watch .tool{display:none}}

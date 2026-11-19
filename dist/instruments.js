@@ -75,7 +75,7 @@ const TideHud=(()=>{
       m.hidden=!here||!r.vis;reading.hidden=!here||!r.caption;
       if(!m.hidden){meter(m,r,i,g.time);if(i)TideWindows.meter(m);}
       set(reading,r.caption||'');
-      const role=v.querySelector('.pname').lastChild,roleName=TideTinMemory.active(g)?(i?'童年 · 沈遥':'童年 · 林澈'):TideTransit.active(g)&&i===1?'梁青 · 驾驶台左舷':g.lastPass?.turned&&i?'海雁号 · 回望船尾':i&&TideSternWatch.station(g)&&!g.lastPass.occupied?'阿棠 · 后甲板':g.fog&&i===1&&['bridge','spot'].includes(g.fog.mode)?'梁青 · 驾驶台视角':g.survey&&i===1&&g.stage===2&&g.engaged[i]?'阿棠 · 船尾视角':roles[i];
+      const role=v.querySelector('.pname').lastChild,roleName=TideTinMemory.active(g)?(i?'童年 · 沈遥':'童年 · 林澈'):TideTransit.active(g)&&i===1?'梁青 · 驾驶台左舷':g.lastPass?.turned&&i?'阿棠 · 海雁号船尾':i&&TideSternWatch.station(g)&&!g.lastPass.occupied?'阿棠 · 后甲板':g.fog&&i===1&&['bridge','spot'].includes(g.fog.mode)?'梁青 · 驾驶台视角':g.survey&&i===1&&g.stage===2&&g.engaged[i]?'阿棠 · 船尾视角':roles[i];
       if(role.textContent!==roleName)role.textContent=roleName;
       const tips=pads[i]!=null?'左摇杆移动　A 跳跃/确认　RT 操作　右摇杆视角':k.use+' 操作　'+k.jump+' 跳跃 / 操作中确认　'+k.trim+' 微调';
       const work=g.archive&&here&&g.archive.sourceLoaded&&g.archive.review===null;
@@ -104,6 +104,9 @@ const TideHud=(()=>{
       const climbingEdge=i&&g.fenders?.ledge;
       const edgeKeys=pads[i]!=null?'左摇杆沿边移动　A 翻上　RT 放手':'方向键沿边移动　/ 翻上　Enter 放手';
       const aftKeys=pads[i]!=null?'左摇杆走动　LT 扶栏　B 贴舷　A 已过　RT 岸台':'方向键走动　] 扶栏　. 贴舷　/ 已过　Enter 岸台';
+      const enteringBay=i===1&&g.lastPass?.turned&&!g.lastPass.arrived;
+      v.classList.toggle('bay-watch',!!enteringBay&&g.lastPass.bay.scope>.55);
+      const bayKeys=pads[i]!=null?'LT 靠艉栏　左右换舷　A 核对本舷　RT 岸台':'按住 ] 靠艉栏　← / → 换舷　/ 核对本舷　Enter 岸台';
       const afterdeck=i===1&&g.lastPass&&g.state.mode===1;
       v.classList.toggle('pilot-station',!!g.rangeWatch||!!g.lastPass&&g.field.done&&g.state.mode>0);
       let rangeKeys='';
@@ -115,7 +118,7 @@ const TideHud=(()=>{
       const trolley=g.relay&&!g.relay.top&&g.stage===0&&(i?TideRelay.target(g,1)===g.world.relay.haul&&g.near[1]:!g.relay.climb&&g.players[0].ground===g.world.relay.car);
       const trolleyKeys=i?(pads[i]!=null?'RT 握绞盘　左右盘车　摇杆回中抱闸':'Enter 握绞盘　← → 盘车　松方向抱闸'):
         (pads[i]!=null?'RT 握柄　前推入销 / 后拉退销　A 接梯':'E 握柄　W 推销 / S 退销　空格接梯');
-      set(v.querySelector('.control-hint'),(trolley?trolleyKeys:'')||rangeKeys|| (afterdeck?aftKeys:climbingEdge?edgeKeys:readingBook?numberKeys:plotting?plotKeys:g.signal&&g.stage===0&&close?starterKeys:g.fog?.haul?rescueHint:TideGallery.active(g)?(pads[i]!=null?'左摇杆移动 / 转轮　A 跳　RT 握柄':i?'方向键移动 / 转轮　/ 跳　Enter 握柄':'WASD 移动 / 转轮　空格 跳　E 握柄'):TideArrival.active(g)?arrivalHint:TideTinMemory.active(g)?childhood:TideTransit.active(g)&&i===1?(pads[1]!=null?'左摇杆转镜　A 报位':'方向键转镜　/ 报位'):rack?(i?'向前重听　操作中确认登记':'左右选列，前后选层　操作中确认提起 / 放回'):work?bindings:tips));
+      set(v.querySelector('.control-hint'),(trolley?trolleyKeys:'')||rangeKeys|| (enteringBay?bayKeys:afterdeck?aftKeys:climbingEdge?edgeKeys:readingBook?numberKeys:plotting?plotKeys:g.signal&&g.stage===0&&close?starterKeys:g.fog?.haul?rescueHint:TideGallery.active(g)?(pads[i]!=null?'左摇杆移动 / 转轮　A 跳　RT 握柄':i?'方向键移动 / 转轮　/ 跳　Enter 握柄':'WASD 移动 / 转轮　空格 跳　E 握柄'):TideArrival.active(g)?arrivalHint:TideTinMemory.active(g)?childhood:TideTransit.active(g)&&i===1?(pads[1]!=null?'左摇杆转镜　A 报位':'方向键转镜　/ 报位'):rack?(i?'向前重听　操作中确认登记':'左右选列，前后选层　操作中确认提起 / 放回'):work?bindings:tips));
     }
   }
   return {build,update};

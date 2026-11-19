@@ -3,14 +3,14 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const box=vm.createContext({});
-for(const name of ['missions','traversal','floating','warp-speech','warping','fender-speech','fender-coping','fenders','plate-speech','arrival-speech','stern-line','bow-cast','arrival','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','buoy-motion','light-register','lookout','cistern-speech','cistern','glass-speech','chartroom','paper','lantern','gallery-speech','gallery','shift-speech','starter','transit-speech','transit','signal','tin-lines','tin-memory','archive','relay-speech','relay-trolley','relay','soundings-speech','survey-plot','soundings','fog-speech','haul-speech','fog-recovery','fogsignal','range-voice','range-watch','pass-speech','stern-watch','lastpass','swing-speech','swing','cooperation']){
+for(const name of ['missions','traversal','floating','warp-speech','warping','fender-speech','fender-coping','fenders','plate-speech','arrival-speech','stern-line','bow-cast','arrival','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','buoy-motion','light-register','lookout','cistern-speech','cistern','glass-speech','chartroom','paper','lantern','gallery-speech','gallery','shift-speech','starter','transit-speech','transit','signal','tin-lines','tin-memory','archive','relay-speech','relay-trolley','relay','soundings-speech','survey-plot','soundings','fog-speech','haul-speech','fog-recovery','fogsignal','range-voice','range-watch','pass-speech','stern-watch','bay-passage','lastpass','ferry-trail','swing-speech','swing','cooperation']){
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../dist',name+'.js'),'utf8'),box);
 }
 const {Session,near,surface,lookout,ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideSwing,TideCistern,TideGlass,TidePaper}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideSwing,TideCistern,TideGlass,TidePaper})',box);
 const {TideFenders,TideWarping,TideFloating,TideArrival,TideSternLine,TideBowCast}=vm.runInContext('({TideFenders,TideWarping,TideFloating,TideArrival,TideSternLine,TideBowCast})',box);
 const {TideTransit,TideSurveyPlot,TideLightRegister,TideBuoyMotion}=vm.runInContext('({TideTransit,TideSurveyPlot,TideLightRegister,TideBuoyMotion})',box);
 const {TideTinMemory}=vm.runInContext('({TideTinMemory})',box);
-const {TideGallery,TideRangeWatch}=vm.runInContext('({TideGallery,TideRangeWatch})',box);
+const {TideGallery,TideRangeWatch,TideBayPassage}=vm.runInContext('({TideGallery,TideRangeWatch,TideBayPassage})',box);
 const empty=()=>({x:0,z:0,use:false,jump:false});
 function steer(g,i,target,keys){
   const p=g.players[i],dx=target.x-p.x,dz=target.z-p.z,dist=Math.hypot(dx,dz);
@@ -847,6 +847,11 @@ function control(g){
         const a=TideLastPass.reading(g);
         const ready=a.lined&&a.exposed&&g.lastPass.next==='sighting'&&!g.lastPass.voice;
         out[1].waitReport=ready&&!a.past&&!g.lastPass.warned;out[1].jump=ready&&a.past;
+      }
+      if(g.lastPass.turned&&!g.lastPass.arrived){
+        const watch=g.lastPass.bay,side=watch.checked[1]?0:1;
+        out[1].magnify=1;out[1].x=side?1:-1;
+        out[1].jump=watch.scope>.82&&Math.abs(watch.pan-side)<.09&&!watch.checked[side]&&g.cues.rescue>.95;
       }
       const error=TideLastPass.bearing(g)-g.lastPass.wheel;
       out[0].x=Math.max(-1,Math.min(1,error*18));out[0].jump=g.lastPass.arrived&&Math.abs(error)<.043;break;
@@ -1941,6 +1946,16 @@ if(require.main===module){
     reach(file,()=>file.stage===1);assert.ok(Number.isFinite(file.leadAngle));
     reach(file,()=>!!file.lastPass);assert.equal(file.lastPass.wheel,file.leadAngle);
   }
+  // The forward axis stays tangent both in the bend and on the final straight.
+  {
+    const end=TideBayPassage.route(1);
+    assert.ok(Math.hypot(end.x+8.4,end.z-14.8)<1e-8);
+    for(let i=1;i<80;i++){
+      const f=i/80,a=TideBayPassage.route(f-.0001),b=TideBayPassage.route(f+.0001);
+      const dx=b.x-a.x,dz=b.z-a.z,h=TideBayPassage.route(f).yaw;
+      assert.ok((-dx*Math.sin(h)-dz*Math.cos(h))/Math.hypot(dx,dz)>.99999);
+    }
+  }
   // From the aft rail the mate can name either observation. Time, a wrong
   // guess or an occluded lower band must never key a clearance automatically.
   {
@@ -1976,7 +1991,32 @@ if(require.main===module){
     reach(g,()=>r.turned);
     coast(60*15,k=>{k[0].use=false;});
     assert.ok(r.steer<.001&&g.cues.rescue<.4&&!r.arrived);
-    reach(g,()=>g.complete);
+    coast(1,k=>{k[1].jump=true;});
+    assert.match(r.bay.feedback,/界外/);
+    assert.deepEqual(Array.from(r.bay.checked),[false,false]);
+    const mark=g.ferryTrail.points[g.ferryTrail.head],historic=[mark.x,mark.z,mark.s,mark.c,mark.t];
+    for(let j=0;j<1200&&g.cues.rescue<1;j++)coast(1);
+    assert.equal(g.cues.rescue,1);
+    assert.deepEqual([mark.x,mark.z,mark.s,mark.c,mark.t],historic);
+    assert.ok(g.ferryTrail.points.some(q=>q.thrust>.35&&Math.hypot(q.x-mark.x,q.z-mark.z)>3));
+    coast(120);assert.ok(!r.arrived&&!r.voice);
+    coast(60,k=>{k[1].magnify=0;k[1].x=-1;});
+    coast(1,k=>{k[1].magnify=0;k[1].jump=true;});assert.match(r.bay.feedback,/靠住/);
+    coast(60,k=>{k[1].x=-1;});
+    coast(1,k=>{k[1].jump=true;});assert.deepEqual(Array.from(r.bay.checked),[true,false]);
+    coast(1,k=>{k[1].jump=true;});assert.match(r.bay.feedback,/已核过/);
+    coast(90,k=>{k[1].use=true;k[1].x=1;k[1].jump=true;});
+    assert.deepEqual(Array.from(r.bay.checked),[true,false]);
+    const halfway=TideLastPass.checkpoint(g),back=new Session(11);
+    back.stage=2;back.begin();TideLastPass.restore(back,JSON.parse(JSON.stringify(halfway)));
+    assert.equal(back.cues.rescue,1);assert.deepEqual(Array.from(back.lastPass.bay.checked),[true,false]);
+    assert.ok(!back.lastPass.arrived);
+    reach(back,()=>back.lastPass.arrived);
+    const legacy=TideLastPass.checkpoint(back);
+    delete legacy.bayChecks;delete legacy.baySide;
+    const resumedBerth=new Session(11);resumedBerth.stage=2;resumedBerth.begin();TideLastPass.restore(resumedBerth,legacy);
+    assert.deepEqual(Array.from(resumedBerth.lastPass.bay.checked),[true,true]);
+    reach(back,()=>back.complete);
   }
   // The final radio remains occupied until the signal operator releases it.
   const final=new Session(11);
@@ -2003,7 +2043,7 @@ if(require.main===module){
     reach(test,()=>test.lastPass.voice==='turn'&&test.lastPass.clock>.6);assert.equal(test.cues.rescue,0);
     reach(test,()=>test.lastPass.arrived);const landed=TideLastPass.checkpoint(test);
     const moored=new Session(11);moored.stage=2;moored.begin();TideLastPass.restore(moored,landed);
-    for(let j=0;j<100;j++){const k=control(moored);k[0].jump=false;k[0].x=1;moored.tick(step,k);}
+    for(let j=0;j<240;j++){const k=control(moored);k[0].jump=false;k[0].x=1;moored.tick(step,k);}
     const wrong=control(moored);wrong[0].x=0;wrong[0].jump=true;moored.tick(step,wrong);
     assert.equal(moored.state.doneAt,null);reach(moored,()=>moored.complete);
   }
