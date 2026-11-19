@@ -6,7 +6,7 @@ const journal=[];
 try {
   progress=Math.max(0,Math.min(levels.length,Math.floor(Number(localStorage.getItem('tide-progress'))||0)));
   const save=JSON.parse(localStorage.getItem('tide-3d-checkpoint'));
-  if(save && Number.isInteger(save.index) && save.index===progress && Number.isInteger(save.stage) && (save.stage>0||save.stage===0&&(save.index===0&&['stern','moored','upper','exit','done'].includes(save.fenders?.berth)||save.index===3&&['inspect','board'].includes(save.cistern?.phase)||save.index===5&&save.glass?.keyed||save.index===10&&save.fog?.key||save.index===8&&save.survey?.taken||save.index===7&&save.relay?.low||save.index===1&&save.cable?.signalled===true||save.index===2&&save.signal?.starter==='latched'||save.index===9&&(save.lantern?.far===true||['middle','stairs','file','inside'].includes(save.lantern?.gallery))||save.index===4&&save.archive?.count>0)) && save.stage<TideMissions.chapters[save.index]?.length)resume=save;
+  if(save && Number.isInteger(save.index) && save.index===progress && Number.isInteger(save.stage) && (save.stage>0||save.stage===0&&(save.index===0&&['stern','moored','upper','exit','done'].includes(save.fenders?.berth)||save.index===3&&['inspect','board'].includes(save.cistern?.phase)||save.index===5&&save.glass?.keyed||save.index===10&&save.fog?.key||save.index===8&&save.survey?.taken||save.index===7&&save.relay?.low||save.index===1&&save.cable?.signalled===true||save.index===2&&save.signal?.starter==='latched'||save.index===9&&(save.lantern?.far===true||['middle','stairs','file','inside'].includes(save.lantern?.gallery))||save.index===4&&save.archive?.count>0||save.index===11&&save.range?.samples?.length>0)) && save.stage<TideMissions.chapters[save.index]?.length)resume=save;
 } catch {}
 const sound=new HarborSound();
 let wantsAudio=true;try{wantsAudio=localStorage.getItem('tide-audio')!=='off';}catch{}
@@ -27,7 +27,10 @@ function showInfo(html) {
   if (!info.open) info.showModal();
 }
 
-function storedMark(save){return save.fenders||save.swing||save.cistern||save.glass||save.pass||save.fog||save.survey||save.relay||save.cable||save.landfall||save.lantern||save.signal||save.archive;}
+function storedMark(save){
+  const mark=save.fenders||save.swing||save.cistern||save.glass||save.pass||save.fog||save.survey||save.relay||save.cable||save.landfall||save.lantern||save.signal||save.archive||save.range;
+  return Number.isFinite(save.lead)?{...mark,lead:save.lead}:mark;
+}
 function campaign() {
   $('count').textContent = String(progress).padStart(2,'0')+' / 12';
   $('start').innerHTML = progress===12 ? '<span>▶</span> 重玩行动' : progress||resume ? '<span>▶</span> 继续行动' : '<span>▶</span> 开始行动';
@@ -62,9 +65,9 @@ function savePoint(g){
   }
   if(g.index!==progress)return;
   const fenders=TideFenders.checkpoint(g),landfall=TideLandfall.checkpoint(g),mark=TideLantern.checkpoint(g)||TideGallery.checkpoint(g),signal=TideSignal.checkpoint(g),archive=TideArchive.checkpoint(g);
-  const swing=TideSwing.checkpoint(g),cistern=TideCistern.checkpoint(g),cable=TideCableQuay.checkpoint(g),relay=TideRelay.checkpoint(g),survey=TideSoundings.checkpoint(g),glass=TideGlass.checkpoint(g),fog=TideFogSignal.checkpoint(g),pass=TideLastPass.checkpoint(g);
-  if(!g.stage&&!fenders&&!signal&&!cistern&&!mark&&!archive&&!cable&&!relay&&!survey&&!fog&&!glass)return;
-  resume={index:g.index,stage:g.stage,...(fenders?{fenders}:{}),...(swing?{swing}:{}),...(cistern?{cistern}:{}),...(glass?{glass}:{}),...(pass?{pass}:{}),...(fog?{fog}:{}),...(survey?{survey}:{}),...(relay?{relay}:{}),...(cable?{cable}:{}),...(landfall?{landfall}:{}),...(mark?{lantern:mark}:{}),...(signal?{signal}:{}),...(archive?{archive}:{})};
+  const swing=TideSwing.checkpoint(g),cistern=TideCistern.checkpoint(g),cable=TideCableQuay.checkpoint(g),relay=TideRelay.checkpoint(g),survey=TideSoundings.checkpoint(g),glass=TideGlass.checkpoint(g),fog=TideFogSignal.checkpoint(g),pass=TideLastPass.checkpoint(g),range=TideRangeWatch.checkpoint(g);
+  if(!g.stage&&!fenders&&!signal&&!cistern&&!mark&&!archive&&!cable&&!relay&&!survey&&!fog&&!glass&&!range)return;
+  resume={index:g.index,stage:g.stage,...(range?{range}:{}),...(Number.isFinite(g.leadAngle)?{lead:g.leadAngle}:{}),...(fenders?{fenders}:{}),...(swing?{swing}:{}),...(cistern?{cistern}:{}),...(glass?{glass}:{}),...(pass?{pass}:{}),...(fog?{fog}:{}),...(survey?{survey}:{}),...(relay?{relay}:{}),...(cable?{cable}:{}),...(landfall?{landfall}:{}),...(mark?{lantern:mark}:{}),...(signal?{signal}:{}),...(archive?{archive}:{})};
   try{localStorage.setItem('tide-3d-checkpoint',JSON.stringify(resume));}catch{}
 }
 function clearInput(){
@@ -136,6 +139,7 @@ async function enterRegatta(fromMemory=false){
   }
 }
 function openLevel(n,stage=0,mark=null){
+  const savedLead=mark?.lead??(n===11&&stage>0&&session?.index===11?session.leadAngle:null);
   closeFiling();if(info.open)info.close();
   if(!game.open)game.showModal();
   sound.stopScene();window.speechSynthesis?.cancel();$('film').hidden=true;$('pause').disabled=true;
@@ -150,7 +154,7 @@ function openLevel(n,stage=0,mark=null){
     if(n===3)TideReceiverAudio.loadCistern();
     if(n===5)TideReceiverAudio.loadGlass();
     if(n===10){TideReceiverAudio.loadFog();TideReceiverAudio.loadHaul();}
-    if(n===11)TideReceiverAudio.loadPass();
+    if(n===11){if(!stage)TideReceiverAudio.loadRange();TideReceiverAudio.loadPass();}
     if(n===9&&!stage&&(!mark||mark.gallery))TideReceiverAudio.loadGallery();
     if(n===8)TideReceiverAudio.loadSoundings();
     if(n===7)TideReceiverAudio.loadRelay();
@@ -165,7 +169,7 @@ function openLevel(n,stage=0,mark=null){
       },success:()=>sound.tone(580,.23,'triangle'),sound:(f,d)=>sound.tone(f,d),
       reset:side=>{view.snap=true;sound.cue('reset',side);},finish:finishLevel
     });
-    if(n===11){try{session.savedSpacing=JSON.parse(localStorage.getItem('tide-foghorn-spacing'));}catch{}}
+    if(n===11){if(Number.isFinite(savedLead))session.leadAngle=TideTraversal.clamp(savedLead,-1.5,-.46);try{session.savedSpacing=JSON.parse(localStorage.getItem('tide-foghorn-spacing'));}catch{}}
     if(stage){
       session.stage=stage;const sec=session.section;session.checkpoints=sec.starts.slice();session.players=sec.starts.map(TideTraversal.spawn);session.begin();
       for(let k=0;k<stage;k++)TideDrawbridge.restore(session.world.sections[k]);
@@ -176,7 +180,7 @@ function openLevel(n,stage=0,mark=null){
     session.pocketTape=pocketTape;
     if(n===9)session.tideTicket=tideTicket;
     if(n===9&&!stage&&(!mark||mark.gallery))TideGallery.begin(session,mark);
-    if(mark&&!mark.gallery){if(mark.berth)TideFenders.restore(session,mark);else if(session.swing)TideSwing.restore(session,mark);else if(session.cistern)TideCistern.restore(session,mark);else if(session.glass)TideGlass.restore(session,mark);else if(session.lastPass)TideLastPass.restore(session,mark);else if(session.fog)TideFogSignal.restore(session,mark);else if(session.survey)TideSoundings.restore(session,mark);else if(session.relay)TideRelay.restore(session,mark);else if(session.cable)TideCableQuay.restore(session,mark);else if(session.world.landfall)TideLandfall.restore(session,mark);else if(session.archive)TideArchive.restore(session,mark);else if(session.signal)TideSignal.restore(session,mark);else TideLantern.restore(session,mark);savePoint(session);}
+    if(mark&&!mark.gallery){if(mark.berth)TideFenders.restore(session,mark);else if(session.swing)TideSwing.restore(session,mark);else if(session.cistern)TideCistern.restore(session,mark);else if(session.glass)TideGlass.restore(session,mark);else if(session.rangeWatch)TideRangeWatch.restore(session,mark);else if(session.lastPass)TideLastPass.restore(session,mark);else if(session.fog)TideFogSignal.restore(session,mark);else if(session.survey)TideSoundings.restore(session,mark);else if(session.relay)TideRelay.restore(session,mark);else if(session.cable)TideCableQuay.restore(session,mark);else if(session.world.landfall)TideLandfall.restore(session,mark);else if(session.archive)TideArchive.restore(session,mark);else if(session.signal)TideSignal.restore(session,mark);else TideLantern.restore(session,mark);savePoint(session);}
     if(n===0&&!stage&&!mark)TideArrival.begin(session);
     view.load(session);
   }catch(err){
@@ -348,7 +352,7 @@ function pause(){
   overlay.innerHTML='<div class="story"><h3>行动暂停</h3><p>'+levels[index].name+'　/　'+(gallery?(session.gallery.phase==='file'?'灯室潮尺原数联':'绕塔检修台'):arrival?'交通艇进港':TideFenders.active(session)?'护舷井登岸':session.cable?TideCableQuay.title(session):session.spec.title)+'</p><p class="hint">'+hint+'</p><div class="pause-options"><button id="unpause">继续行动</button><button id="retry">重试此段</button><button id="quit">返回档案</button><button id="voice"></button><button id="quality"></button></div></div>';
   seatPanel=TideCrewInput.panel(overlay.querySelector('.story'),arrival?(session.arrival.stern?'stern':session.arrival.radio):null);
   addJournal(overlay.querySelector('.story'),journal);
-  $('unpause').onclick=()=>startPlaying(false);$('quit').onclick=()=>game.close();$('retry').onclick=()=>openLevel(index,session.stage,TideLantern.checkpoint(session)||TideGallery.checkpoint(session)||TideFenders.checkpoint(session)||TideSwing.checkpoint(session)||TideCistern.checkpoint(session)||TideGlass.checkpoint(session)||TideLastPass.checkpoint(session)||TideFogSignal.checkpoint(session)||TideSoundings.checkpoint(session)||TideRelay.checkpoint(session)||TideCableQuay.checkpoint(session)||TideLandfall.checkpoint(session)||TideSignal.checkpoint(session)||TideArchive.checkpoint(session));
+  $('unpause').onclick=()=>startPlaying(false);$('quit').onclick=()=>game.close();$('retry').onclick=()=>openLevel(index,session.stage,TideLantern.checkpoint(session)||TideGallery.checkpoint(session)||TideFenders.checkpoint(session)||TideSwing.checkpoint(session)||TideCistern.checkpoint(session)||TideGlass.checkpoint(session)||TideRangeWatch.checkpoint(session)||TideLastPass.checkpoint(session)||TideFogSignal.checkpoint(session)||TideSoundings.checkpoint(session)||TideRelay.checkpoint(session)||TideCableQuay.checkpoint(session)||TideLandfall.checkpoint(session)||TideSignal.checkpoint(session)||TideArchive.checkpoint(session));
   const update=()=>{$('voice').textContent='设备语音　'+(voice?'开':'关');$('quality').textContent='画质　'+(view.quality===1?'高':'流畅');};update();
   $('voice').onclick=()=>{voice=!voice;if(voice&&!sound.enabled)toggleAudio();update();};
   $('quality').onclick=()=>{view.quality=view.quality===1?.72:1;update();};TideWindows.focus($('unpause'));
@@ -388,7 +392,7 @@ function pollInputs(now,connected){
     const use=toolTaps[i]||keys.has(i?'Enter':'KeyE')||!!pad?.buttons[7]?.pressed;
     const cameraInput=orbit||center||keys.has(i?'Backslash':'KeyC')||dead(pad?.axes[2])||dead(pad?.axes[3])||TideWindows.dragging(i);
     view.pointing.request(i,keys.has(i?'Quote':'KeyG')||!!pad?.buttons[5]?.pressed,Boolean(pointing||x||z||use||jump||cameraInput),!!pad);
-    return {x:pointing?0:x,z:pointing?0:z,use,waitReport,magnify:i&&keys.has('BracketRight')?1:(pad?.buttons[6]?.value||Number(!!pad?.buttons[6]?.pressed)),jumpHeld:(i?keys.has('Slash')||keys.has('ShiftRight'):keys.has('Space'))||down,jump};
+    return {x:pointing?0:x,z:pointing?0:z,use,waitReport,magnify:(i?keys.has('BracketRight'):session.rangeWatch&&keys.has('BracketLeft'))?1:(pad?.buttons[6]?.value||Number(!!pad?.buttons[6]?.pressed)),jumpHeld:(i?keys.has('Slash')||keys.has('ShiftRight'):keys.has('Space'))||down,jump};
   });
 }
 function padMenus(pads){
@@ -449,7 +453,7 @@ function frame(now){
   if(sound.enabled){sound.scene?.update(session,dt);sound.tape?.update(session);sound.receiver?.update(session);}
   if(!redraw||now-redraw>55){
     TideHud.update(session,padSlots);
-    showStatus((TideGallery.active(session)&&(session.gallery.subtitle||(session.noticeUntil>session.time&&session.notice.startsWith('安全索')?session.notice:session.gallery.phase==='file'?'灯室　／　潮尺原数联':'塔外廊　／　绕塔检修台')))||(TideArrival.active(session)&&(session.arrival.caption||'北岬交通艇　／　进港靠泊'))||(session.stage===0&&session.fenders?.subtitle)||(session.archive?.memory?.voice&&TideTinLines[session.archive.memory.voice].line)||(session.stage===0&&session.signal?.caption)||(session.stage>0&&session.signal?.voice&&TideTransitSpeech[session.signal.voice].line)||session.swing?.subtitle||session.cistern?.subtitle||session.glass?.subtitle||(!session.lastPass?.occupied&&session.lastPass?.subtitle)||session.pilotHorn?.subtitle||session.fog?.subtitle||(session.fog?.haul?'雾号所　／　轮坑接应':'')||session.survey?.subtitle||session.relay?.subtitle||session.cable?.subtitle||session.cable?.warp.subtitle||(session.noticeUntil>session.time?session.notice.replace(/\n/g,'　'):(TideFenders.active(session)?'护舷井登岸':session.cable?TideCableQuay.title(session):session.landfall?'防潮门值班间':session.spec.title)+'　·　靠近角色颜色的目标'));
+    showStatus((TideGallery.active(session)&&(session.gallery.subtitle||(session.noticeUntil>session.time&&session.notice.startsWith('安全索')?session.notice:session.gallery.phase==='file'?'灯室　／　潮尺原数联':'塔外廊　／　绕塔检修台')))||(TideArrival.active(session)&&(session.arrival.caption||'北岬交通艇　／　进港靠泊'))||(session.stage===0&&session.fenders?.subtitle)||(session.archive?.memory?.voice&&TideTinLines[session.archive.memory.voice].line)||(session.stage===0&&session.signal?.caption)||(session.stage>0&&session.signal?.voice&&TideTransitSpeech[session.signal.voice].line)||session.swing?.subtitle||session.cistern?.subtitle||session.glass?.subtitle||(!session.lastPass?.occupied&&session.lastPass?.subtitle)||session.rangeWatch?.subtitle||session.pilotHorn?.subtitle||session.fog?.subtitle||(session.fog?.haul?'雾号所　／　轮坑接应':'')||session.survey?.subtitle||session.relay?.subtitle||session.cable?.subtitle||session.cable?.warp.subtitle||(session.noticeUntil>session.time?session.notice.replace(/\n/g,'　'):(TideFenders.active(session)?'护舷井登岸':session.cable?TideCableQuay.title(session):session.landfall?'防潮门值班间':session.spec.title)+'　·　靠近角色颜色的目标'));
     $('elapsed').textContent=timeLabel(session.time)+'　/　'+(session.stage+1)+' of 3';
     redraw=now;
   }
@@ -462,7 +466,7 @@ $('pause').onclick=pause;$('sound').onclick=$('field-audio').onclick=toggleAudio
 $('expand').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else if(game.requestFullscreen)await game.requestFullscreen();}catch{showStatus('当前窗口已使用可用的最大画面');}};
 $('brief').onclick=()=>{showInfo('<h2>北岬灯塔 · 紧急任务</h2><p>海雁号失去动力。机修员林澈和信号员沈遥必须在潮水吞没北礁前恢复电台，找出灯塔旧档案里的误判，重新校准光束。</p><p>十二关贯穿四幕。两人各自操作一名角色，共用同一个三维世界。</p><p><a href="story.html" target="_blank" rel="noopener">阅读原作调研、原创故事与十二关设计（含剧透）</a></p>');addJournal($('info-content'),levels.slice(0,progress).map((l,i)=>'第 '+(i+1)+' 关　'+l.name+'　'+l.after));};
 $('help').onclick=()=>showInfo('<h2>双人操作指南</h2><p>林澈用 WASD 移动、空格跳跃，按住 E 操作。沈遥用方向键移动、斜杠 / 或右 Shift 跳跃，按住 Enter 操作。轻点跳跃可以越过短阶，按住则跳得更高。</p><p>林澈用 Q / R 转镜头，C 回到人物身后。沈遥用逗号 / 句号转镜头，反斜杠回正。两人可以同时转动各自的镜头。</p><p>要给同伴指路，林澈按住 F，沈遥按住分号，手柄按住 LB。用移动键或左摇杆瞄准实物，松开即可。也可以在自己的半屏右击。标记会跟着甲板或船移动。自由行动时站稳，林澈按住 G，沈遥按住单引号键，手柄按住 RB，看向同伴刚指出的实物。看清后对方会收到回应。松开回到原视角。</p><p>跟随各自画面内的设备标记。在光圈里按住操作键，左右键调节仪器，跳跃键确认读数或发送信号。站在移动甲板上会随甲板运动，可从边缘跃向对岸。</p><p>点右上角「双窗口」，可把沈遥的画面拖到另一块显示器。关掉副窗口或点「合回同屏」即可接着玩。在任一窗口按键均可控制两人。拖动自己的画面可转镜头，双击回正。标准手柄使用左摇杆移动、A 跳跃、RT 操作、右摇杆转动视角、按下回到身后。轻推摇杆，行动简报与暂停菜单会亮起对应角色。只有一只手柄时可把它交给任意一边，两只手柄也可互换。方向键选菜单，A 确认，B 返回，Start 或 Esc 暂停，章节与段落检查点保存在此浏览器。</p>');
-const moveCodes=new Set(['BracketRight','KeyW','KeyA','KeyS','KeyD','KeyE','Space','ArrowUp','ArrowLeft','ArrowDown','ArrowRight','Enter','Slash','ShiftRight','KeyQ','KeyR','KeyC','Comma','Period','Backslash','KeyF','Semicolon','KeyG','Quote']);
+const moveCodes=new Set(['BracketLeft','BracketRight','KeyW','KeyA','KeyS','KeyD','KeyE','Space','ArrowUp','ArrowLeft','ArrowDown','ArrowRight','Enter','Slash','ShiftRight','KeyQ','KeyR','KeyC','Comma','Period','Backslash','KeyF','Semicolon','KeyG','Quote']);
 function keyDown(e){
   if(!game.open)return;
   if(mode==='paused'||mode==='story'||mode==='regatta')TideCrewInput.key(e.code,true);

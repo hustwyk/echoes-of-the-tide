@@ -52,7 +52,7 @@ const TideCoop = (() => {
         returnGate:0,balance:0,warnUntil:0,buttonCooldown:0,releaseHeld:false,catchup:0};
       if(this.spec.type==='ride')this.state.dials[this.spec.driver]=.50;
       this.rig=TideRigging.reset(this);this.paper=TidePaper.create(this);this.optic=TideLantern.create(this);
-      if(this.optic){this.cues.light=.97;this.cues.rays=TideLantern.viewData(this).images;}TideFieldWork.reset(this);TideCableQuay.begin(this);TideLookout.reset(this);TideRelay.begin(this);TideSoundings.begin(this);TideGlass.begin(this);TideCistern.begin(this);TideSwing.begin(this);TideFogSignal.begin(this);TideLastPass.begin(this);this.pilotHorn=TideFogSignal.formal(this);TideSignal.begin(this);TideArchive.begin(this);
+      if(this.optic){this.cues.light=.97;this.cues.rays=TideLantern.viewData(this).images;}TideFieldWork.reset(this);TideCableQuay.begin(this);TideLookout.reset(this);TideRangeWatch.begin(this);TideRelay.begin(this);TideSoundings.begin(this);TideGlass.begin(this);TideCistern.begin(this);TideSwing.begin(this);TideFogSignal.begin(this);TideLastPass.begin(this);this.pilotHorn=TideFogSignal.formal(this);TideSignal.begin(this);TideArchive.begin(this);
       this.events.stage?.(this);
     }
     alert(text,seconds=2.5) {
@@ -93,6 +93,9 @@ const TideCoop = (() => {
       if(TideTinMemory.active(this)){TideTinMemory.step(this,inputs,dt);return;}
       if(TideFenders.active(this)){TideFenders.step(this,inputs,yaws,dt);return;}
       if(this.fog||this.pilotHorn)TideFogSignal.step(this,dt);
+      if(this.pilotHorn&&Number.isFinite(this.leadAngle)){
+        this.cues.water=-3.56+.045*Math.sin(this.time*.22);TideLastPass.aimLight(this,this.leadAngle,.11);
+      }
       if(this.survey)TideSoundings.step(this,dt);
       if(this.relay)TideRelay.step(this,dt);
       if(this.cable)TideCableQuay.update(this,dt);
@@ -152,6 +155,7 @@ const TideCoop = (() => {
       if(prevStaff)TideDrawbridge.carry(this,inputs,dt,prevStaff);
       if(q.doneAt!==null)return;
       if(transfer){TideSwing.interact(this,inputs,dt);return;}
+      if(this.rangeWatch){TideRangeWatch.operate(this,inputs,dt);return;}
       if(this.cistern){TideCistern.interact(this,inputs,dt);return;}
       if(this.glass){TideGlass.interact(this,inputs,dt);return;}
       if(this.fog){TideFogSignal.interact(this,inputs,dt);return;}

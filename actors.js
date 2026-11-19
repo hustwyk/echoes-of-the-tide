@@ -1699,15 +1699,19 @@
       b.oval('#dcdccd',[side*1.25,3.32,2.7],[.32,.26,1.22],'satin');
       for(let j=0;j<3;j++)b.box('#697772',[side*1.25,3.34,1.97+j*.70],[.635,.23,.055],'satin');
     }
-    b.box('#b0b7a9',[0,3.54,-2.4],[2.96,.86,3.30]);
-    b.box('#d4d2bb',[0,4.09,-2.46],[3.18,.84,3.43]);
+    // Keep the solid distant cabin in its own group so inspection views can
+    // swap in the open wheelhouse without copying the hull's vertex buffers.
+    const shellBatch=new Batch(),wheelhouseShell=new T.Group();
+    wheelhouseShell.name='wheelhouseShell';ship.add(wheelhouseShell);
+    shellBatch.box('#b0b7a9',[0,3.54,-2.4],[2.96,.86,3.30]);
+    shellBatch.box('#d4d2bb',[0,4.09,-2.46],[3.18,.84,3.43]);
     for(let i=0;i<5;i++){
-      b.box('#515e59',[-1.24+.62*i,4.11,-4.19],[.60,.64,.046],'metal',[-.10,0,0]);
-      b.box('#3d514e',[-1.24+.62*i,4.12,-4.22],[.53,.56,.027],'glass',[-.10,0,0]);
+      shellBatch.box('#515e59',[-1.24+.62*i,4.11,-4.19],[.60,.64,.046],'metal',[-.10,0,0]);
+      shellBatch.box('#3d514e',[-1.24+.62*i,4.12,-4.22],[.53,.56,.027],'glass',[-.10,0,0]);
       b.tube('#263532',[-1.39+.62*i,3.90,-4.25],[-1.16+.62*i,4.13,-4.235],.010);
     }
     for(const side of [-1,1]) {
-      for(let j=0;j<3;j++)b.box('#405755',[side*1.608,4.12,-3.52+j*1.01],[.024,.55,.88],'glass');
+      for(let j=0;j<3;j++)shellBatch.box('#405755',[side*1.608,4.12,-3.52+j*1.01],[.024,.55,.88],'glass');
       b.box('#917a59',[side*1.51,3.54,-1.01],[.055,.79,.60],'satin');
       b.box('#273b3b',[side*1.55,3.70,-1.02],[.025,.30,.36],'glass');
       b.box('#303d36',[side*1.65,4.49,-2.66],[.22,.13,.34],'metal');
@@ -1734,6 +1738,7 @@
       b.tube(steel,[s*.25,1.45,6.05],[s*.25,3.1,5.45],.03);
     }
     for(let j=0;j<7;j++)b.tube(steel,[-.25,1.55+j*.228,6.01-j*.084],[.25,1.55+j*.228,6.01-j*.084],.022);
+    shellBatch.flush(wheelhouseShell);
     b.flush(ship);
     for(const side of [-1,1]){
       plaque(ship,['海 雁','HAI YAN  /  04'],['#3c5452','#e3d9b8','#a6724c'],[side*2.376,.52,2.75],[0,side*Math.PI/2,0],1.59,.48);

@@ -58,7 +58,7 @@ const TideMissions = (() => {
       step('diaphone','雨窗目视复核',['wheel','horn'],'梁青：这次把风也算进去。三声过后，我自己抬头。')
     ],
     [
-      step('optic','守住安全光带',['wheel','lens'],'梁青：海雁就要遮住基准了，看我的船首。',{v:[.65,.38],rough:2}),
+      step('range','外礁合像测距',['wheel','lens'],'梁青：海雁就要遮住基准了，看我的船首。'),
       step('rhythm','正式转向提示',['wheel','horn'],'沈遥：看见安全带。给我预备灯。',{period:6.3,irregular:true}),
       step('release','把频道留给船长',['wheel','radio'],'阿棠：等一拍。我还看不见那根桩。')
     ]

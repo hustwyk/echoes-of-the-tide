@@ -27,6 +27,7 @@ const TideLookout=(()=>{
     return [x,g.cues.water+.5*(swell(x-3,z,t)+swell(x+3,z,t)),z];
   }
   function point(g,id){
+    if(g.rangeWatch&&(id==='stump'||id==='ship'))return TideRangeWatch.position(g,id);
     const t=g.time,w=g.cues.water;
     if(id==='buoy')return TideBuoyMotion.lamp(g);
     if(id==='stump')return [marks.stump.x,g.survey||g.index===11?-2.52:-1.16,marks.stump.z];
@@ -36,7 +37,7 @@ const TideLookout=(()=>{
   function camera(g){
     const w=g.watch,side=w.task.watcher;
     const e=g.world.relay?.eye;
-    const eye=g.survey?TideSoundings.stern(g):e?[e.x,e.y,e.z]:g.signal?TideSignal.scope(g):[side?-21.3:-37.3,side?4.35:5.15,-89.8];
+    const eye=g.rangeWatch?TideRangeWatch.eye:g.survey?TideSoundings.stern(g):e?[e.x,e.y,e.z]:g.signal?TideSignal.scope(g):[side?-21.3:-37.3,side?4.35:5.15,-89.8];
     const base=g.survey?Math.atan2(-36-eye[0],eye[2]+118):e?Math.atan2(-20-e.x,e.z+110):g.signal?Math.atan2(-26-eye[0],eye[2]+113):Math.atan2(-32-eye[0],117+eye[2]);
     const yaw=base+w.yaw,pitch=w.pitch;
     return {eye,at:[eye[0]+Math.sin(yaw)*Math.cos(pitch),eye[1]+Math.sin(pitch),eye[2]-Math.cos(yaw)*Math.cos(pitch)],yaw,pitch};
@@ -44,7 +45,7 @@ const TideLookout=(()=>{
   function active(g){return !!g.watch&&!g.watch.done&&g.field.done;}
   function observe(g,inputs,dt){
     const w=g.watch,d=w.task.watcher,k=inputs[d];
-    const lens=g.signal||g.survey,held=g.engaged[d];
+    const lens=g.signal||g.survey||g.rangeWatch,held=g.engaged[d];
     const targetPower=lens&&held?1+2.5*clamp(k.magnify||0,0,1):1;
     w.magnification+=(targetPower-w.magnification)*(1-Math.exp(-dt*11));
     if(held){
