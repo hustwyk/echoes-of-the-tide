@@ -9,7 +9,7 @@ const TideRelay=(()=>{
     const base=slab('relayPier',-.15,0,.50,13.3,13);
     const lower=slab('relayRest',-5.40,2.04,-1.48,1.28,1.76);
     const upper=slab('relayHead',-2.68,4.56,-3.37,4.02,2.20);
-    const car=slab('relayCar',-1.52,2.02,-1.47,1.43,1.18);car.dynamic=true;
+    const car=slab('relayCar',TideRelayTrolley.railX(1),2.02,-1.47,1.43,1.18);car.dynamic=true;
     const foot=site('lower','塔脚爬梯',-5.40,0,-.28),rest=site('rest','下层歇脚板',-5.40,2.04,-1.24);
     const lift=site('upper','上段爬梯',-1.52,2.02,-1.49),mast=site('mast','桅顶天线',-2.74,4.56,-3.04);
     const haul=site('haul','横移绞盘',-.05,0,3.30),desk=site('desk','更正发报台',3.70,0,-4.04);
@@ -20,7 +20,7 @@ const TideRelay=(()=>{
     return {floors,sections,style:'bridge',relay:{base,lower,upper,car,foot,rest,lift,mast,haul,desk,files,eye:point(-2.74,6.03,-3.66)}};
   }
   function create(g){
-    return g.world.relay?{climb:'',low:false,top:false,travel:1,boarded:false,file:-1,rejected:false,loaded:false,
+    return g.world.relay?{climb:'',low:false,top:false,travel:1,trolley:TideRelayTrolley.create(),boarded:false,file:-1,rejected:false,loaded:false,
       yaw:.28,pitch:-.14,actualYaw:0,actualPitch:0,reference:null,strength:0,lock:0,cursor:0,
       mask:Array(6).fill(false),tried:Array(6).fill(false),signed:[false,false],voice:'',clock:0,
       message:null,line:-1,subtitle:'',sum:0,samples:0,stageMode:'',gripTime:0}:null;
@@ -29,7 +29,7 @@ const TideRelay=(()=>{
     const r=g.relay;if(!r)return;
     r.stageMode='';r.voice='';r.clock=0;r.message=null;r.line=-1;r.subtitle='';r.lock=0;
     g.cues.water=-3.45;
-    if(g.stage>=1){r.top=r.low=r.loaded=true;r.file=1;r.climb='';r.travel=1;}
+    if(g.stage>=1){r.top=r.low=r.loaded=true;r.file=1;r.climb='';TideRelayTrolley.reset(g,true);}
     if(g.stage===2){r.mask.fill(true);r.tried.fill(true);}
   }
   function nearestFile(g){
@@ -50,7 +50,7 @@ const TideRelay=(()=>{
   function near(g,i){
     const r=g.relay,w=g.world.relay,p=g.players[i],s=target(g,i);
     if(!i&&r.climb)return true;
-    if(!i&&s===w.lift)return p.ground===w.car&&r.travel>.91&&Math.abs(p.x-w.lift.x)<.78;
+    if(!i&&s===w.lift)return p.grounded&&p.ground===w.car;
     if(s.kind==='car')return false;
     if(s===w.mast&&p.ground!==w.upper)return false;
     return p.grounded&&Math.abs(p.y-s.y)<.38&&Math.hypot(p.x-s.x,p.z-s.z)<(s.kind==='file'?.77:1.03)&&
@@ -71,11 +71,9 @@ const TideRelay=(()=>{
       pitch:amp*(.033*Math.sin(t*1.14-.4)+.016*Math.cos(t*.58))};
   }
   function wind(g){return Math.sin(g.time*1.35+.18);}
-  function step(g,dt){
-    const r=g.relay,w=g.world.relay,c=w.car,t=r.travel;
-    const x=point(-3.65+2.13*t,0,0).x,y=2.02+.13*Math.sin(t*Math.PI)*wind(g),z=point(0,0,-1.47).z+.16*Math.sin(t*Math.PI)*Math.sin(g.time*1.15);
-    for(const p of g.players)if(p.ground===c){p.x+=x-c.x;p.y+=y-c.y;p.z+=z-c.z;}
-    Object.assign(c,{x,y,z});
+  function step(g,dt,driver){
+    const r=g.relay;
+    TideRelayTrolley.move(g,driver,dt);
     const gust=winds(g),aim=bearing(g);
     r.actualYaw=r.yaw+gust.yaw;r.actualPitch=r.pitch+gust.pitch;
     r.strength=Math.exp(-Math.pow((r.actualYaw-aim.yaw)/.098,2)-Math.pow((r.actualPitch-aim.pitch)/.076,2));
@@ -92,7 +90,15 @@ const TideRelay=(()=>{
     }
   }
   function stance(g,i,dt){
-    const p=g.players[i],s=target(g,i);if(!i&&!g.relay.top)return;
+    const p=g.players[i],s=target(g,i);
+    if(!i&&!g.relay.top){
+      if(p.ground===g.world.relay.car){
+        const c=p.ground,k=1-Math.exp(-dt*9);
+        p.x+=(c.x-p.x)*k;p.z+=(c.z+.13-p.z)*k;
+        p.yaw+=Math.atan2(-Math.sin(p.yaw),Math.cos(p.yaw))*k;
+      }
+      return;
+    }
     const k=1-Math.exp(-dt*9);const x=s.x+(i&&g.stage===2?.58:!i&&g.stage===2?-.13:0);
     p.x+=(x-p.x)*k;p.z+=(s.z-p.z)*k;
     p.yaw+=Math.atan2(Math.sin(-p.yaw),Math.cos(p.yaw))*k;
@@ -102,6 +108,7 @@ const TideRelay=(()=>{
     if(r.climb===''){
       const s=target(g,0);
       if(!k.use||!near(g,0)||(s!==w.foot&&s!==w.lift))return false;
+      if(s===w.lift&&(!r.trolley.locked||!k.jump))return false;
       r.climb=s===w.foot?'lower':'upper';r.gripTime=0;
       g.sound(253,.08);
     }
@@ -139,14 +146,17 @@ const TideRelay=(()=>{
   function arrive(g,input,dt){
     const r=g.relay,w=g.world.relay,p=g.players[0],s=target(g,1);
     if(!r.top){
-      if(g.engaged[1]&&s===w.haul)r.travel=clamp(r.travel+input[1].x*dt*.48,0,1);
-      if(p.ground===w.car)r.boarded=true;
-      if(p.y<1.22&&!r.climb)r.boarded=false;
-      g.set(0,r.climb?'前推沿爬梯攀升，后拉可以退回。':!r.low||p.y<1.3?'走到外侧爬梯，按操作键抓牢，前推上爬。':
-        p.ground===w.car?'踏板接近上梯时，按操作键抓住上段爬梯，再前推。':'等踏板靠近，再向右跳上横移踏板。',{
-        caption:r.climb==='upper'?'上段爬梯':r.low?'下层歇脚板已设安全索':'下段爬梯'});
-      if(s===w.haul)g.set(1,'握住绞盘，先向左收踏板接人。等同伴站稳，向右把他送到上梯。',{
-        vis:'dial',value:r.travel,caption:(p.ground===w.car?'踏板已承重':'踏板空载')+'　·　'+Math.round(r.travel*100)+'%'});
+      const h=r.trolley,onDeck=p.ground===w.car;
+      TideRelayTrolley.insert(g,input[0],dt);
+      if(onDeck&&!r.boarded)g.sound(174,.06);
+      r.boarded=onDeck;
+      const action=r.climb?'前推上爬，后拉可沿梯退回。':!r.low||p.y<1.3?'到外梯脚按操作键抓牢，前推上爬。':
+        !onDeck?'等沈遥收回踏板，再向右跳上去。':h.locked?'保持握持，按跳跃换手接梯，前推登顶。':
+        h.missed&&!h.blocked?'销头落空了。后拉收回，报出梯座的方向。':h.blocked?'销尖顶住了。后拉收销，报出偏差，再前推。':'握住插销，看梯座报左右。沈遥抱闸后，前推入孔。';
+      g.set(0,action,{caption:onDeck?(h.locked?'插销已穿过梯座':TideRelayTrolley.direction(h)):(r.climb==='upper'?'上段爬梯':r.low?'下层歇脚板 · 安全索':'下段爬梯')});
+      if(s===w.haul)g.set(1,h.locked?'已听见闩响。等林澈接上梯，去稿架取件。':onDeck?
+        '听林澈报孔位。左右点动绞盘，松方向并继续握持即可抱闸。':'握住绞盘向左收车，等同伴跳上踏板。',{
+        caption:(onDeck?'踏板承重':'空载')+'　·　'+(h.brake>.78?'已抱闸':h.driver?'绞盘在手':'绞盘松开')});
     }
     if(s.kind==='file'){
       g.set(1,'走到稿架的三份原件前，核对桅顶同伴要的日期。握住纸角并确认取件。',{caption:'稿架　'+s.label});
@@ -225,7 +235,14 @@ const TideRelay=(()=>{
   }
   function interact(g,input,dt){
     const r=g.relay;
-    if(g.stage===0)arrive(g,input,dt);
+    if(g.stage===0){
+      arrive(g,input,dt);
+      const h=r.trolley;
+      if(!r.voice){
+        if(!h.dialogue&&r.boarded&&h.driver){h.dialogue=1;startVoice(g,'transferBoard','trolley');}
+        else if(h.locked&&h.dialogue===1){h.dialogue=2;startVoice(g,'transferPin','trolley');}
+      }
+    }
     else{
       if(TideLookout.active(g)){
         TideLookout.interact(g,input,dt);
@@ -239,15 +256,15 @@ const TideRelay=(()=>{
   }
   function checkpoint(g){
     const r=g.relay;if(!r||!r.low)return null;
-    return {low:true,top:r.top,loaded:r.loaded,scope:g.watch?.done===true,mask:r.mask.slice(),tried:r.tried.slice(),signed:r.signed.slice()};
+    return {low:true,docked:r.trolley.locked,top:r.top,loaded:r.loaded,scope:g.watch?.done===true,mask:r.mask.slice(),tried:r.tried.slice(),signed:r.signed.slice()};
   }
   function restore(g,save){
     if(!g.relay||save?.low!==true)return;
     const w=g.world.relay,r=g.relay;r.low=true;r.top=g.stage>0||save.top===true;r.loaded=g.stage>0||save.loaded===true;
-    r.file=r.loaded?1:-1;r.travel=r.top?1:0;
-    g.checkpoints=[r.top?w.mast:w.rest,r.loaded?w.desk:r.top?w.files[1]:w.haul];
+    r.file=r.loaded?1:-1;TideRelayTrolley.reset(g,r.top||save.docked===true);
+    g.checkpoints=[r.top?w.mast:r.trolley.locked?w.car:w.rest,r.loaded?w.desk:r.top?w.files[1]:w.haul];
     g.players=g.checkpoints.map(TideTraversal.spawn);
-    if(!r.top)Object.assign(g.players[0],{z:w.rest.z,ground:w.lower});
+    if(!r.top)Object.assign(g.players[0],r.trolley.locked?{ground:w.car,z:w.car.z+.13}:{z:w.rest.z,ground:w.lower});
     g.players[1].ground=w.base;
     // The foot positions are inside the usable top grating after a tower save.
     if(r.top)Object.assign(g.players[0],{x:w.mast.x,y:w.upper.y,z:w.mast.z,ground:w.upper});

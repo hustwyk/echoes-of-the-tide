@@ -397,7 +397,7 @@ const TideHarbor = (() => {
           at:[ledge.x+.15,(p.y+ledge.y)*.5+1.05,ledge.z+1.10]}:null;
         const cableShot=ready&&g.cable?this.cableYard.shot(g,i):null;
         const tapeShot=ready&&g.archive?TideArchive.shot(g,i):null;
-        const relayShot=ready&&g.fog?this.fogHouse.shot(g,i,this.sightlines):ready&&g.survey?this.tideStation.shot(g,i,vw/height):ready&&g.relay?this.relayStation.shot(g,i):null;
+        const relayShot=ready&&g.fog?this.fogHouse.shot(g,i,this.sightlines):ready&&g.survey?this.tideStation.shot(g,i,vw/height):ready&&g.relay?this.relayStation.shot(g,i,vw/height):null;
         const berthShot=TideFenders.active(g)&&ready?TideFenders.shot(g,i,yaw,this.pitch[i]):null;
         const atTin=g.section.tram&&!g.section.tram.heard&&g.engaged[i]&&g.state.taps?.length;
         const pocketShot=ready&&(g.state.pocket||atTin)?this.bridgework?.pocketShot(i):null;

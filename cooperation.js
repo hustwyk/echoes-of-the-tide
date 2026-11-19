@@ -97,7 +97,7 @@ const TideCoop = (() => {
         this.cues.water=-3.56+.045*Math.sin(this.time*.22);TideLastPass.aimLight(this,this.leadAngle,.11);
       }
       if(this.survey)TideSoundings.step(this,dt);
-      if(this.relay)TideRelay.step(this,dt);
+      if(this.relay)TideRelay.step(this,dt,inputs[1]);
       if(this.cable)TideCableQuay.update(this,dt);
       const transfer=TideSwing.active(this);
       const activeSites=this.field.done?section.sites:section.field.sites;
@@ -128,6 +128,9 @@ const TideCoop = (() => {
         else if(this.relay){
           TideRelay.collision(this,p);if(this.engaged[side])TideRelay.stance(this,side,dt);
           if(!side&&this.relay.top&&p.y<this.world.relay.upper.y-1.40)this.resetPerson(0,'桅顶安全索接住了你');
+          else if(!side&&this.relay.trolley.locked&&!this.relay.top&&p.y<this.world.relay.car.y-.9){
+            this.resetPerson(0,'接梯安全索拉回踏板');p.ground=this.world.relay.car;
+          }
         }else if(this.cable){if(!side)TideCableQuay.restrain(this);TideCableQuay.collide(this,p);if(this.engaged[side])TideCableQuay.pose(this,side,dt);}
         else if(this.landfall){if(this.engaged[side])TideLandfall.stance(this,side,dt);}
         else if(this.archive){TideArchive.collide(this,p);if(this.engaged[side])TideArchive.stance(this,side,dt);}

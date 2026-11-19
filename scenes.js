@@ -20,7 +20,7 @@ const TideScenes=(()=>{
     'taperoom tapedesk archivestudio summer-room screw-table child-duo regatta-speech regatta-boats',
     'glassenv glassgear glassroom',
     'swinggear swingyard',
-    'relayenv relaygear relaystation',
+    'relay-trolley relayenv relaygear trolley-fittings relaystation',
     'soundingsenv chart-rule soundingsgear stern-compass broken-pile surveypier',
     'lanternroom gallery-gear gallery-belay gallery-yard gallery-wall gallery-slip',
     'foghouseenv foghousegear fog-haul haul-pose foghouse',
