@@ -3,7 +3,7 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const box=vm.createContext({});
-for(const name of ['missions','traversal','floating','warp-speech','warping','fender-speech','fenders','plate-speech','arrival-speech','stern-line','arrival','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','buoy-motion','light-register','lookout','cistern-speech','cistern','glass-speech','chartroom','paper','lantern','gallery-speech','gallery','shift-speech','starter','transit-speech','transit','signal','tin-lines','tin-memory','archive','relay-speech','relay','soundings-speech','survey-plot','soundings','fog-speech','haul-speech','fog-recovery','fogsignal','pass-speech','lastpass','swing-speech','swing','cooperation']){
+for(const name of ['missions','traversal','floating','warp-speech','warping','fender-speech','fender-coping','fenders','plate-speech','arrival-speech','stern-line','arrival','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','buoy-motion','light-register','lookout','cistern-speech','cistern','glass-speech','chartroom','paper','lantern','gallery-speech','gallery','shift-speech','starter','transit-speech','transit','signal','tin-lines','tin-memory','archive','relay-speech','relay','soundings-speech','survey-plot','soundings','fog-speech','haul-speech','fog-recovery','fogsignal','pass-speech','lastpass','swing-speech','swing','cooperation']){
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../dist',name+'.js'),'utf8'),box);
 }
 const {Session,near,surface,lookout,ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideSwing,TideCistern,TideGlass,TidePaper}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideSwing,TideCistern,TideGlass,TidePaper})',box);
@@ -532,6 +532,9 @@ function fenderInputs(g,out){
     else steer(g,1,TideFenders.pawl,out[1]);
   }else if(!s.seen[1]){
     steer(g,1,b.z>14.33?w.shelf:w.well,out[1]);
+  }else if(s.ledge){
+    out[1].z=s.ledge.z>10.02?-1:0;
+    out[1].jump=s.ledge.z<=10.02&&!s.previousJump;
   }else if(s.wall?.phase==='hold'){
     out[1].x=-s.wall.normalX;
     out[1].jump=s.wall.age>.025&&(!s.lastFace?s.setting>.88:true)&&!s.previousJump;
@@ -705,6 +708,13 @@ function control(g){
   }
   if(s.type==='ride'){
     const d=s.driver,r=1-d,carrier=sec.ferry.deck;
+    if(g.rig?.belay){
+      const p=g.players[r],edge=sec.rig.ledge;
+      out[d].use=true;out[d].z=-1;
+      out[r].x=Math.max(-1,Math.min(1,(edge.x-p.x)*4));out[r].z=-.72;
+      out[r].jump=p.y>edge.y-.23&&Math.abs(p.z-edge.z)<1.16&&Math.abs(p.x-edge.x)<.60;
+      return out;
+    }
     if(q.latch){
       if(q.returnGate||s.mode==='basket'&&!(g.index===0&&g.stage===1))routeTo(g,d,sec.ends[d],out[d]);
       if(q.returnGate===1 && g.players[d].z<=(sec.starts[d].z+sec.ends[d].z)/2+.65)out[d]=empty();
@@ -969,7 +979,19 @@ if(require.main===module){
     assert.equal(s.wall.phase,'hold');assert.ok(g.players[1].y<=entry+.01);
     reach(g,()=>s.wall?.phase==='hold'&&s.wall.normalX===-1);assert.equal(s.kicks,1);
     assert.ok(s.setting>.65);assert.ok(Math.abs(g.players[1].x-(s.fenderX-.28))<.03);
-    reach(g,()=>s.top[1]);assert.ok(!s.top[0]);
+    reach(g,()=>s.ledge?.phase==='hang');
+    const hanging=g.players[1],caughtZ=hanging.z,beforeMantle=g.setbacks;
+    assert.equal(s.contactSound,'lipCatch');assert.ok(caughtZ>10.45);
+    for(let j=0;j<55;j++)g.tick(step,[control(g)[0],empty()]);
+    assert.equal(hanging.y,.68-1.70);assert.equal(hanging.z,caughtZ);
+    g.tick(step,[control(g)[0],{...empty(),jump:true}]);
+    assert.match(g.notice,/铁盖/);assert.equal(s.ledge.phase,'hang');assert.ok(!s.top[1]);
+    for(let j=0;j<50;j++)g.tick(step,[control(g)[0],{...empty(),z:-1,jump:true}]);
+    assert.equal(s.ledge.phase,'hang','holding the failed pull must not mantle automatically');
+    assert.ok(hanging.z<caughtZ-.60&&s.contactSound==='lipShift');
+    reach(g,()=>s.ledge?.phase==='up');assert.ok(!hanging.grounded&&!s.top[1]);
+    reach(g,()=>s.top[1]);assert.ok(!s.top[0]);assert.equal(g.setbacks,beforeMantle);
+    assert.equal(s.contactSound,'lipLand');assert.equal(hanging.ground,g.world.fenders.ledge);
     const upper=TideFenders.checkpoint(g);assert.equal(upper.berth,'upper');
     const saved=new Session(0);TideFenders.restore(saved,upper);
     assert.equal(saved.players[1].ground,saved.world.fenders.ledge);
@@ -984,6 +1006,36 @@ if(require.main===module){
     reach(g,()=>s.phase==='done');assert.equal(g.stage,0);assert.equal(g.state.ferry,0);
     const docked=new Session(0);TideFenders.restore(docked,TideFenders.checkpoint(g));
     assert.equal(TideFenders.active(docked),false);reach(docked,()=>docked.stage===1);
+    const high=new Session(0),h=high.fenders;
+    let secondFoot=false,caught=false;
+    for(let n=0;n<4800&&!h.top[1];n++){
+      const k=control(high),p=high.players[1];
+      if(h.seen[1]&&p.grounded&&!h.wall&&!h.lastFace&&Math.abs(p.z-9.90)>.06){
+        k[1].jump=false;k[1].x=0;k[1].z=Math.max(-1,Math.min(1,(9.90-p.z)*7-p.vz*.25));
+      }
+      if(h.wall?.normalX===-1&&h.wall.phase==='hold'){
+        secondFoot=true;k[1].jump=h.wall.age>.48&&!h.previousJump;
+      }
+      high.tick(step,k);caught||=!!h.ledge;
+    }
+    assert.ok(secondFoot&&h.top[1]&&!caught);assert.equal(high.setbacks,0);
+    assert.ok(high.players[1].z<10.32);assert.equal(h.contactSerial,0);
+    const blocked=new Session(0);let loadedShoe=false;
+    for(let n=0;n<3900&&!blocked.fenders.ledge;n++){
+      const k=control(blocked),wall=blocked.fenders.wall;
+      if(wall?.normalX===-1&&wall.phase==='hold'){
+        k[1].jump=wall.age>.48&&!blocked.fenders.previousJump;loadedShoe||=k[1].jump;
+      }
+      blocked.tick(step,k);assert.ok(!blocked.fenders.top[1],'Iron bullnose cannot count as a landing');
+    }
+    assert.ok(loadedShoe&&blocked.fenders.ledge.z>10.45);assert.equal(blocked.setbacks,0);
+    const release=new Session(0);
+    reach(release,()=>release.fenders.ledge?.age>.45);
+    release.tick(step,[control(release)[0],{...empty(),use:true}]);
+    assert.ok(!release.fenders.ledge&&!release.fenders.top[1]);assert.ok(release.players[1].vy<0);
+    for(let j=0;j<180&&!release.players[1].grounded;j++)release.tick(step,[control(release)[0],empty()]);
+    assert.equal(release.players[1].ground,release.world.fenders.well);
+    reach(release,()=>release.fenders.top[1]);
     const solo=new Session(0);
     reach(solo,()=>solo.fenders.seen[1]);
     for(let j=0;j<500;j++){

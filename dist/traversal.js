@@ -150,5 +150,5 @@ const TideTraversal = (() => {
       p.y=top;p.vy=0;p.cast=false;if(!floor.buoyant)p.deckMotion=null;p.jumpRise=false;p.ground=floor;p.grounded=true;p.grace=.095;
     } else {p.grounded=false;p.ground=null;p.grace-=dt;}
   }
-  return {build,spawn,move,netHeight,surfaceHeight,surface,clamp,mix};
+  return {build,spawn,move,netHeight,surfaceHeight,surface,clamp,mix,smooth};
 })();

@@ -28,7 +28,7 @@ const TideFenders = (() => {
     g.checkpoints=g.world.fenders.boats.slice();g.players=g.checkpoints.map(spawn);
     TideFloating.step(g.world.fenders.floatPose,g.players,g.cues.water,0,0);
     return {phase:'approach',setting:0,fenderX:2.67,fenderTop:-2.30,wheelSpin:0,ladder:0,pawl:false,onLadder:false,
-      wall:null,lastFace:0,kicks:0,wallBuffer:0,previousJump:false,seen:[false,false],grip:[null,null],top:[false,false],voice:'shore',clock:0,line:-1,queue:[],subtitle:'',warned:false,heardPawl:false};
+      ledge:null,ledgeExit:null,askedAtEdge:false,contactSerial:0,contactSound:'',contactAt:-10,wall:null,lastFace:0,kicks:0,wallBuffer:0,previousJump:false,seen:[false,false],grip:[null,null],top:[false,false],voice:'shore',clock:0,line:-1,queue:[],subtitle:'',warned:false,heardPawl:false};
   }
   function active(g){return g.index===0&&g.stage===0&&!!g.fenders&&g.fenders.phase!=='done';}
   function close(p,site,r=.9){return p.grounded&&Math.abs(p.y-site.y)<.4&&Math.hypot(p.x-site.x,p.z-site.z)<r;}
@@ -36,6 +36,7 @@ const TideFenders = (() => {
     const s=g.fenders,w=g.world.fenders;
     if(s.top[i]&&(i===0||s.ladder>=1))return {p:g.section.starts[0],name:'堤上吊篮码头'};
     if(!i)return s.ladder>=1?{p:ladder,name:'卷梯下端'}:{p:wheel,name:'护舷手绞轮'};
+    if(s.ledge)return {p:{x:left,y:top,z:Math.min(s.ledge.z,TideFenderCoping.flatEnd)},name:'平石堤沿'};
     if(s.top[1])return {p:pawl,name:'卷梯棘轮'};
     if(!s.seen[1])return {p:w.shelf,name:'落脚踏板'};
     return s.lastFace===1?{p:{x:s.fenderX,y:s.fenderTop-.68,z:10.68},name:'移动护舷'}:{p:{x:left,y:s.kicks?top:-1.62,z:10.68},name:s.kicks?'堤沿':'黑色固定护舷'};
@@ -50,7 +51,10 @@ const TideFenders = (() => {
   function narrate(g,dt){
     const s=g.fenders;
     if(!s||g.stage!==0)return;
-    if(!s.voice)s.voice=s.queue.shift()||'';
+    if(!s.voice){
+      if(s.queue[0]==='lipAsk'&&!s.ledge)s.queue.splice(0,s.queue[1]==='lipReply'?2:1);
+      s.voice=s.queue.shift()||'';
+    }
     if(!s.voice){s.subtitle='';return;}
     const clip=TideFenderSpeech[s.voice];s.clock+=dt;
     while(s.line+1<clip.lines.length&&s.clock>=clip.lines[s.line+1][0]){
@@ -58,7 +62,7 @@ const TideFenders = (() => {
     }
     if(s.clock>=clip.duration){s.voice='';s.line=-1;s.clock=0;s.subtitle='';}
   }
-  function clearWall(s){s.wall=null;s.lastFace=0;s.kicks=0;s.wallBuffer=0;}
+  function clearWall(s){s.ledge=null;s.wall=null;s.lastFace=0;s.kicks=0;s.wallBuffer=0;}
   function swimmer(g,i,wet){
     const s=g.fenders,p=g.players[i];
     if(wet)g.cues.splash={x:p.x,z:p.z,at:g.time};
@@ -67,8 +71,9 @@ const TideFenders = (() => {
     g.setbacks++;g.events.reset?.(i);g.alert('救生索收紧，'+(i?'沈遥':'林澈')+'回到落脚处',1.8);
   }
   function climber(g,input,yaw,dt){
-    const s=g.fenders,p=g.players[1],oldX=p.x;
+    const s=g.fenders,p=g.players[1],oldX=p.x,oldZ=p.z;
     const pressed=!!input.jump&&!s.previousJump;s.previousJump=!!input.jump;
+    if(s.ledge){TideFenderCoping.step(g,input,pressed,dt);return;}
     s.wallBuffer=Math.max(0,s.wallBuffer-dt);
     if(pressed&&!p.grounded)s.wallBuffer=.12;
     const dx=input.x*Math.cos(yaw)+input.z*Math.sin(yaw);
@@ -78,7 +83,8 @@ const TideFenders = (() => {
       const normal=wall.normalX,plane=normal>0?left:s.fenderX;
       wall.age+=dt;wall.planeX=plane;wall.topY=normal>0?.62:s.fenderTop;
       if(s.wallBuffer>0){
-        p.vx=normal*5.6;p.vy=8.0;p.vz=dz*1.3;p.cast=true;p.grace=p.jumpBuffer=0;p.jumpRise=false;p.launch=1;
+        p.vx=normal*5.6;p.vy=normal>0?8:2.65+5.95*TideFenderCoping.charge(wall);
+        p.vz=dz*1.3;p.cast=true;p.grace=p.jumpBuffer=0;p.jumpRise=false;p.launch=1;
         s.wallBuffer=0;s.kicks++;s.lastFace=normal;wall.phase='kick';wall.age=0;
       }else if(p.y< -2.53||(normal<0&&p.y+.45>s.fenderTop)||dx*normal>.52&&wall.age>.12||p.z<9.10||p.z>11.9){
         s.wall=null;p.vx=normal*.9;p.cast=false;
@@ -89,6 +95,8 @@ const TideFenders = (() => {
     }
     if(s.wall?.phase==='kick'){s.wall.age+=dt;if(s.wall.age>.27){s.wall=null;p.cast=false;}}
     move(p,{...input,jump:pressed&&p.grounded},dt,g.world,yaw,false);
+    if(TideFenderCoping.catchEdge(g,oldX,dx<-.12||p.vx<-.65))return;
+    TideFenderCoping.guard(p,oldX,oldZ);
     if(p.grounded)clearWall(s);
     if(p.z<9.05||p.z>11.95)return;
     for(const normal of [1,-1]){
@@ -97,7 +105,8 @@ const TideFenders = (() => {
       p.x=plane+normal*clearance;
       const inward=p.vx*normal<-.1||dx*normal<-.2;p.vx=normal*Math.max(0,p.vx*normal);
       const tread=normal>0?p.y> -1.80:p.y> -1.10&&p.y+.45<cap;
-      if(!p.grounded&&inward&&tread&&s.lastFace!==normal&&p.y+.22<cap){
+      const slidingToEdge=normal===1&&s.lastFace===-1&&p.vy<0&&TideFenderCoping.aboveGrip(p);
+      if(!p.grounded&&inward&&tread&&!slidingToEdge&&s.lastFace!==normal&&p.y+.22<cap){
         s.wall={phase:'hold',normalX:normal,normalZ:0,planeX:plane,topY:cap,age:0};p.vy=Math.min(p.vy,.12);p.cast=false;p.grace=p.jumpBuffer=0;
         p.yaw=Math.atan2(normal,0);
       }
@@ -128,7 +137,10 @@ const TideFenders = (() => {
       if(a.y>=top){Object.assign(a,spawn(w.sill),{z:9.15});s.onLadder=false;s.top[0]=true;g.checkpoints[0]=w.sill;}
       if(a.y<=ladder.y&&!ka.use){Object.assign(a,spawn(w.lower),{x:ladder.x,z:ladder.z});s.onLadder=false;}
     }else move(a,ka,dt,g.world,yaws[0],winding);
-    if(!s.top[1])climber(g,kb,yaws[1],dt);else move(b,kb,dt,g.world,yaws[1],s.pawl);
+    if(!s.top[1])climber(g,kb,yaws[1],dt);
+    else{
+      const oldX=b.x,oldZ=b.z;move(b,kb,dt,g.world,yaws[1],s.pawl);TideFenderCoping.guard(b,oldX,oldZ);
+    }
     if(a.ground===w.lower&&!s.seen[0]){s.seen[0]=true;g.checkpoints[0]=w.lower;}
     if(b.ground===w.well&&!s.seen[1]){s.seen[1]=true;g.checkpoints[1]=w.well;s.phase='climb';}
     if(!s.top[1]&&b.ground===w.ledge){
@@ -142,8 +154,8 @@ const TideFenders = (() => {
       if(wet||s.top[i]&&p.y<top-1.46)swimmer(g,i,wet);
       g.near[i]=!!s.grip[i]||close(g.players[i],target(g,i).p);g.engaged[i]=!!s.grip[i];
     }
-    const leftText=s.top[0]?'从石阶下到吊篮码头':s.onLadder?'握紧梯档，向前爬；松手可停':s.ladder>=1?'到绞轮后面的卷梯，按住操作并向前爬':s.top[1]?'靠近回程梯，等沈遥放到底':s.seen[0]?'按住操作并向前收绳，等沈遥蹬上堤沿':'跑向手绞轮，在艇边起跳，长按跳得更高';
-    const rightText=s.ladder>=1?'回身下石阶，在吊篮码头等林澈':s.top[1]?'站到棘轮前，按住操作并向后放梯':s.wall?.phase==='hold'?'脚掌贴住了，松开再按跳蹬向对面':s.lastFace===1?'接住升起的右护舷，再按跳蹬回左堤沿':s.seen[1]?'向左边黑护舷起跳，贴住后再按一次跳':'越过艇边水沟，沿窄踏板跑到两块护舷之间';
+    const leftText=s.top[0]?'从石阶下到吊篮码头':s.onLadder?'握紧梯档，向前爬；松手可停':s.ladder>=1?'到绞轮后面的卷梯，按住操作并向前爬':s.top[1]?'靠近回程梯，等沈遥放到底':s.ledge?'她挂住了。守在绞轮边，等她绕过堤沿的铁盖。':s.seen[0]?'按住操作并向前收绳，等沈遥蹬上堤沿':'跑向手绞轮，在艇边起跳，长按跳得更高';
+    const rightText=s.ladder>=1?'回身下石阶，在吊篮码头等林澈':s.top[1]?'站到棘轮前，按住操作并向后放梯':s.ledge?(s.ledge.phase==='up'?'压稳双掌，把膝盖送上堤。':s.ledge.z>TideFenderCoping.flatEnd?'抓紧石边，沿边往岸里挪，找铁盖尽头的平石。':'双手上方已经平了，再按跳翻上堤。'):s.wall?.phase==='hold'?(s.wall.normalX>0?'脚掌贴住了，松开再按跳蹬向对面':(TideFenderCoping.charge(s.wall)>.90?'脚掌踩稳了。按跳高蹬，往堤上平石落。':'短蹬可抓沿。脚掌压稳胶面后，再蹬能跳高。')):s.lastFace===1?'接住升起的右护舷，再按跳蹬回左堤沿':s.seen[1]?'向左边黑护舷起跳，贴住后再按一次跳':'越过艇边水沟，沿窄踏板跑到两块护舷之间';
     g.set(0,leftText,s.grip[0]==='wheel'?{vis:'dial',value:s.setting,caption:'护舷升程 '+Math.round(100*s.setting)+'%'}:{});
     g.set(1,rightText,s.grip[1]==='pawl'?{vis:'dial',value:s.ladder,caption:'放梯 '+Math.round(100*s.ladder)+'%'}:{});
     if(s.top.every(Boolean)&&g.players.every(p=>p.grounded&&p.z<5.79)){
@@ -164,10 +176,12 @@ const TideFenders = (() => {
     const s=g.fenders,w=g.world.fenders;s.phase=mark.berth;s.top[1]=true;s.seen.fill(true);s.setting=1;s.voice='';s.heardPawl=mark.berth!=='upper';s.clock=0;s.line=-1;s.queue=[];s.subtitle='';s.warned=true;geometry(s);
     s.ladder=s.phase==='upper'?0:1;s.top[0]=s.phase==='done';
     g.checkpoints=s.phase==='done'?g.section.starts.slice():[w.lower,w.ledge];g.players=g.checkpoints.map(spawn);
+    if(!s.top[0])g.players[1].z=9.98;
     g.notice=s.phase==='upper'?'沈遥已经登堤，卷梯棘轮在她手边':s.phase==='exit'?'卷梯已锁定，林澈可以攀上去':g.spec.radio;g.noticeUntil=g.time+4;
   }
   function shot(g,i,yaw,pitch){
     const s=g.fenders,p=g.players[i];
+    const edge=TideFenderCoping.shot(g,i);if(edge)return edge;
     if(Math.abs(yaw)>.85||(!s.grip[i]&&(i===0||!s.seen[1]||s.top[1])))return null;
     const x=i?(s.top[1]?-2.12:.10):p.x;
     const y=i&&!s.top[1]?Math.max(-.64,p.y+.72):p.y+1.12;

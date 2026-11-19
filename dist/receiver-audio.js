@@ -32,6 +32,7 @@ const TideReceiverAudio=(()=>{
     const buffers={},pending=new Set();
     let air=null,echo=null,swingSource=null,swingSerial=0,swingFoley=null;
     let haulSource=null,haulSerial=0,haulFoley=null;
+    let lipSource=null,lipSerial=0,lipFoley=null;
     let plotSource=null,plotSerial=0,plotFoley=null,bookSource=null,bookSerial=0,bookFoley=null;
     let starter=null;
     const starterHits=new Map();
@@ -88,7 +89,7 @@ const TideReceiverAudio=(()=>{
       if(clip){clip.gain.gain.setTargetAtTime(.0001,ctx.currentTime,.012);try{clip.source.stop(ctx.currentTime+.045);}catch{}}
       return null;
     }
-    function stop(){bookFoley=end(bookFoley);plotFoley=end(plotFoley);for(const hit of starterHits.values())hit.clip=end(hit.clip);plateFoley=end(plateFoley);haulFoley=end(haulFoley);arrivalFoley=end(arrivalFoley);swingFoley=end(swingFoley);air=end(air);if(echo){for(const node of Object.values(echo))node.disconnect();echo=null;}preview=end(preview);call=end(call);ratchet=end(ratchet);previousStroke=0;story=end(story);storyKey='';relay=end(relay);lastKey=false;}
+    function stop(){lipFoley=end(lipFoley);bookFoley=end(bookFoley);plotFoley=end(plotFoley);for(const hit of starterHits.values())hit.clip=end(hit.clip);plateFoley=end(plateFoley);haulFoley=end(haulFoley);arrivalFoley=end(arrivalFoley);swingFoley=end(swingFoley);air=end(air);if(echo){for(const node of Object.values(echo))node.disconnect();echo=null;}preview=end(preview);call=end(call);ratchet=end(ratchet);previousStroke=0;story=end(story);storyKey='';relay=end(relay);lastKey=false;}
     function quay(g){
       const a=g.cable,button=a.down||a.returnDown;
       if(button&&!lastKey){relay=end(relay);relay=play('relay',.72);}
@@ -161,6 +162,14 @@ const TideReceiverAudio=(()=>{
       const berth=g.stage===0&&g.fenders;
       const memory=g.archive?.memory;
       if(memory||g.signal||berth||g.swing||g.cistern||g.glass||g.lastPass||horn||g.relay||g.survey){
+        if(berth){
+          if(lipSource!==berth){lipSource=berth;lipSerial=0;}
+          const key='dock/'+berth.contactSound;
+          if(lipSerial!==berth.contactSerial&&buffers[key]){
+            lipSerial=berth.contactSerial;lipFoley=end(lipFoley);
+            lipFoley=play(key,.81,Math.max(0,g.time-berth.contactAt));
+          }
+        }
         if(g.swing){
           if(swingSource!==g.swing){swingSource=g.swing;swingSerial=g.swing.cueSerial||0;}
           for(const id of ['strain','clasp','tin']){const key='sway/'+id;if(!buffers[key]&&!pending.has(key))decode(key).catch(()=>{});}

@@ -101,7 +101,9 @@ const TideHud=(()=>{
         else if(drawing)plotKeys=pads[i]!=null?'RT 握尺　上下移脚　左右转尺　A 划线':'E 握尺　W / S 移脚　A / D 转尺　空格划线';
         else plotKeys=pads[i]!=null?'RT 握图台　左摇杆移十字　A 压针':'E 握图台　WASD 移十字　空格压针';
       }
-      set(v.querySelector('.control-hint'),readingBook?numberKeys:plotting?plotKeys:g.signal&&g.stage===0&&close?starterKeys:g.fog?.haul?rescueHint:TideGallery.active(g)?(pads[i]!=null?'左摇杆移动 / 转轮　A 跳　RT 握柄':i?'方向键移动 / 转轮　/ 跳　Enter 握柄':'WASD 移动 / 转轮　空格 跳　E 握柄'):TideArrival.active(g)?arrivalHint:TideTinMemory.active(g)?childhood:TideTransit.active(g)&&i===1?(pads[1]!=null?'左摇杆转镜　A 报位':'方向键转镜　/ 报位'):rack?(i?'向前重听　操作中确认登记':'左右选列，前后选层　操作中确认提起 / 放回'):work?bindings:tips);
+      const climbingEdge=i&&g.fenders?.ledge;
+      const edgeKeys=pads[i]!=null?'左摇杆沿边移动　A 翻上　RT 放手':'方向键沿边移动　/ 翻上　Enter 放手';
+      set(v.querySelector('.control-hint'),climbingEdge?edgeKeys:readingBook?numberKeys:plotting?plotKeys:g.signal&&g.stage===0&&close?starterKeys:g.fog?.haul?rescueHint:TideGallery.active(g)?(pads[i]!=null?'左摇杆移动 / 转轮　A 跳　RT 握柄':i?'方向键移动 / 转轮　/ 跳　Enter 握柄':'WASD 移动 / 转轮　空格 跳　E 握柄'):TideArrival.active(g)?arrivalHint:TideTinMemory.active(g)?childhood:TideTransit.active(g)&&i===1?(pads[1]!=null?'左摇杆转镜　A 报位':'方向键转镜　/ 报位'):rack?(i?'向前重听　操作中确认登记':'左右选列，前后选层　操作中确认提起 / 放回'):work?bindings:tips);
     }
   }
   return {build,update};
