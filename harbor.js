@@ -90,6 +90,7 @@ const TideHarbor = (() => {
     free() {
       if(!this.scene)return;
       this.releaseRange();
+      this.ferryHull?.dispose();this.ferryHull=null;this.entrance?.dispose();this.entrance=null;
       this.bridgeWindows?.dispose();this.bridgeWindows=null;
       this.pilotStand?.dispose();this.pilotStand=null;
       this.afterdeck?.dispose();this.watchHands?.dispose();this.afterdeck=this.watchHands=null;
@@ -104,7 +105,7 @@ const TideHarbor = (() => {
     load(g) {
       this.free();for(const cam of this.cameras)cam.layers.set(0);
       this.scene=new T.Scene();this.scene.background=new T.Color(0x597580);
-      this.coast=g.cistern||g.archive?null:TideCoast.create(this.scene,Math.floor(g.index/3),g.index);
+      this.coast=g.cistern||g.archive?null:TideCoast.create(this.scene,Math.floor(g.index/3),g.index,g.world.floors);
       this.floors=new Map();this.rigs=[];this.halos=[];
       const add=(m)=>{this.scene.add(m);return m;};
       const pierCuts=TidePierDeck.layout(g.world.floors);
@@ -175,12 +176,13 @@ const TideHarbor = (() => {
       this.lanternroom=g.world.lantern?TideLanternRoom.create(this.scene,g):null;
       this.bridgework=TideBridgework.create(this.scene,g,this.floors,this.actors);
       if(g.index===11){
+        this.entrance=TideEntranceMarks.create(this.scene,TideBayPassage.marks);
         this.bridgeWindows=TideBridgeWindows.create(this.ship);
         this.pilotStand=TidePilotStand.create(this.scene,g);
         this.afterdeck=TideAfterdeck.create(this.ship);
         this.watchHands=TideWatchHands.create(this.ship);
       }
-      this.ship.position.fromArray(TideLookout.vessel(g,g.time));if(!g.archive&&!g.cistern)add(this.ship);
+      this.ship.position.fromArray(TideLookout.vessel(g,g.time));if(this.coast){add(this.ship);this.ferryHull=TideFerryHull.create(this.ship);}
       this.dockside=g.cistern||g.glass||g.fog||g.survey||g.relay||g.cable||g.world.lantern||g.signal||g.archive?null:TideDockside.create(this.scene,g);
       this.fieldProps=g.cistern||g.fog||g.survey||g.relay||g.cable||g.archive?null:TideFieldProps.create(this.scene,g,this.actors);
       this.cinema=TideCinema.create(this.scene,g,{ship:this.ship,actors:this.actors,cameras:this.cameras,swingYard:this.swingYard,cisternRoom:this.cisternRoom,glassRoom:this.glassRoom,marker:this.coast?.marker});
@@ -262,7 +264,8 @@ const TideHarbor = (() => {
       }
       this.coast?.update(t,g.cues,g.players);this.shoreScans?.update(g,t);
       this.ship.position.fromArray(TideLookout.vessel(g,t));
-      this.ship.rotation.set(.028*Math.sin(t*.78),g.index===11?TideLastPass.yaw(g):g.fog?TideFogSignal.shipYaw:g.survey?TideSoundings.shipYaw:g.signal?TideSignal.ship(g,t).yaw:1.12+g.cues.rescue*.7,.034*Math.sin(t*.91));
+      this.ship.rotation.set(.028*Math.sin(t*.78),TideFerryTrail.yaw(g,t),.034*Math.sin(t*.91));
+      this.coast?.wash.update(g,t,this.ship);this.ferryHull?.update(t,g.cues.water,g.index);
       this.bridgeWindows?.update(g,t);this.watchHands?.update(g);this.pilotStand?.update(g);
       if(!g.rangeWatch&&this.rangeConsole)this.releaseRange();
       if(g.rangeWatch&&!this.rangeConsole){

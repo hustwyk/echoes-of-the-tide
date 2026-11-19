@@ -99,17 +99,19 @@ window.TideCoast = (() => {
       float a=6.28318530718*q;
       return -(.81+.075*cos(a*.31))*cos(a)+.085*sin(2.*a)+.037*sin(p.x*.38-p.y*.27+t*.85);
     }`;
-  const waterVertex = `
-    uniform float uTime,uSurvey;
-    ${surveyWaves}
-    varying vec3 vSea;
-    varying float vHeight;
+  const swells = surveyWaves + `
     float swell(vec2 p,float t){
       return .46*sin(dot(p,vec2(.23,.11))+t*1.12)
            + .34*sin(dot(p,vec2(-.17,.29))-t*.88)
            + .18*sin(dot(p,vec2(.49,-.41))+t*1.42)
            + .09*sin(dot(p,vec2(.81,.62))-t*1.64);
     }
+  `;
+  const waterVertex = `
+    uniform float uTime,uSurvey;
+    ${swells}
+    varying vec3 vSea;
+    varying float vHeight;
     void main(){
       vec4 world=modelMatrix*vec4(position,1.);
       float h=uSurvey>.5?surveySwell(world.xz,uTime):swell(world.xz,uTime);
@@ -119,11 +121,13 @@ window.TideCoast = (() => {
       gl_Position=projectionMatrix*viewMatrix*world;
     }`;
   const waterFragment = `
+${TideWindSea.declarations}
+    ${TideFerryWash.declarations}
     uniform sampler2D uNoise,uSky,uSceneMap;uniform mat4 uSceneProject;uniform float uSceneLevel,uSceneWeight;
     uniform float uTime,uHasSky,uSignal,uBearing,uInside,uSurvey;
     uniform vec2 uPilot;
     ${surveyWaves}
-    uniform float uShoreLamp;uniform vec4 uTurningShip;
+    uniform float uShoreLamp;uniform vec2 uEntranceMarks[2];
     uniform vec3 uSun,uFog;uniform vec4 basin,uNearOptic,uFarOptic;uniform vec2 uGhost,uRangeAxis;
     varying vec3 vSea;
     varying float vHeight;
@@ -139,36 +143,26 @@ window.TideCoast = (() => {
       vec2 flow=vec2(t*.009,-t*.006);
       vec3 noiseA=texture2D(uNoise,p*.039+flow).rgb;
       vec3 noiseB=texture2D(uNoise,p.yx*.082-flow*1.3).rgb;
-      float fine=mix(1.,.25,smoothstep(15.,190.,dist));
       float dx=.106*cos(dot(p,vec2(.23,.11))+t*1.12)-.058*cos(dot(p,vec2(-.17,.29))-t*.88)
-             +.088*cos(dot(p,vec2(.49,-.41))+t*1.42);
+             +.0882*cos(dot(p,vec2(.49,-.41))+t*1.42)+.0729*cos(dot(p,vec2(.81,.62))-t*1.64);
       float dz=.051*cos(dot(p,vec2(.23,.11))+t*1.12)+.099*cos(dot(p,vec2(-.17,.29))-t*.88)
-             -.074*cos(dot(p,vec2(.49,-.41))+t*1.42);
+             -.0738*cos(dot(p,vec2(.49,-.41))+t*1.42)+.0558*cos(dot(p,vec2(.81,.62))-t*1.64);
       if(uSurvey>.5){
         dx=(surveySwell(p+vec2(.1,0.),t)-surveySwell(p-vec2(.1,0.),t))*5.;
         dz=(surveySwell(p+vec2(0.,.1),t)-surveySwell(p-vec2(0.,.1),t))*5.;
       }
-      // Short gravity waves break into wind-aligned ripples. Fade the
-      // sub-pixel capillaries independently of the broad travelling swell.
-      vec2 wind=vec2(.872,.49),crosswind=vec2(-.49,.872);
-      float wx=dot(p,wind),wy=dot(p,crosswind);
-      float warp=2.1*(noiseA.r-.5)+.44*sin(wy*.74+t*.34);
-      float ripple=.083*cos(wx*6.83+.51*sin(wy*1.68)+warp-t*4.16)
-                  +.047*cos(wx*12.3+wy*2.7-warp*1.7-t*6.14);
-      float capillary=.024*cos(wx*28.7-wy*5.9+warp*3.2-t*9.14)*(1.-smoothstep(9.,42.,dist));
-      vec2 micro=wind*(ripple+capillary)+crosswind*.033*sin(wy*6.2+wx*1.9+t*3.17);
-      vec2 rough=vec2(noiseA.r+noiseB.g-1.,noiseB.r+noiseA.g-1.)*.31;
-      vec3 normal=normalize(vec3(-dx+(rough.x+micro.x)*fine,1.,-dz+(rough.y+micro.y)*fine));
-      vec3 reflected=reflect(-eye,normal),r=reflected;r.y=max(.018,r.y);
-      vec3 sky=mix(vec3(.30,.42,.47),texture2D(uSky,envUV(r)).rgb,uHasSky);
-      sky=mix(vec3(.085,.146,.16),sky,.34+.66*smoothstep(-.14,.11,reflected.y));
+      ${TideWindSea.surface}
+      ${TideFerryWash.disturbance}
+      vec3 reflected=reflect(-eye,normal),r=reflected;
+      ${TideWindSea.reflection}
       if(uSceneWeight>.5){
-        vec4 surfaceImage=uSceneProject*vec4(p.x,uSceneLevel,p.y,1.);
-        vec2 uv=surfaceImage.xy/max(surfaceImage.w,.001)*.5+.5;
-        vec2 tilt=clamp(normal.xz,vec2(-.8),vec2(.8));
-        vec2 curl=vec2(dot(tilt,vec2(.69,-.39)),dot(tilt,vec2(.33,.74)));
-        vec2 base=uv+curl*.036;
-        vec2 blur=vec2(.0009+.0018*abs(curl.x),.0012+.0021*abs(curl.y));
+        vec2 tilt=clamp(normal.xz,vec2(-.74),vec2(.74));
+        // Perturb the point on the reflector in world space before projecting.
+        // A facet reflecting the port side then moves the correct way in either eye.
+        float path=clamp(.35+.056*dist,.42,2.7);
+        vec4 surfaceImage=uSceneProject*vec4(p.x+tilt.x*path,uSceneLevel,p.y+tilt.y*path,1.);
+        vec2 base=surfaceImage.xy/max(surfaceImage.w,.001)*.5+.5;
+        vec2 blur=vec2(.0012+.0018*abs(tilt.x),.0013+.0021*abs(tilt.y));
         vec4 image=.5*texture2D(uSceneMap,base)+.25*(texture2D(uSceneMap,base+blur)+texture2D(uSceneMap,base-blur));
         float edge=smoothstep(.0,.035,min(min(base.x,base.y),min(1.-base.x,1.-base.y)));
         if(surfaceImage.w>0.)sky=mix(sky,image.rgb/max(image.a,.001),edge*clamp(image.a,0.,1.)*.91);
@@ -180,11 +174,7 @@ window.TideCoast = (() => {
       lit+=vec3(.016,.047,.039)*shaft;
       float shine=pow(max(dot(reflect(-uSun,normal),eye),0.),77.);
       lit+=vec3(1.,.61,.30)*shine*.8;
-      // Choppy crests break first; turbulence erodes each crest into filaments.
-      float crest=smoothstep(.58,1.03,vHeight+.19*(noiseA.r-.12));
-      float windward=smoothstep(-.12,.35,-dot(normal.xz,wind)+.35*(noiseA.r-.4));
-      float foam=crest*(.28+.72*windward)*smoothstep(.45,.68,noiseA.g*.48+noiseB.r*.52);
-      lit=mix(lit,vec3(.49,.55,.53),foam*.55);
+      ${TideWindSea.breaking}
       float ledX=14.+(p.y+85.)*tan(clamp(uBearing,-.7,.7));
       float streak=exp(-abs(p.x-ledX)*.38)*(noiseB.r*.8+.1);
       if(uPilot.y>0.){
@@ -219,12 +209,14 @@ window.TideCoast = (() => {
         float markerShine=exp(-pow(dot(nearMark,across)/.76,2.)-pow(dot(nearMark,transit)/3.3,2.));
         lit+=facet*vec3(.07,1.17,.43)*(shine*uShoreLamp+.38*markerShine);
       }
-      if(uTurningShip.w>0.){
-        vec2 waterTrack=p-uTurningShip.xy,stern=vec2(sin(uTurningShip.z),cos(uTurningShip.z));
-        float aft=dot(waterTrack,stern),sideWake=abs(dot(waterTrack,vec2(stern.y,-stern.x)));
-        float legs=exp(-pow((sideWake-2.8-.19*aft)/(.64+.043*max(0.,aft)),2.));
-        float froth=smoothstep(-2.,7.,aft)*(1.-smoothstep(8.,24.,aft))*legs*uTurningShip.w;
-        lit=mix(lit,vec3(.60,.70,.67),froth*smoothstep(.23,.64,noiseA.r+.21*normal.x));
+      ${TideFerryWash.color}
+      if(dot(uBayLine.zw,uBayLine.zw)>.5){
+        for(int j=0;j<2;j++){
+          float stone=1.-smoothstep(-4.28,-3.78,vSea.y);
+          float sd=distance(p,uEntranceMarks[j])-mix(.31,.64,stone);
+          float wash=(1.-smoothstep(.012,.12+.14*noiseA.g,sd))*smoothstep(.19,.74,wsMid.b+.16*vHeight);
+          lit=mix(lit,vec3(.68,.77,.72),wash*.75);
+        }
       }
       lit=mix(lit,lit*vec3(.26,.39,.40)+vec3(.004,.009,.010),uInside);
       lit=mix(lit,uFog,smoothstep(90.,290.,dist)*.74);
@@ -233,7 +225,7 @@ window.TideCoast = (() => {
       #include <colorspace_fragment>
     }`;
 
-  function create(scene,act,index=act*3) {
+  function create(scene,act,index=act*3,floors=[]) {
     const T=window.THREE, group=new T.Group();
     group.name='北岬海岸';
     scene.add(group);
@@ -318,20 +310,14 @@ window.TideCoast = (() => {
     const rim=new T.DirectionalLight(act===1?0xffb87c:0xafddff,act===1?1.05:.68);
     rim.position.set(29,16,24);
     group.add(hemisphere,sun,sunTarget,rim);
-    const oceanGeo=geom(new T.PlaneGeometry(640,540,192,162).rotateX(-Math.PI/2));
-    const vertices=oceanGeo.attributes.position;
-    // Concentrate wave vertices at the catwalks while preserving the far horizon.
-    for(let i=0;i<vertices.count;i++) {
-      const x=vertices.getX(i)/320, z=vertices.getZ(i)/270;
-      vertices.setX(i,320*Math.sign(x)*Math.pow(Math.abs(x),1.55));
-      vertices.setZ(i,270*Math.sign(z)*Math.pow(Math.abs(z),1.45));
-    }
-    const uniforms={uSceneMap:{value:null},uSceneProject:{value:new T.Matrix4()},uSceneWeight:{value:0},uSceneLevel:{value:-4},uPilot:{value:new T.Vector2()},uSurvey:{value:index===8?1:0},uTime:{value:0},uNoise:{value:noise},uSky:{value:noise},uHasSky:{value:0},uSignal:{value:0},
-      uShoreLamp:{value:index===2?0:-1},uTurningShip:{value:new T.Vector4()},
+    const oceanGeo=geom(TideOceanGrid.create(T,floors,index));
+    const windSea=TideWindSea.create(T),wash=TideFerryWash.create(T);
+    const uniforms={...windSea.uniforms,...wash.uniforms,uEntranceMarks:{value:TideBayPassage.marks.map(m=>new T.Vector2(m.x,m.z))},uSceneMap:{value:null},uSceneProject:{value:new T.Matrix4()},uSceneWeight:{value:0},uSceneLevel:{value:-4},uPilot:{value:new T.Vector2()},uSurvey:{value:index===8?1:0},uTime:{value:0},uNoise:{value:noise},uSky:{value:noise},uHasSky:{value:0},uSignal:{value:0},
+      uShoreLamp:{value:index===2?0:-1},
       uNearOptic:{value:new T.Vector4(0,0,1,-1)},uFarOptic:{value:new T.Vector4()},uGhost:{value:new T.Vector2()},uRangeAxis:{value:new T.Vector2(Math.sin(TideLantern.yaw),Math.cos(TideLantern.yaw))},
       basin:{value:new T.Vector4()},uBearing:{value:0},uInside:{value:act===1?.9:0},uSun:{value:new T.Vector3(-.42,.40,-.82).normalize()},uFog:{value:fogColor}};
     const water=new T.Mesh(oceanGeo,mat(new T.ShaderMaterial({uniforms,vertexShader:waterVertex,fragmentShader:waterFragment})));
-    water.name='潮汐海面';water.position.set(index===8?-42:0,-4,index===8?-97:-52);group.add(water);
+    water.name='潮汐海面';water.position.y=-4;group.add(water);
     readSky().then(img=>{
       if(disposed)return;
       const panorama=document.createElement('canvas');
@@ -779,12 +765,11 @@ window.TideCoast = (() => {
     group.add(new T.Points(glowGeo,glow));
 
     return {
-      marker,water,finalPile,
+      marker,water,finalPile,wash,
       update(t,cues={},players){
         frameShadow(players);uniforms.uTime.value=t;
         if(cues.vessel){
-          const s=cues.vessel;uniforms.uShoreLamp.value=cues.rangeGreen;
-          uniforms.uTurningShip.value.set(s.x,s.z,s.yaw,cues.wake||0);
+          uniforms.uShoreLamp.value=cues.rangeGreen;
         }
         if(cues.basinBounds)uniforms.basin.value.fromArray(cues.basinBounds);
         rainMat.uniforms.uTime.value=t;
@@ -807,7 +792,7 @@ window.TideCoast = (() => {
         }
         if(cues.pilot){
           const b=cues.pilot;
-          uniforms.uPilot.value.set(b.bearing,1);uniforms.uTurningShip.value.set(b.x,b.z,b.yaw,b.wake);
+          uniforms.uPilot.value.set(b.bearing,1);
           const bow=b.bow||[b.x,water.position.y+1.48,b.z];
           const range=Math.max(1,Math.hypot(bow[0]-lantern.x,bow[2]-lantern.z));
           beamDirection.set(Math.sin(b.bearing),(bow[1]-lantern.y)/range,-Math.cos(b.bearing)).normalize();
@@ -823,7 +808,7 @@ window.TideCoast = (() => {
       dispose(){
         if(disposed)return;
         disposed=true;
-        finalPile?.dispose();buoyFoam.dispose();buoyLantern.dispose();buoyBody.dispose();surf?.dispose();scene.remove(group);
+        windSea.dispose();wash.dispose();finalPile?.dispose();buoyFoam.dispose();buoyLantern.dispose();buoyBody.dispose();surf?.dispose();scene.remove(group);
         if(scene.background===sky || scene.background===fogColor){
           scene.background=previous.background;
           scene.backgroundIntensity=previous.intensity;
@@ -838,5 +823,5 @@ window.TideCoast = (() => {
     };
   }
 
-  return {create};
+  return {create,swells};
 })();

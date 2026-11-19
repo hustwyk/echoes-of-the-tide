@@ -1,17 +1,17 @@
 // The ship drifts lengthwise past a fixed pile. The lookout can see both collars
 // clear the transom before the captain spends the last burst of propulsion.
 const TideLastPass=(()=>{
-  const home=-.96,heading=-2.19,clamp=TideTraversal.clamp;
+  const home=-.96,heading=TideBayPassage.entry,clamp=TideTraversal.clamp;
   function begin(g){
-    g.lastPass=g.index===11&&g.stage===2?{watch:TideSternWatch.create(),drift:0,wheel:Number.isFinite(g.leadAngle)?g.leadAngle:home,steer:1,next:'standby',warned:false,cleared:false,turned:false,arrived:false,
+    g.lastPass=g.index===11&&g.stage===2?{watch:TideSternWatch.create(),bay:TideBayPassage.create(),drift:0,wheel:Number.isFinite(g.leadAngle)?g.leadAngle:home,steer:1,next:'standby',warned:false,cleared:false,turned:false,arrived:false,
       voice:'',subtitle:'',clock:0,line:-1,occupied:false}:null;
     if(g.lastPass)g.cues.water=TideSternWatch.tide(g.time);
   }
-  function yaw(g){return heading-.68*g.cues.rescue;}
+  function yaw(g){return TideBayPassage.route(g.cues.rescue).yaw;}
   function vessel(g,t){
-    const f=g.cues.rescue,r=g.lastPass,slide=4.35+6.72*(r?.drift||0),s=Math.sin(heading),c=Math.cos(heading),pile=TideLookout.marks.stump;
-    const x=pile.x-slide*s-5.1*c+.17*Math.sin(t*.30)-8.4*f;
-    const z=pile.z-slide*c+5.1*s+.11*Math.cos(t*.38)+14.8*f;
+    const route=TideBayPassage.route(g.cues.rescue),r=g.lastPass,slide=4.35+6.72*(r?.drift||0),s=Math.sin(heading),c=Math.cos(heading),pile=TideLookout.marks.stump;
+    const x=pile.x-slide*s-5.1*c+.17*Math.sin(t*.30)+route.x;
+    const z=pile.z-slide*c+5.1*s+.11*Math.cos(t*.38)+route.z;
     return [x,g.cues.water+.5*(TideLookout.swell(x-2.5,z-2.8,t)+TideLookout.swell(x+2.5,z+2.8,t)),z];
   }
   function along(g){
@@ -42,6 +42,7 @@ const TideLastPass=(()=>{
       const f=TideSternWatch.frame(g);if(!f)return null;
       return {eye:onDeck(g,...f.eye),at:onDeck(g,...f.at),fov:64-9*f.brace,handsOnly:true,aftWatch:true};
     }
+    const close=TideBayPassage.shot(g);if(close)return close;
     const ship=vessel(g,g.time);
     return {eye:[p.x-5.05,2.20,p.z-2.3],at:[ship[0],ship[1]+1.64,ship[2]],fov:57,handsOnly:true};
   }
@@ -88,9 +89,10 @@ const TideLastPass=(()=>{
       r.drift=clamp(r.drift+dt/19,0,1);
       TideSternWatch.move(g,input[1],dt);TideSternWatch.report(g,input[1]);
     }
+    if(r.turned)TideBayPassage.watch(g,input[1],dt);
     g.set(0,r.arrived?'船尾进湾。左右转回原来的刻口，按确认锁轮。':'左右跟住船首，把窄光留给船长。',dial);
-    g.set(1,r.turned?(r.occupied?'松开发话键让船尾完整回话。':'等船尾入湾，听阿棠回报船上情况。'):TideSternWatch.hint(g),{
-      caption:r.occupied?'岸台发话　·　接收被占用':r.turned?'背风水域':r.watch.sighted?'船尾来报':'海雁号　·　后甲板'});
+    g.set(1,r.turned?(r.occupied?'松开发话键让船尾完整回话。':r.arrived?'两舷都进湾了。收好手台，等灯轮回位。':r.bay.until>g.time?r.bay.feedback:'等船转直再靠住艉栏。黄顶界桩越过近处栏角时，在两舷各报一次。'):TideSternWatch.hint(g),{
+      caption:r.occupied?'岸台发话　·　接收被占用':r.turned?(r.bay.side?'右舷':'左舷')+'　·　左 '+(r.bay.checked[0]?'已过':'待核')+'　右 '+(r.bay.checked[1]?'已过':'待核'):r.watch.sighted?'船尾来报':'海雁号　·　后甲板'});
     if(r.turned&&!r.arrived){
       // The single burst gives the hull way. Without a guiding light the
       // captain holds her heading and coasts until she can see the turn again.
@@ -102,7 +104,7 @@ const TideLastPass=(()=>{
     if(!r.voice&&!r.occupied){
       if(r.next==='standby')say(r,'standby');
       else if(r.next==='turn'&&g.engaged[0]&&aligned)say(r,'turn');
-      else if(r.next==='arriving'&&g.engaged[0]&&aligned&&g.cues.rescue===1&&!r.arrived)say(r,'berth');
+      else if(r.next==='arriving'&&g.engaged[0]&&aligned&&g.cues.rescue===1&&r.bay.checked.every(Boolean)&&!r.arrived)say(r,'berth');
     }
     receiver(g,dt);
     if(r.arrived&&aligned&&g.commit(0,input))g.advance();
@@ -110,7 +112,7 @@ const TideLastPass=(()=>{
   function checkpoint(g){
     const r=g.lastPass;if(!r)return null;
     if(!r.cleared)return r.watch.aboard?{onWatch:true,asked:r.next==='sighting',warned:r.warned,watch:TideSternWatch.save(r.watch),drift:r.drift,wheel:r.wheel}:null;
-    return {cleared:true,turned:r.turned,arrived:r.arrived,wheel:r.wheel,drift:r.drift,travel:g.cues.rescue,steer:r.steer};
+    return {cleared:true,turned:r.turned,arrived:r.arrived,wheel:r.wheel,drift:r.drift,travel:g.cues.rescue,steer:r.steer,bayChecks:r.bay.checked.slice(),baySide:r.bay.side};
   }
   function restore(g,s){
     const r=g.lastPass;if(!r||(s?.cleared!==true&&s?.onWatch!==true))return;
@@ -125,6 +127,8 @@ const TideLastPass=(()=>{
     r.arrived=r.turned&&s.arrived===true;g.cues.rescue=r.turned?clamp(Number(s.travel)||0,0,1):0;
     r.steer=Number.isFinite(s.steer)?clamp(s.steer,0,1):1;
     if(r.arrived)g.cues.rescue=1;
+    r.bay.checked=[0,1].map(i=>r.arrived||r.turned&&s.bayChecks?.[i]===true);
+    r.bay.side=r.bay.pan=s.baySide===0?0:1;
     r.next=r.turned?'arriving':'turn';g.state.mode=r.turned?2:1;
     g.field.done=true;g.players=g.section.sites.map(TideTraversal.spawn);g.checkpoints=g.section.sites.slice();
   }
