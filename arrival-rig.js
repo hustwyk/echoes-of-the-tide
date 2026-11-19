@@ -53,19 +53,14 @@ const TideArrivalRig=(()=>{
     const geo=track(new T.BufferGeometry());geo.setAttribute('position',pos);geo.setAttribute('normal',normal);
     geo.setAttribute('color',new T.Float32BufferAttribute(colors,3));geo.setIndex(indices);cord.vertexColors=true;
     const rope=new T.Mesh(geo,cord);rope.frustumCulled=false;rope.castShadow=true;root.add(rope);
-    const loop=new T.Group();root.add(loop);
-    const eyelet=new T.CatmullRomCurve3([[0,-.245,0],[-.18,-.13,.009],[-.245,.05,.018],[-.16,.214,-.004],
-      [.052,.255,.013],[.226,.119,.019],[.197,-.071,-.008],[.039,-.215,0]].map(a=>new T.Vector3(...a)),true);
-    const braids=[0xb09870,0xcab287,0x958462].map(color=>track(new T.MeshStandardMaterial({color,roughness:.82})));
-    for(let strand=0;strand<3;strand++){
-      const path=[];for(let k=0;k<240;k++){const t=k/240,p=eyelet.getPointAt(t),tan=eyelet.getTangentAt(t),angle=t*2*Math.PI*17+strand*2*Math.PI/3;
-        p.x+=tan.y*.007*Math.cos(angle);p.y-=tan.x*.007*Math.cos(angle);p.z+=.007*Math.sin(angle);path.push(p);}
-      loop.add(new T.Mesh(track(new T.TubeGeometry(new T.CatmullRomCurve3(path,true),240,.009,5,true)),braids[strand]));
-    }
-    for(let k=0;k<5;k++)mesh(loop,cyl,braids[k%3],.008,-.230-k*.009,0,.023,.012,.023);
-    const knot=new T.Vector3();
-    const ghost=new T.Mesh(track(new T.TorusGeometry(.28,.009,6,40)),track(new T.MeshBasicMaterial({color:0xf3df9e,transparent:true,opacity:.73,depthWrite:false})));
-    ghost.rotation.x=-Math.PI*.5;root.add(ghost);
+    const eye=TideBowEye.create(T,root);
+    const wash=TideBowWash.create(T,scene);
+    // A short row of chalk-white dots follows the trajectory for the current
+    // arm stroke. It has no target lock and disappears as the rope leaves.
+    const dotShape=track(new T.SphereGeometry(1,8,6));
+    const dotPaint=track(new T.MeshBasicMaterial({color:0xffe7c3,transparent:true,opacity:.65,depthWrite:false}));
+    const dots=new T.InstancedMesh(dotShape,dotPaint,14);dots.frustumCulled=false;root.add(dots);
+    const dot=new T.Object3D();
     const p=new T.Vector3(),tangent=new T.Vector3(),cross=new T.Vector3(),axis=new T.Vector3();
     const points=Array.from({length:sections},()=>new T.Vector3()),hands=[new T.Vector3(),new T.Vector3()],wipePoint=new T.Vector3();
     function vec(a){return new T.Vector3(a.x,a.y,a.z);}
@@ -103,6 +98,8 @@ const TideArrivalRig=(()=>{
           }else{
             const f=bow?u/Math.max(fraction,.0001):u;
             v.lerpVectors(bow?bow[3]:from,bow?edge:end,f);v.y+=slack*Math.sin(f*Math.PI);
+            const shelf=g.world.fenders.shelf;
+            if(Math.abs(v.x-shelf.x)<shelf.w*.5&&Math.abs(v.z-shelf.z)<shelf.d*.5)v.y=Math.max(v.y,shelf.y+.022);
           }
         }
       }
@@ -121,27 +118,23 @@ const TideArrivalRig=(()=>{
       const s=g.arrival,playing=TideArrival.active(g);root.visible=playing&&s.atBow>.6&&!s.moored;
       sternPose=TideSternLine.equipment(g);sternGear.update(sternPose);
       sternWater.update({...sternPose,active:playing&&!!s?.stern,time:t,water:g.cues.water});
+      wash.update({active:playing,impact:s?.bow?.impact,water:g.cues.water,time:t});
       if(!playing)return;
       plate.update(s,t);
       const speech=TideArrival.speech(s.voice),level=s.voice==='captain'?(speech.mouth?.levels[Math.floor(s.voiceAt*20)]||0)/100:0;
       radio.update({tune:(s.dial-6)/10,level,power:true,rx:s.voice==='captain',ptt:s.radio==='test'&&s.use?1:0,tx:false,silent:true},t);
       if(!root.visible)return;
-      const target=TideArrival.cleat(g),end=TideArrival.endPoint(g);
-      const from=world(1.50,-1.55,15.45);
-      const throwSite=world(1.68,-1.69,15.39);
-      loop.position.copy(throwSite);loop.rotation.set(-1.12,0,.45);ghost.visible=!s.attached&&!s.flight;
-      // The aiming loop rests on the dock or the live water, in the same space as the cast.
-      const shelf=g.world.fenders.shelf,over=Math.abs(end.x-shelf.x)<shelf.w*.5+.17&&Math.abs(end.z-shelf.z)<shelf.d*.5+.17;
-      ghost.position.set(end.x,over?shelf.y+.17:g.cues.water+TideFloating.swell(end.x,end.z,t)+.10,end.z);
-      ghost.material.opacity=.64+.16*Math.sin(t*4);
-      if(s.flight){
-        const f=s.flight,k=Math.min(1,f.age/.70);
-        loop.position.copy(vec(f.from)).lerp(vec(f.to),k);
-        loop.position.y+=1.06*4*k*(1-k);
-        loop.rotation.set(-1.16-.35*k,0,.45*(1-k));
-        if(!f.hit&&k>=1){loop.position.lerp(throwSite,Math.min(1,(f.age-.7)/.46));}
-      }else if(s.attached){loop.position.copy(vec(target));loop.rotation.set(-Math.PI*.5,0,0);}
-      loop.updateWorldMatrix(true,false);knot.set(.008,-.267,0).applyMatrix4(loop.matrixWorld);
+      const b=s.bow,from=world(1.50,-1.55,15.45);
+      eye.update(TideBowCast.frame(g));
+      dots.visible=!s.attached&&(b.phase==='ready'||b.phase==='wind');
+      if(dots.visible){
+        const f=TideBowCast.launch(g,b.power),end=TideArrival.cleat(g),span=TideBowCast.crossing(f,end.y);
+        for(let n=0;n<dots.count;n++){
+          const at=span*(n+1)/(dots.count+1),v=TideBowCast.position(f,at);
+          dot.position.set(v.x,v.y,v.z);dot.scale.setScalar(.018+(n%3===2?.008:0));dot.updateMatrix();dots.setMatrixAt(n,dot.matrix);
+        }
+        dots.instanceMatrix.needsUpdate=true;
+      }
       let bow=null;
       if(s.stern){
         const grip=bowContacts(s,t);
@@ -149,7 +142,7 @@ const TideArrivalRig=(()=>{
         // bight stays on deck while the long span sags toward the shore post.
         bow=[world(1.48,-2.55,15.94),grip[1],grip[0],world(1.63,-2.36,15.19)];
       }
-      shape(from,knot,s.attached?(s.haul?-.055:-.34):s.flight?-.44:-.12,bow);
+      shape(from,eye.knot,s.attached?(s.haul?-.055:-.34):b.phase==='air'?-.27:b.phase==='retrieve'?-.22:-.09,bow);
     }
     function grips(i){
       const s=g.arrival;if(!TideArrival.active(g)||s.moored)return null;
@@ -161,8 +154,10 @@ const TideArrivalRig=(()=>{
       if(!i&&s.atBow<.23)return radio.contacts();
       if(!i){
         if(s.atBow<.78)return null;
-        const a=g.players[0],ext=s.flight?Math.sin(Math.min(1,s.flight.age/.45)*Math.PI):0;
-        hands[0].copy(world(1.48,-1.56,15.45));hands[1].copy(world(1.74,-1.67+ext*.28,15.37-ext*.20));return hands;
+        const b=s.bow;
+        const feed=b.phase==='retrieve'?.085*Math.sin(b.reels*5.8+Math.PI):0;
+        hands[0].copy(world(1.50,-1.55+feed,15.45+feed));
+        hands[1].copy(vec(TideBowCast.hand(g,TideBowCast.stroke(b))));return hands;
       }
       const w=boat.helmWheel;w.updateWorldMatrix(true,false);
       hands[0].set(-.004,.072,-.152).applyMatrix4(w.matrixWorld);
@@ -182,9 +177,13 @@ const TideArrivalRig=(()=>{
         eye=world(.46+look*.09,-1.11+rise*.18,17.00);
         at=world(.35,-1.445,16.53);fov=44;
         const b=s.atBow;if(b>0){
-          eye.lerp(world(2.45,.07+rise,18.45+look*.65),b);
-          at.lerp(vec(TideArrival.endPoint(g)).lerp(world(1.65,-1.5,15.62),.38),b);
-          fov+=12*b;
+          const pivot=vec(TideBowCast.hand(g,0)),yaw=TideBowCast.turn(g);
+          const forward=new T.Vector3(Math.sin(yaw),0,-Math.cos(yaw)),right=new T.Vector3(Math.cos(yaw),0,Math.sin(yaw));
+          const shoulder=pivot.clone().addScaledVector(forward,-2.43).addScaledVector(right,.82+look*.35);
+          shoulder.y+=1.28+rise*.74;
+          const shore=vec(TideArrival.cleat(g)).sub(pivot).clampLength(0,5.4).add(pivot);
+          const sight=pivot.clone().addScaledVector(forward,2.2).lerp(shore,.53);sight.y-=.10;
+          eye.lerp(shoulder,b);at.lerp(sight,b);fov+=(Math.max(54,Math.min(70,65-.75*(aspect||1)))-fov)*b;
         }
       }
       let entry=ready?Math.min(1,g.time/1.55):0;entry=entry*entry*(3-2*entry);
@@ -226,7 +225,7 @@ const TideArrivalRig=(()=>{
         feet:[world(-5.556,-2.486,16.45),world(-5.514,-2.486,16.85)]};
     }
     function clampPan(v){return Math.max(-1,Math.min(1,Math.sin(v)));}
-    return {update,grips,shot,seat,plate,get stern(){return sternPose;},dispose(){sternWater.dispose();sternGear.dispose();plate.dispose();radio.dispose();fairlead.removeFromParent();station.removeFromParent();board.removeFromParent();root.removeFromParent();for(const o of owned)o.dispose();}};
+    return {update,grips,shot,seat,plate,get stern(){return sternPose;},dispose(){dots.dispose();eye.dispose();wash.dispose();sternWater.dispose();sternGear.dispose();plate.dispose();radio.dispose();fairlead.removeFromParent();station.removeFromParent();board.removeFromParent();root.removeFromParent();for(const o of owned)o.dispose();}};
   }
   return {create};
 })();

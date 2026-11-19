@@ -17,7 +17,7 @@ const TideArrival=(()=>{
     g.arrival={x:h.anchorX-17.6,z:h.anchorZ+4.65,heading:.19,speed:.63,rudder:0,drive:0,
       plate:{look:0,stroke:.045,coverage:Array(12).fill(0),read:false,reported:false,held:false,direction:0,cue:'',cueAt:0,serial:0},
       dial:9,channel:9,receive:0,radio:'tune',voice:'',voiceAt:0,caption:'',cue:'',serial:0,
-      lateral:-.78,reach:2.9,flight:null,attached:false,secured:false,haul:0,walking:0,
+      bow:TideBowCast.create(),attached:false,secured:false,haul:0,walking:0,
       moored:false,done:false,use:false,warning:'',warnTo:0,misses:0,engineRunning:true};
     advanceHull(g,0,0,0);placeCrew(g,0);display(g);
   }
@@ -164,24 +164,13 @@ const TideArrival=(()=>{
       ay=a.yaw;by=b.yaw;
     }
     if(t>0&&t<1&&!s.moored)ay=Math.atan2(radioSite.x-castSite.x,radioSite.z-castSite.z);
+    if(t===1&&!s.moored&&!s.attached)ay=-s.bow.aim;
     moveTo(g,0,a,ay);moveTo(g,1,b,by);
     if(s.stern&&s.stern.travel<1)g.players[1].speed=1.17;
     if(t>0&&t<1&&!s.moored)g.players[0].speed=Math.hypot(castSite.x-radioSite.x,castSite.z-radioSite.z)*1.2;
     if(s.moored&&s.walking>0&&s.walking<1){g.players[0].speed=1.65;g.players[1].speed=s.walking>.15?2.35:0;}
   }
-  function endPoint(g){
-    const s=g.arrival;
-    return deck(g,castSite.x+s.lateral,castSite.y+.11,castSite.z-s.reach);
-  }
   function warn(g,msg){g.arrival.warning=msg;g.arrival.warnTo=g.time+2.5;}
-  function cast(g){
-    const s=g.arrival,from=deck(g,castSite.x-.06,castSite.y+1.01,castSite.z-.24),to=endPoint(g);
-    const end=cleat(g);
-    const valid=Math.hypot(to.x-end.x,to.z-end.z)<.65&&Math.abs(s.speed)<1.34;
-    const floor=TideTraversal.surface(g.world,to.x,to.z,to.y+.25);
-    to.y=floor?TideTraversal.surfaceHeight(floor,to.x,to.z)+.065:g.cues.water+TideFloating.swell(to.x,to.z,g.time+.70)+.035;
-    s.flight={from,to:valid?end:to,age:0,hit:valid,fast:Math.abs(s.speed)>=1.34};s.misses+=valid?0:1;
-  }
   function step(g,inputs,dt){
     const s=g.arrival,k=inputs[0],helm=inputs[1];
     const pressed=k.use&&!s.use,released=!k.use&&s.use;
@@ -197,20 +186,7 @@ const TideArrival=(()=>{
     if(s.attached&&!s.secured&&Math.abs(thrust)<.12&&Math.abs(s.speed)<.68&&helm.use){s.secured=true;s.engineRunning=false;TideSternLine.start(g);}
     s.haul=s.attached&&s.secured&&k.use?1:0;
     advanceHull(g,s.plate.held?s.rudder:helm.x,thrust,dt);
-    if(s.radio==='line'&&!s.attached){
-      if(!s.flight){
-        s.lateral=clamp(s.lateral+k.x*dt*2.2,-4.8,4.8);
-        s.reach=clamp(s.reach-k.z*dt*2.1,1.05,6.1);
-        if(pressed&&(s.atBow||0)>.80)cast(g);
-      }else{
-        s.flight.age+=dt;
-        if(s.flight.age>=.70&&s.flight.hit){s.attached=true;s.flight=null;
-          const bow=deck(g,castSite.x,castSite.y,castSite.z);const end=cleat(g);
-          s.paidOut=Math.hypot(bow.x-end.x,bow.z-end.z)+.37;tell(g,'hull');}
-        else if(s.flight.age>=1.16){const f=s.flight;s.flight=null;
-          warn(g,f.fast?'船还在往前冲。先收油，再把缆圈送过去。':'缆圈落空了，收回来。看圈落在岸桩的哪一边。');}
-      }
-    }
+    TideBowCast.step(g,k,dt,pressed,released);
     if(s.stern&&!s.moored)TideSternLine.step(g,helm,dt);
     placeCrew(g,dt);s.use=k.use;
     if(s.moored&&s.walking>=1&&!s.voice){
@@ -223,15 +199,24 @@ const TideArrival=(()=>{
   function display(g){
     const s=g.arrival;g.near.fill(true);g.engaged.fill(true);
     if(s.stern&&!s.moored){TideSternLine.show(g);return;}
-    const end=cleat(g),here=endPoint(g),miss=Math.hypot(end.x-here.x,end.z-here.z);
+    const bow=s.bow;
     let radio,read;
     if(s.radio==='tune'){radio='转动防水电台的旋钮。让掌舵的人告诉你值班频道。';read='频道 '+String(s.channel).padStart(2,'0');}
     else if(s.radio==='wait'){radio=g.time<s.warnTo?s.warning:'按住侧面的发话键，等林澈把话说完。';read='接收灯亮　／　发射灯灭';}
     else if(s.radio!=='line'){radio='听电台和艇上的回话。';read='北岬工作台　／　CH 12';}
     else if(s.moored){radio='通过艇上的窄走道，准备登岸。';read='首缆已系妥';}
     else if(s.attached){radio=s.secured?'按住操作键收缆，把船带到护舷旁。':'缆眼套住了。等同伴停机，再收紧。';read=s.secured?'船尾空挡　／　可以收缆':'首缆套住';}
-    else{radio=g.time<s.warnTo?s.warning:'看岸上的黄铜系缆桩，移动缆圈的落点。套准后按操作键抛缆。';
-      read=s.flight?'缆圈在空中':miss<.65?'缆圈对准桩顶':miss>6?'岸桩还在投缆范围外':'收放缆圈，对准岸桩';}
+    else if(bow.phase==='retrieve'){
+      radio=bow.reason;read='按住操作键把余缆收回艇首';
+    }else if(bow.phase==='wind'){
+      radio='对着岸桩两只羊角松手。船还在走，绳圈也会跟船往前飞。';
+      read='后摆 '+Math.round(bow.power*100)+'%　／　松手抛出';
+    }else if(bow.phase==='air'||bow.phase==='swing'){
+      radio='看绳圈落在羊角的哪一边。';read=bow.phase==='air'?'缆眼已离手':'向前送肩';
+    }else{
+      radio='找红白牌下的双角桩。左右瞄，前后调仰角。按住操作键后摆，松手抛缆。';
+      read='仰角 '+Math.round(bow.loft*180/Math.PI)+'°　／　'+(s.misses?'缆已收回，再抛一把':'白点是这一把的弧线');
+    }
     g.set(0,radio,{caption:read});
     const plate=s.plate,inspect=s.radio==='tune'&&!plate.reported;
     const pilot=plate.held?(plate.read?'读出值班频道，松开操作键抬头看堤。':'左右移动手套，把两位数字上的盐霜都擦掉。油门仍可进退。'):
@@ -239,5 +224,5 @@ const TideArrival=(()=>{
       '看岸边红白「首缆」牌，向前进车，带船首靠过去。临近收油，过头可倒车。';
     g.set(1,pilot,{caption:(s.secured?'空挡':'航速 '+Math.abs(s.speed).toFixed(1)+' m/s')+(s.radio==='tune'?(plate.read?'　／　外港值班 12':'　／　舵座铜牌'):'')});
   }
-  return {begin,step,active,speech,cleat,deck,endPoint,helmSite,castSite,radioSite};
+  return {begin,step,active,speech,cleat,deck,tell,helmSite,castSite,radioSite};
 })();
