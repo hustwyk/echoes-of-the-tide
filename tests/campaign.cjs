@@ -3,7 +3,7 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const box=vm.createContext({});
-for(const name of ['missions','traversal','floating','warp-speech','warping','fender-speech','fender-coping','fenders','plate-speech','arrival-speech','stern-line','bow-cast','arrival','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','buoy-motion','light-register','lookout','cistern-speech','cistern','glass-speech','chartroom','paper','lantern','gallery-speech','gallery','shift-speech','starter','transit-speech','transit','signal','tin-lines','tin-memory','archive','relay-speech','relay','soundings-speech','survey-plot','soundings','fog-speech','haul-speech','fog-recovery','fogsignal','range-voice','range-watch','pass-speech','stern-watch','lastpass','swing-speech','swing','cooperation']){
+for(const name of ['missions','traversal','floating','warp-speech','warping','fender-speech','fender-coping','fenders','plate-speech','arrival-speech','stern-line','bow-cast','arrival','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','buoy-motion','light-register','lookout','cistern-speech','cistern','glass-speech','chartroom','paper','lantern','gallery-speech','gallery','shift-speech','starter','transit-speech','transit','signal','tin-lines','tin-memory','archive','relay-speech','relay-trolley','relay','soundings-speech','survey-plot','soundings','fog-speech','haul-speech','fog-recovery','fogsignal','range-voice','range-watch','pass-speech','stern-watch','lastpass','swing-speech','swing','cooperation']){
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../dist',name+'.js'),'utf8'),box);
 }
 const {Session,near,surface,lookout,ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideSwing,TideCistern,TideGlass,TidePaper}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideSwing,TideCistern,TideGlass,TidePaper})',box);
@@ -228,8 +228,10 @@ function quayInputs(g,out){
 function relayInputs(g,out){
   const r=g.relay,w=g.world.relay,p=g.players[0],axis=x=>Math.max(-1,Math.min(1,x));
   const dest=TideRelay.target(g,0),desk=TideRelay.target(g,1),s=desk.kind==='file'?w.files[1]:desk;
-  if(r.climb||(!r.top&&dest===w.foot&&TideRelay.near(g,0))||dest===w.lift&&TideRelay.near(g,0)){
+  if(r.climb||(!r.top&&dest===w.foot&&TideRelay.near(g,0))){
     out[0].use=true;out[0].z=-1;
+  }else if(!r.top&&p.ground===w.car){
+    out[0].use=true;out[0].z=r.trolley.blocked?1:r.trolley.aligned&&r.trolley.brake>.8&&Math.abs(r.trolley.noseSpeed)<.10?-1:0;out[0].jump=r.trolley.locked;
   }else if(!r.top&&r.low&&p.y>1.25){
     if(p.ground===w.car||!p.grounded||r.travel<.06){
       steer(g,0,w.car,out[0]);out[0].jump=p.ground===w.lower&&r.travel<.06;
@@ -243,7 +245,10 @@ function relayInputs(g,out){
       steer(g,1,{x:gap.x,y:0,z:who.z},out[1]);
     else steer(g,1,s,out[1]);
   }
-  if(s===w.haul&&out[1].use)out[1].x=p.ground===w.car||r.boarded?1:-1;
+  if(s===w.haul&&out[1].use){
+    const error=.81-r.travel;
+    out[1].x=p.ground===w.car?(Math.abs(error)<.016?0:Math.sign(error)*(Math.abs(error)<.16?.38:1)):-1;
+  }
   if(out[1].use&&(s.kind==='file'||s===w.desk&&!r.loaded))out[1].jump=true;
   if(!r.top)return out;
   if(lookout.active(g)){
@@ -1280,6 +1285,37 @@ if(require.main===module){
     const lowerSave=TideRelay.checkpoint(g),lower=new Session(7);TideRelay.restore(lower,lowerSave);
     assert.equal(lower.players[0].ground,lower.world.relay.lower);
     reach(lower,()=>lower.players[0].ground===lower.world.relay.car);
+    const trolley=lower.relay.trolley,car=lower.world.relay.car;
+    function workCar(frames,lever,winch){
+      for(let j=0;j<frames;j++)lower.tick(step,[{...empty(),...lever},{...empty(),...winch}]);
+    }
+    workCar(210,{use:true},{use:true,x:1});
+    assert.equal(lower.relay.travel,1);
+    assert.ok(trolley.dx>.40&&lower.players[0].ground===car);
+    workCar(100,{use:true,z:-1,jump:true},{use:true});
+    assert.equal(trolley.bolt,1);assert.ok(trolley.missed&&!trolley.locked&&!lower.relay.climb);
+    workCar(50,{use:true,z:1},{use:true});
+    assert.equal(trolley.bolt,0);
+    reach(lower,()=>trolley.aligned&&trolley.brake>.82&&Math.abs(trolley.noseSpeed)<.11);
+    workCar(90,{use:true,z:-1,jump:true},{});
+    assert.ok(trolley.blocked&&!trolley.locked&&!lower.relay.climb);
+    assert.ok(Math.abs(trolley.bolt-trolley.contact)<.01);
+    // The shoe must be held, and the rider has to withdraw a jammed pin.
+    workCar(80,{use:true,z:-1},{use:true});
+    assert.ok(trolley.blocked&&!trolley.locked);
+    workCar(45,{use:true,z:1},{use:true});
+    workCar(100,{use:true},{use:true});
+    assert.ok(!trolley.locked&&trolley.bolt===0);
+    reach(lower,()=>trolley.locked);
+    const mark=TideRelay.checkpoint(lower),docked=new Session(7);
+    assert.equal(mark.docked,true);TideRelay.restore(docked,mark);
+    assert.equal(docked.players[0].ground,docked.world.relay.car);
+    for(let j=0;j<30;j++)docked.tick(step,[{...empty(),use:true,z:-1},empty()]);
+    assert.ok(docked.relay.trolley.locked&&!docked.relay.climb&&!docked.relay.top);
+    reach(docked,()=>docked.relay.climb==='upper');
+    reach(docked,()=>docked.relay.top);
+    const oldRest=new Session(7);TideRelay.restore(oldRest,{low:true,top:false});
+    assert.ok(!oldRest.relay.trolley.locked&&oldRest.players[0].ground===oldRest.world.relay.lower);
     reach(g,()=>r.top||r.climb==='upper');
     for(let j=0;j<600&&r.file<0;j++){
       const k=control(g);k[1]=empty();const file=w.files[0];

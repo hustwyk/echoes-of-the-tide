@@ -34,6 +34,7 @@ const TideReceiverAudio=(()=>{
     let air=null,echo=null,swingSource=null,swingSerial=0,swingFoley=null;
     let haulSource=null,haulSerial=0,haulFoley=null;
     let lipSource=null,lipSerial=0,lipFoley=null;
+    let trolleyState=null,trolleyCount=0,trolleyFoley=null;
     let plotSource=null,plotSerial=0,plotFoley=null,bookSource=null,bookSerial=0,bookFoley=null;
     let rangeSource=null,rangeSerial=0,rangeFoley=null;
     let deckSource=null,deckSerial=0,deckFoley=null;
@@ -92,7 +93,7 @@ const TideReceiverAudio=(()=>{
       if(clip){clip.gain.gain.setTargetAtTime(.0001,ctx.currentTime,.012);try{clip.source.stop(ctx.currentTime+.045);}catch{}}
       return null;
     }
-    function stop(){rangeFoley=end(rangeFoley);deckFoley=end(deckFoley);lipFoley=end(lipFoley);bookFoley=end(bookFoley);plotFoley=end(plotFoley);for(const hit of starterHits.values())hit.clip=end(hit.clip);plateFoley=end(plateFoley);haulFoley=end(haulFoley);arrivalFoley=end(arrivalFoley);swingFoley=end(swingFoley);air=end(air);if(echo){for(const node of Object.values(echo))node.disconnect();echo=null;}preview=end(preview);call=end(call);ratchet=end(ratchet);previousStroke=0;story=end(story);storyKey='';relay=end(relay);lastKey=false;}
+    function stop(){trolleyFoley=end(trolleyFoley);rangeFoley=end(rangeFoley);deckFoley=end(deckFoley);lipFoley=end(lipFoley);bookFoley=end(bookFoley);plotFoley=end(plotFoley);for(const hit of starterHits.values())hit.clip=end(hit.clip);plateFoley=end(plateFoley);haulFoley=end(haulFoley);arrivalFoley=end(arrivalFoley);swingFoley=end(swingFoley);air=end(air);if(echo){for(const node of Object.values(echo))node.disconnect();echo=null;}preview=end(preview);call=end(call);ratchet=end(ratchet);previousStroke=0;story=end(story);storyKey='';relay=end(relay);lastKey=false;}
     function quay(g){
       const a=g.cable,button=a.down||a.returnDown;
       if(button&&!lastKey){relay=end(relay);relay=play('relay',.72);}
@@ -218,6 +219,18 @@ const TideReceiverAudio=(()=>{
           if(book.serial!==bookSerial&&book.cue&&buffers['test/'+book.cue]){
             bookSerial=book.serial;bookFoley=end(bookFoley);
             bookFoley=play('test/'+book.cue,.82,Math.max(0,g.time-book.at));
+          }
+        }
+        if(g.relay&&g.stage===0&&!g.relay.top){
+          const h=g.relay.trolley;
+          if(trolleyState!==h){trolleyState=h;trolleyCount=0;}
+          for(const id of ['trolleyBrake','boltStrike','boltSeated']){
+            const key='mast/'+id;
+            if(!buffers[key]&&!pending.has(key))decode(key).catch(()=>{});
+          }
+          if(h.cue&&h.cueCount!==trolleyCount&&buffers['mast/'+h.cue]){
+            trolleyCount=h.cueCount;trolleyFoley=end(trolleyFoley);
+            trolleyFoley=play('mast/'+h.cue,.82,Math.max(0,g.time-h.cueAt));
           }
         }
         const starting=g.signal&&g.stage===0;
