@@ -11,6 +11,7 @@ try {
 const sound=new HarborSound();
 let wantsAudio=true;try{wantsAudio=localStorage.getItem('tide-audio')!=='off';}catch{}
 const keys=new Set(),jumps=[false,false],toolTaps=[false,false],gamepadDown=[false,false];
+let waitTap=false,waitPad=false;
 let tideTicket=null;
 try{tideTicket=TideGallery.validTicket(JSON.parse(localStorage.getItem('tide-survey-ticket')));}catch{}
 let session=null,view=null,index=0,mode='menu',last=0,remainder=0,redraw=0,voice=false;
@@ -69,7 +70,7 @@ function savePoint(g){
 function clearInput(){
   TideCrewInput.clear();
   if(view)view.lastTick=null;
-  view?.pointing?.cancel();pointTaps.fill(false);keys.clear();jumps.fill(false);toolTaps.fill(false);gamepadDown.fill(false);cameraButtons.fill(false);last=0;remainder=0;
+  view?.pointing?.cancel();pointTaps.fill(false);waitTap=false;waitPad=false;keys.clear();jumps.fill(false);toolTaps.fill(false);gamepadDown.fill(false);cameraButtons.fill(false);last=0;remainder=0;
 }
 function note(line){
   if(line && journal.at(-1)!==line)journal.push(line);
@@ -343,7 +344,7 @@ function pause(){
   mode='paused';clearInput();sound.stopScene();window.speechSynthesis?.cancel();
   $('pause').textContent='继续';
   const arrival=TideArrival.active(session),gallery=TideGallery.active(session);
-  const hint=TideSurveyPlot.briefing(session)||(gallery?'西台与背风台各有一架手轮。握住操作键左右转轮，松手停车；另一人从黄边起跳。过白漆台后，两人沿梯进灯室。':arrival&&session.arrival.stern?'林澈收首缆，让沈遥把船钩送进岸边的绿绳眼。听她喊勾住便松开。沈遥握杆向后拉，等绳眼来到艇尾桩上方再松手。':arrival&&session.arrival.radio==='line'?'林澈移动缆圈，瞄准岸桩后投缆。沈遥收油回空挡，等船慢下来后按住操作键停机；林澈才拉得动缆绳。':arrival?'无线电的工作频道刻在舵座。掌舵的人按住操作键俯身，再左右擦开铜牌。船首的人听到频道后调台，按住发话键等自己说完。':'站到彩色光圈内，按住操作键使用设备。操作时可左右微调，按跳跃键确认。拖动各自的画面调整视角，双击可回正。');
+  const hint=(TideSternWatch.station(session)?'左屏守住船首的引导光。右屏走到艇艉，扶住横栏，对齐两道白漆。桩还贴着船舷就报等一拍；下箍露出且两道箍都越过艉栏再报已过。':null)||TideSurveyPlot.briefing(session)||(gallery?'西台与背风台各有一架手轮。握住操作键左右转轮，松手停车；另一人从黄边起跳。过白漆台后，两人沿梯进灯室。':arrival&&session.arrival.stern?'林澈收首缆，让沈遥把船钩送进岸边的绿绳眼。听她喊勾住便松开。沈遥握杆向后拉，等绳眼来到艇尾桩上方再松手。':arrival&&session.arrival.radio==='line'?'林澈移动缆圈，瞄准岸桩后投缆。沈遥收油回空挡，等船慢下来后按住操作键停机；林澈才拉得动缆绳。':arrival?'无线电的工作频道刻在舵座。掌舵的人按住操作键俯身，再左右擦开铜牌。船首的人听到频道后调台，按住发话键等自己说完。':'站到彩色光圈内，按住操作键使用设备。操作时可左右微调，按跳跃键确认。拖动各自的画面调整视角，双击可回正。');
   overlay.innerHTML='<div class="story"><h3>行动暂停</h3><p>'+levels[index].name+'　/　'+(gallery?(session.gallery.phase==='file'?'灯室潮尺原数联':'绕塔检修台'):arrival?'交通艇进港':TideFenders.active(session)?'护舷井登岸':session.cable?TideCableQuay.title(session):session.spec.title)+'</p><p class="hint">'+hint+'</p><div class="pause-options"><button id="unpause">继续行动</button><button id="retry">重试此段</button><button id="quit">返回档案</button><button id="voice"></button><button id="quality"></button></div></div>';
   seatPanel=TideCrewInput.panel(overlay.querySelector('.story'),arrival?(session.arrival.stern?'stern':session.arrival.radio):null);
   addJournal(overlay.querySelector('.story'),journal);
@@ -372,7 +373,11 @@ function pollInputs(now,connected){
     const dead=v=>Math.abs(v||0)>.17?v:0;
     const down=!!pad?.buttons[0]?.pressed;
     const jump=jumps[i]||down&&!gamepadDown[i];gamepadDown[i]=down;
-    const orbit=Number(keys.has(i?'Period':'KeyR'))-Number(keys.has(i?'Comma':'KeyQ'));
+    const aft=i===1&&TideSternWatch.station(session);
+    const waitButton=aft&&!!pad?.buttons[1]?.pressed;
+    const waitReport=aft&&(waitTap||waitButton&&!waitPad);
+    if(i===1){waitTap=false;waitPad=waitButton;}
+    const orbit=Number(!aft&&keys.has(i?'Period':'KeyR'))-Number(keys.has(i?'Comma':'KeyQ'));
     view.yaws[i]-=orbit*now*2.30;
     const center=!!pad?.buttons[11]?.pressed;if(center&&!cameraButtons[i])recenter(i);cameraButtons[i]=center;
     if(pad){view.yaws[i]-=dead(pad.axes[2])*now*2.4;view.pitch[i]=TideTraversal.clamp(view.pitch[i]+dead(pad.axes[3])*now*2,-1.15,2.1);}
@@ -383,7 +388,7 @@ function pollInputs(now,connected){
     const use=toolTaps[i]||keys.has(i?'Enter':'KeyE')||!!pad?.buttons[7]?.pressed;
     const cameraInput=orbit||center||keys.has(i?'Backslash':'KeyC')||dead(pad?.axes[2])||dead(pad?.axes[3])||TideWindows.dragging(i);
     view.pointing.request(i,keys.has(i?'Quote':'KeyG')||!!pad?.buttons[5]?.pressed,Boolean(pointing||x||z||use||jump||cameraInput),!!pad);
-    return {x:pointing?0:x,z:pointing?0:z,use,magnify:i&&keys.has('BracketRight')?1:(pad?.buttons[6]?.value||Number(!!pad?.buttons[6]?.pressed)),jumpHeld:(i?keys.has('Slash')||keys.has('ShiftRight'):keys.has('Space'))||down,jump};
+    return {x:pointing?0:x,z:pointing?0:z,use,waitReport,magnify:i&&keys.has('BracketRight')?1:(pad?.buttons[6]?.value||Number(!!pad?.buttons[6]?.pressed)),jumpHeld:(i?keys.has('Slash')||keys.has('ShiftRight'):keys.has('Space'))||down,jump};
   });
 }
 function padMenus(pads){
@@ -435,7 +440,7 @@ function frame(now){
     while(remainder>=1/60 && mode==='playing'){
       view.rememberPose(session);
       session.tick(1/60,inputs,TideGallery.active(session)?view.yaws.map((yaw,i)=>TideGallery.movementYaw(session,i,yaw)):view.yaws);remainder-=1/60;
-      for(const input of inputs)input.jump=false;
+      for(const input of inputs){input.jump=false;input.waitReport=false;}
     }
   }
   if(mode!=='playing')return;
@@ -470,6 +475,7 @@ function keyDown(e){
   if(e.code==='Escape'&&(mode==='playing'||mode==='paused')){e.preventDefault();if(!e.repeat)pause();return;}
   if(mode!=='playing'||!moveCodes.has(e.code))return;
   e.preventDefault();keys.add(e.code);
+  if(!e.repeat&&e.code==='Period'&&TideSternWatch.station(session))waitTap=true;
   if(!e.repeat&&(e.code==='KeyF'||e.code==='Semicolon'))pointTaps[e.code==='KeyF'?0:1]=true;
   if(!e.repeat&&(e.code==='KeyC'||e.code==='Backslash'))recenter(e.code==='KeyC'?0:1);
   if(!e.repeat&&e.code==='KeyE'&&TideArrival.active(session))toolTaps[0]=true;

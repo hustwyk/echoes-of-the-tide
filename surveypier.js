@@ -1,31 +1,6 @@
 // The inspection floats ride the simulated swell. Their moorings stay attached to the stone sills.
 const TideSurveyPier=(()=>{
-  const T=THREE,V=(x,y,z)=>new T.Vector3(x,y,z),up=V(0,1,0),tau=Math.PI*2;
-  function buildPile(stump,own,rod,iron,bolt,wood){
-    // Wet split timber has a jagged crown, a complete lower collar and a missing segment of the upper one.
-    let seed=738;const rand=()=>((seed=Math.imul(seed,1664525)+1013904223>>>0)/4294967296);
-    const pts=[],rgb=[],idx=[],rings=6,N=44,grain=Array.from({length:N},()=>rand());
-    for(let j=0;j<rings;j++)for(let i=0;i<N;i++){
-      const a=i*tau/N,y=[-5,-3.31,-2.88,-2.61,-2.35,-2.13][j]+(j===5?grain[i]*.23-.09:0),rad=(.31+.031*grain[i])*(j===5?.83:1);
-      pts.push(Math.sin(a)*rad+.034*(y+3),y,Math.cos(a)*rad);
-      const v=.049+.075*grain[i]+.015*j;rgb.push(v,v*.81,v*.60);
-      if(j<rings-1){const k=j*N+i,n=j*N+(i+1)%N;idx.push(k,n,n+N,k,n+N,k+N);}
-    }
-    for(let i=1;i<N-1;i++)idx.push(5*N,5*N+i,5*N+i+1);
-    const splinters=own(new T.BufferGeometry());splinters.setAttribute('position',new T.Float32BufferAttribute(pts,3));splinters.setAttribute('color',new T.Float32BufferAttribute(rgb,3));splinters.setIndex(idx);splinters.computeVertexNormals();
-    const bark=own(new T.MeshStandardMaterial({vertexColors:true,roughness:.59,metalness:.09,side:T.DoubleSide}));
-    const pile=new T.Mesh(splinters,bark);pile.castShadow=true;stump.add(pile);
-    for(let k=0;k<27;k++){
-      const a=k*tau/27,b=(k+1)*tau/27;
-      for(const [y,missing] of [[-2.77,false],[-2.50,k>=2&&k<=7]]){
-        if(missing)continue;
-        rod(stump,iron,V(Math.sin(a)*.373,y+.028*Math.cos(a),Math.cos(a)*.373),V(Math.sin(b)*.373,y+.028*Math.cos(b),Math.cos(b)*.373),.048,.034);
-        if(k%4===0)rod(stump,bolt,V(Math.sin(a)*.36,y+.015,Math.cos(a)*.36),V(Math.sin(a)*.42,y+.015,Math.cos(a)*.42),.023);
-      }
-      const h=grain[k]*.24;
-      rod(stump,wood,V(Math.sin(a)*.25,-2.18,Math.cos(a)*.25),V(Math.sin(a)*.278,-2.09+h,Math.cos(a)*.278),.014);
-    }
-  }
+  const T=THREE,V=(x,y,z)=>new T.Vector3(x,y,z),up=V(0,1,0);
   function create(scene,g){
     const root=new T.Group(),base=TideSoundings.point(0,0,0);
     root.position.set(base.x,0,base.z);scene.add(root);
@@ -33,7 +8,7 @@ const TideSurveyPier=(()=>{
     const owned=new Set(),own=o=>(owned.add(o),o);
     const mat=(color,roughness,metalness)=>own(new T.MeshStandardMaterial({color,roughness,metalness}));
     const iron=TideSteel.material(0,own,true),zinc=mat(0x879491,.54,.78),rubber=mat(0x343a34,.72,.08),
-      ochre=mat(0xc19451,.61,.42),wood=mat(0x554d3e,.80,.12),rope=mat(0x75684b,.92,.07),bolt=mat(0x978d75,.46,.69);
+      ochre=mat(0xc19451,.61,.42),rope=mat(0x75684b,.92,.07),bolt=mat(0x978d75,.46,.69);
     const box=own(new T.BoxGeometry(1,1,1)),cyl=own(new T.CylinderGeometry(1,1,1,14)),dummy=new T.Object3D(),batches=new Map();
     function form(parent,geo,material,pos,scale,rot){
       if(!batches.has(parent))batches.set(parent,new Map());
@@ -67,7 +42,7 @@ const TideSurveyPier=(()=>{
       return o;
     });
     const stump=new T.Group();stump.position.set(TideLookout.marks.stump.x-base.x,0,TideLookout.marks.stump.z-base.z);root.add(stump);
-    buildPile(stump,own,rod,iron,bolt,wood);
+    const pile=TideBrokenPile.create(stump);
     for(const [parent,groups] of batches)for(const {geo,material,instances} of groups.values()){
       const mesh=new T.InstancedMesh(geo,material,instances.length);instances.forEach((m,i)=>mesh.setMatrixAt(i,m));
       mesh.castShadow=mesh.receiveShadow=true;parent.add(mesh);own(mesh);
@@ -118,7 +93,7 @@ const TideSurveyPier=(()=>{
       const water=TideSoundings.surface(q.x,q.z,g.time),level=water*.66+r.jaw*.34;
       return view([x+1.40,-.96,z+.22],[x,level,z],26);
     }
-    return {update,hands,shot,dispose(){env.dispose();gear.dispose();owned.forEach(o=>o.dispose());root.removeFromParent();}};
+    return {update,hands,shot,pile,dispose(){pile.dispose();env.dispose();gear.dispose();owned.forEach(o=>o.dispose());root.removeFromParent();}};
   }
-  return {create,buildPile};
+  return {create};
 })();

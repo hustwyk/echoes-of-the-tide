@@ -1,5 +1,8 @@
 // Original rescue radio performances, caption times in seconds.
 const TidePassSpeech={
+  deckStep:{duration:.342,lines:[],pan:.35},
+  railTouch:{duration:.275,lines:[],pan:.44},
+  deckKey:{duration:.176,lines:[],pan:.25},
   "berth": {
     "duration": 3.694,
     "lines": [
