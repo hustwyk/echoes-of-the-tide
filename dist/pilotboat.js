@@ -449,6 +449,7 @@
         const m=new T.Mesh(geo,mat);
         m.name=owner===quay?'码头固定系缆羊角':mat===wood?'交通艇橡木舱面':mat===hullMaterial?'交通艇折角船壳':'交通艇舾装';
         m.castShadow=mat!==pane&&mat!==lamps&&mat!==cord;m.receiveShadow=mat!==pane&&mat!==lamps;
+        if(owner===quay&&mat===cord)m.userData.shoreEye=true;
         owner.add(m);triangles+=b.idx.length/3;
       }
       set.clear();
@@ -509,6 +510,7 @@
       helmWheel.rotation.x=(arrival?.rudder||0)*1.56;
       throttleLever.rotation.z=-(arrival?.drive||0)*.55;
       if(moorings)moorings.visible=!arrival||arrival.moored;
+      for(const mesh of quay.children)if(mesh.userData.shoreEye)mesh.visible=!arrival||arrival.moored;
       if(pose){
         root.rotation.set(pose.pitch,pose.yaw,pose.roll,'YXZ');
         root.position.set(-pose.anchorX,-pose.anchorY,-pose.anchorZ).applyQuaternion(root.quaternion);

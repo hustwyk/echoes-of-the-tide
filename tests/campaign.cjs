@@ -3,11 +3,11 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const box=vm.createContext({});
-for(const name of ['missions','traversal','floating','warp-speech','warping','fender-speech','fender-coping','fenders','plate-speech','arrival-speech','stern-line','arrival','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','buoy-motion','light-register','lookout','cistern-speech','cistern','glass-speech','chartroom','paper','lantern','gallery-speech','gallery','shift-speech','starter','transit-speech','transit','signal','tin-lines','tin-memory','archive','relay-speech','relay','soundings-speech','survey-plot','soundings','fog-speech','haul-speech','fog-recovery','fogsignal','range-voice','range-watch','pass-speech','stern-watch','lastpass','swing-speech','swing','cooperation']){
+for(const name of ['missions','traversal','floating','warp-speech','warping','fender-speech','fender-coping','fenders','plate-speech','arrival-speech','stern-line','bow-cast','arrival','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','buoy-motion','light-register','lookout','cistern-speech','cistern','glass-speech','chartroom','paper','lantern','gallery-speech','gallery','shift-speech','starter','transit-speech','transit','signal','tin-lines','tin-memory','archive','relay-speech','relay','soundings-speech','survey-plot','soundings','fog-speech','haul-speech','fog-recovery','fogsignal','range-voice','range-watch','pass-speech','stern-watch','lastpass','swing-speech','swing','cooperation']){
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../dist',name+'.js'),'utf8'),box);
 }
 const {Session,near,surface,lookout,ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideSwing,TideCistern,TideGlass,TidePaper}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideSwing,TideCistern,TideGlass,TidePaper})',box);
-const {TideFenders,TideWarping,TideFloating,TideArrival,TideSternLine}=vm.runInContext('({TideFenders,TideWarping,TideFloating,TideArrival,TideSternLine})',box);
+const {TideFenders,TideWarping,TideFloating,TideArrival,TideSternLine,TideBowCast}=vm.runInContext('({TideFenders,TideWarping,TideFloating,TideArrival,TideSternLine,TideBowCast})',box);
 const {TideTransit,TideSurveyPlot,TideLightRegister,TideBuoyMotion}=vm.runInContext('({TideTransit,TideSurveyPlot,TideLightRegister,TideBuoyMotion})',box);
 const {TideTinMemory}=vm.runInContext('({TideTinMemory})',box);
 const {TideGallery,TideRangeWatch}=vm.runInContext('({TideGallery,TideRangeWatch})',box);
@@ -555,11 +555,18 @@ function approachInputs(g,out){
   helm.z=a.attached?0:-Math.max(-.55,Math.min(1,gap*.50));
   helm.use=a.attached;
   if(a.radio==='line'&&!a.attached){
-    const end=TideArrival.cleat(g),target=TideFloating.local(h,end.x,end.y,end.z);
-    const side=target.x+h.anchorX-TideArrival.castSite.x-a.lateral;
-    const reach=TideArrival.castSite.z-h.anchorZ-target.z-a.reach;
-    radio.x=Math.max(-1,Math.min(1,side*4));radio.z=Math.max(-1,Math.min(1,-reach*4));
-    radio.use=(a.atBow||0)>.85&&Math.hypot(side,reach)<.32&&Math.abs(a.speed)<1.2;
+    const b=a.bow,end=TideArrival.cleat(g);
+    if(b.phase==='retrieve')radio.use=true;
+    else if(b.phase==='wind'||b.phase==='ready'){
+      // Follow the same arc as the live guide. Compare its landing with the two
+      // horns; input is still limited to a stick and a grip/release.
+      const shot=TideBowCast.launch(g,b.power),t=TideBowCast.crossing(shot,end.y),land=TideBowCast.position(shot,t);
+      const yaw=TideBowCast.turn(g),dx=end.x-land.x,dz=end.z-land.z;
+      const side=dx*Math.cos(yaw)+dz*Math.sin(yaw),reach=dx*Math.sin(yaw)-dz*Math.cos(yaw);
+      radio.x=Math.max(-1,Math.min(1,side*1.5));
+      if(b.phase==='wind')radio.use=reach>.025&&b.power<.999;
+      else radio.use=!a.use&&a.atBow>.92&&Math.abs(a.speed)<.35&&Math.abs(side)<.20&&reach<5;
+    }
   }
   if(a.attached)radio.use=true;
   if(a.stern){
@@ -954,17 +961,48 @@ if(require.main===module){
     assert.equal(a.radio,'wait');assert.match(a.warning,/松键太早/);
     for(let j=0;j<600&&(a.atBow||0)<1;j++)g.tick(step,withoutPilot());
     assert.equal(a.radio,'line');assert.equal(a.atBow,1);
-    g.tick(step,[{...empty(),use:true},empty()]);assert.equal(a.flight.hit,false);
-    run(75,idle);assert.equal(a.attached,false);assert.match(a.warning,/落空/);
-
-    // Stage a physically aligned cast with too much headway.
+    g.tick(step,[{...empty(),use:true},empty()]);assert.equal(a.bow.phase,'wind');
+    run(8,idle);assert.equal(a.bow.phase,'swing');
+    run(12,idle);assert.equal(a.bow.phase,'air');assert.ok(!a.attached);
+    run(130,idle);assert.equal(a.bow.phase,'retrieve');assert.equal(a.misses,1);
+    const missed={...a.bow.loose};
+    run(80,idle);assert.equal(a.bow.phase,'retrieve');
+    assert.equal(a.bow.loose.x,missed.x);
+    run(120,()=>[{...empty(),use:true},empty()]);assert.equal(a.bow.phase,'ready');assert.ok(!a.attached);
+    run(2,idle);
+    // The same arm motion on a moving boat inherits its headway.
     const h=g.world.fenders.floatPose;
-    a.x=h.anchorX;a.z=h.anchorZ;a.heading=0;a.speed=1.9;g.tick(step,idle());
-    const end=TideArrival.cleat(g),local=TideFloating.local(h,end.x,end.y,end.z);
-    a.lateral=local.x+h.anchorX-TideArrival.castSite.x;
-    a.reach=TideArrival.castSite.z-h.anchorZ-local.z;
-    g.tick(step,[{...empty(),use:true},empty()]);assert.ok(a.flight.fast&&!a.flight.hit);
-    run(75,idle);assert.match(a.warning,/收油/);
+    a.x=h.anchorX;a.z=h.anchorZ;a.heading=0;a.speed=0;run(4,idle);
+    const stationary=TideBowCast.launch(g,.4);
+    a.speed=2;run(2,idle);const advancing=TideBowCast.launch(g,.4);
+    assert.ok(advancing.vx-stationary.vx>1.5);
+    const end=TideArrival.cleat(g),eye={...end,yaw:0,tilt:.045,rx:.49,rz:.405};
+    assert.ok(TideBowCast.hornClearance(eye,end).outer<1);
+    const skim=TideBowCast.hornClearance({...eye,x:eye.x+.36},end);
+    assert.ok(skim.inner<1&&skim.outer>1);
+    const wide=TideBowCast.hornClearance({...eye,x:eye.x+.86},end);
+    assert.ok(wide.inner>1.08);
+    // The shore contact is swept across the frame. Identical starting points
+    // can clear both horns, clip the near horn or miss the hardware entirely.
+    function crossHorns(offset,frameTime){
+      const trial=new Session(0);TideArrival.begin(trial);
+      const arrival=trial.arrival,b=arrival.bow,post=TideArrival.cleat(trial);
+      arrival.radio='line';arrival.atBow=1;
+      const f={x:post.x,y:post.y+.62,z:post.z+1.48,yaw:0,vy:1,vx:0,vz:0,ax:0,az:0};
+      const landing=TideBowCast.crossing(f,post.y);
+      f.vx=offset/landing;f.vz=-1.48/landing;b.flight=f;b.phase='air';
+      for(let j=0;j<90&&b.phase==='air';j++){
+        assert.equal(arrival.attached,false);
+        TideBowCast.step(trial,empty(),frameTime,false,false);
+      }
+      return arrival;
+    }
+    for(const frameTime of [1/30,1/120]){
+      const caught=crossHorns(.095,frameTime),scrape=crossHorns(.37,frameTime),miss=crossHorns(-.85,frameTime);
+      assert.equal(caught.attached,true);assert.ok(Math.abs(caught.bow.seat.x-end.x-.095)<.001);
+      assert.equal(scrape.attached,false);assert.equal(scrape.bow.impact.kind,'horn');
+      assert.equal(miss.attached,false);assert.equal(miss.bow.impact.kind,'stone');
+    }
     reach(g,()=>a.attached);
     run(150,()=>[{...empty(),use:true},empty()]);
     assert.ok(!a.secured&&!a.moored);

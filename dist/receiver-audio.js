@@ -134,7 +134,7 @@ const TideReceiverAudio=(()=>{
       if(TideArrival.active(g)){
         const s=g.arrival;
         if(arrivalSource!==s){arrivalSource=s;arrivalSerial=s.serial;}
-        for(const id of ['captain','heard','button','call','dark','pttDown','pttUp','dial','hull','sternOut','sternHold','sternCaught','sternFast','hookStone','wetLine','cleatDrop']){
+        for(const id of ['captain','heard','button','call','dark','pttDown','pttUp','dial','hull','bowCast','bowSplash','bowDrop','sternOut','sternHold','sternCaught','sternFast','hookStone','wetLine','cleatDrop']){
           const key='boat/'+id;if(!buffers[key]&&!pending.has(key))decode(key).catch(()=>{});
         }
         if(s.serial!==arrivalSerial){arrivalSerial=s.serial;arrivalFoley=end(arrivalFoley);arrivalFoley=play('boat/'+s.cue,.71);}

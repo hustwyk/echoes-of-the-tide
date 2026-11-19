@@ -88,7 +88,7 @@ const TideHud=(()=>{
       const atPlate=i&&g.arrival&&g.arrival.radio!=='line';
       const arrivalHint=g.arrival?.stern&&!g.arrival.moored?(i?(pads[i]!=null?'左摇杆扫钩 / 送杆　A 挑起　RT 近看 / 握杆':'← → 扫钩　↑ ↓ 送收　/ 挑起　Enter 近看 / 握杆'):(pads[i]!=null?'按住 RT 收首缆　松开让缆':'按住 E 收首缆　松开让缆')):i&&atPlate?(pads[i]!=null?'RT 看铜牌　按住时左右擦　前后进退车':'Enter 看铜牌　按住时 ← → 擦拭　↑ ↓ 进退车'):
         i?(pads[i]!=null?'左摇杆操舵与进退　RT 停机':'↑ 进车　↓ 倒车　← → 操舵　Enter 停机'):
-        (g.arrival?.radio==='line'?(pads[i]!=null?'左摇杆移动落点　RT 抛缆 / 收缆':'WASD 移动落点　E 抛缆 / 收缆'):(pads[i]!=null?'左摇杆左右调台　RT 发话':'A / D 调台　E 发话'));
+        (g.arrival?.radio==='line'&&(g.arrival.bow.phase==='retrieve'||g.arrival.attached)?(pads[i]!=null?'按住 RT 收缆':'按住 E 收缆'):g.arrival?.radio==='line'?(pads[i]!=null?'左摇杆定方向和仰角　按住 RT 后摆，松手抛':'A D 瞄准　W S 仰角　按住 E 后摆，松手抛'):(pads[i]!=null?'左摇杆左右调台　RT 发话':'A / D 调台　E 发话'));
       const rescueHint=i?(pads[i]!=null?'RT 握柄　左摇杆左右盘车　回中抱闸':'Enter 握柄　← → 盘车　松开方向键抱闸'):
         (pads[i]!=null?'RT 抓环　左摇杆前推翻上　松开 RT 后 A 回收':'E 抓环　W 翻上　松开 E 后空格回收');
       const starterKeys=pads[i]!=null?(i?'RT 握柄　左右对针　A 解锁　前推送柄':'RT 握柄　左摇杆后拉、前推'):(i?'Enter 握柄　← → 对针　/ 解锁　↑ 送柄　↓ 退柄':'E 握柄　S 拉到底　W 推回');
