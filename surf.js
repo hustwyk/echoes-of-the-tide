@@ -186,12 +186,12 @@
         vec3 tears=texture2D(surfCell,p.yx*vec2(.048,.077)-drift*.06+vec2(.10*noiseB.b)).rgb;
         float rag=(bleed-.47)*1.65+(tears.g-.54)*.92;
         float lip=.56+.88*pulse+.46*cycle;
-        float packed=1.-smoothstep(.05,lip+.36,coast+rag);
+        float denseFoam=1.-smoothstep(.05,lip+.36,coast+rag);
         float edge=.8+2.75*(1.-exp(-age*.84))+rag;
         float ribbon=(1.-smoothstep(.08,1.00,abs(coast-edge)))*cycle;
         float decay=1.-smoothstep(.45,4.7+rag,coast);
         float lace=decay*(.15+.73*cycle)*(.14+.68*cells.r)*smoothstep(.30,.78,tears.g+.22*bleed);
-        float churn=packed*(.56+.40*cells.g)+ribbon*(.16+.49*cells.r)*smoothstep(.26,.70,tears.g)+lace;
+        float churn=denseFoam*(.56+.40*cells.g)+ribbon*(.16+.49*cells.r)*smoothstep(.26,.70,tears.g)+lace;
         float protection=smoothstep(4.,9.,length(p-vec2(-42.,-120.)))*smoothstep(4.,10.,length(p-vec2(-30.,-116.)));
         float cover=clamp(churn,0.,.95)*mix(.20,1.,protection)*(1.-.47*smoothstep(65.,155.,dist));
         vec3 froth=mix(vec3(.36,.46,.45),vec3(.81,.88,.81),.27+.54*bleed+.16*cells.b);
