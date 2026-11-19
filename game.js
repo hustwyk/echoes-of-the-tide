@@ -104,21 +104,14 @@ function onStage(g){
   view?.pointing?.clear();savePoint(g);const line=TideFenders.active(g)?TideFenders.briefing:g.spec.radio;note(line);g.notice=line;g.noticeUntil=g.time+6;
   if(mode==='playing'&&!TideFenders.active(g)&&!g.swing?.voice&&!g.cistern?.voice)say(line);
 }
-let race=null,sharedRenderer=null,loadingRace=null,raceEntry=0;
+let race=null,sharedRenderer=null,entrySerial=0;
 function fieldRenderer(){return sharedRenderer??=TideHarbor.makeRenderer(canvas);}
-function poolModule(){
-  if(typeof TideRegattaPool!=='undefined')return Promise.resolve();
-  return loadingRace??=new Promise((ok,bad)=>{
-    const tag=document.createElement('script');tag.src='regatta-pool.js';
-    tag.onload=()=>{tag.remove();ok();};tag.onerror=()=>{tag.remove();loadingRace=null;bad(Error('未能读取试船池场景'));};document.head.append(tag);
-  });
-}
 async function enterRegatta(fromMemory=false){
   if(race||mode==='regatta-loading')return;
-  const entry=++raceEntry;if(info.open)info.close();if(!game.open)game.showModal();
+  const entry=++entrySerial;if(info.open)info.close();if(!game.open)game.showModal();
   if(wantsAudio)sound.enable(true).then(updateAudio);
   clearInput();sound.stopScene();window.speechSynthesis?.cancel();
-  mode='regatta-loading';$('split').hidden=$('film').hidden=true;overlay.replaceChildren();
+  mode='regatta-loading';overlay.classList.remove('entering');$('split').hidden=$('film').hidden=true;overlay.replaceChildren();
   $('act').textContent='夏日回忆　/　北岬试船池';$('level-title').textContent='瓶盖杯';$('elapsed').textContent='';
   showStatus('正在把船模放进水里');$('pause').disabled=true;
   function leave(winner=null){
@@ -130,15 +123,16 @@ async function enterRegatta(fromMemory=false){
     }else game.close();
   }
   try{
-    await poolModule();if(raceEntry!==entry||!game.open)return;
+    await TideScenes.load('pool');if(entrySerial!==entry||!game.open)return;
     race=TideRegattaUI.create(fieldRenderer(),fromMemory,leave);mode='regatta';$('pause').disabled=false;$('pause').textContent='暂停';TideWindows.focus(canvas);
   }catch(error){
-    if(raceEntry!==entry||!game.open)return;
+    if(entrySerial!==entry||!game.open)return;
     showStatus('试船池暂时无法显示。'+error.message);const back=document.createElement('button');
     back.textContent=fromMemory?'回到录音桌':'返回行动档案';back.onclick=leave;overlay.replaceChildren(back);
   }
 }
-function openLevel(n,stage=0,mark=null){
+async function openLevel(n,stage=0,mark=null,forReceipt=false){
+  const entry=++entrySerial;
   const savedLead=mark?.lead??(n===11&&stage>0&&session?.index===11?session.leadAngle:null);
   closeFiling();if(info.open)info.close();
   if(!game.open)game.showModal();
@@ -146,8 +140,38 @@ function openLevel(n,stage=0,mark=null){
   journal.length=0;
   clearInput();index=n;mode='loading';
   $('split').hidden=true;showStatus('正在准备场景');
-  overlay.innerHTML='<div class="story"><h3>正在进入北岬</h3></div>';
+  const level=levels[n],act=acts[Math.floor(n/3)];
+  $('act').textContent=act.name+'　/　'+String(n+1).padStart(2,'0')+' OF 12';$('level-title').textContent=level.name;$('elapsed').textContent='';
+  const sternMark=mark?.berth==='stern';
+  const initial=sternMark?'发动机已经停了，首缆仍套在岸桩上。沈遥走到艇尾，堤沿的绿绳眼还要绕过船舷，才能落在艇尾桩上。':level.story;
+  const quote=sternMark?(mark.phase==='fast'?'沈遥：“在桩上了。现在能松手了。”':mark.phase==='draw'?'沈遥：“勾住了。等我把它带回来。”':'沈遥：“船尾还在摆。我去够那只绿绳眼。”'):level.quote;
+  overlay.innerHTML='<div class="story"><small>行动简报</small><h3>'+level.name+'</h3><p class="brief-story">'+initial+'</p><blockquote>'+quote+'</blockquote><div id="brief-seats"></div><button class="primary">'+(stage||mark?'从检查点继续':n===0?'登上交通艇':'进入关卡')+'　›</button><div class="scene-load"><label for="scene-progress">正在载入场景</label><progress id="scene-progress"></progress><button class="load-back">返回档案</button></div></div>';
+  const bar=$('scene-progress'),accept=overlay.querySelector('.primary'),loading=overlay.querySelector('.scene-load');
+  overlay.style.setProperty('--brief-image','url(assets/'+act.image+'.jpg)');
+  overlay.classList.add('entering');
+  loading.querySelector('.load-back').onclick=()=>game.close();
+  let embark=false;
+  const boat=sternMark?'stern':n===0&&!stage&&!mark?'tune':null;
+  if(forReceipt){
+    $('act').textContent='天亮之后';$('level-title').textContent='顾岚的回件';
+    overlay.querySelector('small').textContent='值班档案';overlay.querySelector('h3').textContent='顾岚的回件';
+    overlay.querySelector('.brief-story').textContent='港口转来当年后甲板上的一段证词。林澈给签页归栏，沈遥把顾岚的原话夹进去。';
+    overlay.querySelector('blockquote').textContent='顾岚：“劳驾，把这句话也夹进去。”';
+    accept.hidden=true;seatPanel=null;
+  }else seatPanel=TideCrewInput.panel($('brief-seats'),boat);
+  accept.onclick=()=>{
+    if(mode==='story'){startPlaying(true);return;}
+    if(mode==='loading'){
+      embark=true;accept.disabled=true;accept.textContent='就绪后自动进入';
+      TideWindows.focus(canvas);
+    }
+  };
+  TideWindows.focus(forReceipt?loading.querySelector('.load-back'):accept);
   try{
+    if(!TideScenes.ready(n)){
+      await TideScenes.load(n,(done,total)=>{if(entry===entrySerial){bar.max=total;bar.value=done;}});
+      if(entry!==entrySerial||!game.open)return false;
+    }
     view??=new TideHarbor.WorldView(canvas,(i,kind)=>sound.tone(kind==='seen'?(i?820:740):(i?690:518),kind==='seen'?.16:.10,'sine',.11,i?.58:-.58),fieldRenderer());
     if(n===0){TideReceiverAudio.loadFender();if(!stage&&!mark){TideReceiverAudio.loadArrival();TideReceiverAudio.loadPlate();}}
     if(n===6)TideReceiverAudio.loadSwing();
@@ -167,7 +191,7 @@ function openLevel(n,stage=0,mark=null){
           note(line);if(voice&&!session?.signal?.voice&&!session?.archive?.memory?.voice)say(line);
         }
       },success:()=>sound.tone(580,.23,'triangle'),sound:(f,d)=>sound.tone(f,d),
-      reset:side=>{view.snap=true;sound.cue('reset',side);},finish:finishLevel
+      reset:side=>{view.recovered[side]=true;sound.cue('reset',side);},finish:finishLevel
     });
     if(n===11){if(Number.isFinite(savedLead))session.leadAngle=TideTraversal.clamp(savedLead,-1.5,-.46);try{session.savedSpacing=JSON.parse(localStorage.getItem('tide-foghorn-spacing'));}catch{}}
     if(stage){
@@ -184,21 +208,23 @@ function openLevel(n,stage=0,mark=null){
     if(n===0&&!stage&&!mark)TideArrival.begin(session);
     view.load(session);
   }catch(err){
-    console.error(err);mode='error';
-    overlay.innerHTML='<div class="story"><h3>三维场景未能启动</h3><p>请在支持 WebGL 的桌面浏览器中开启图形加速后重试。</p><p id="error-detail"></p><button class="secondary">返回档案</button></div>';
-    $('error-detail').textContent=err.message;overlay.querySelector('button').onclick=()=>game.close();return;
+    if(entry!==entrySerial||!game.open)return false;
+    console.error(err);mode='error';seatPanel=null;overlay.classList.remove('entering');
+    const readError=!TideScenes.ready(n);
+    overlay.innerHTML='<div class="story"><h3>'+(readError?'场景未能载入':'三维场景未能启动')+'</h3><p id="error-detail"></p><button id="reload-scene" class="primary">重试</button> <button class="secondary">返回档案</button></div>';
+    $('error-detail').textContent=readError?err.message:'请检查浏览器图形加速。'+err.message;
+    $('reload-scene').onclick=()=>forReceipt?openFiling(true):openLevel(n,stage,mark);overlay.querySelector('.secondary').onclick=()=>game.close();return false;
   }
-  const level=levels[n],act=acts[Math.floor(n/3)];mode='story';
-  $('act').textContent=act.name+'　/　'+String(n+1).padStart(2,'0')+' OF 12';$('level-title').textContent=level.name;
-  $('elapsed').textContent='';showStatus('两名玩家 · 独立视角');
-  const sternMark=mark?.berth==='stern';
+  mode='story';loading.remove();overlay.classList.remove('entering');
+  showStatus('两名玩家 · 独立视角');
   const plotBriefing=TideSurveyPlot.briefing(session);
-  const briefing=plotBriefing|| (sternMark?'发动机已经停了，首缆仍套在岸桩上。沈遥走到艇尾，堤沿的绿绳眼还要绕过船舷，才能落在艇尾桩上。':level.story);
-  const openingLine=plotBriefing?'阿棠：“我从船上往岸上看。你那把尺，往船这边画。”':sternMark?(session.arrival.stern.phase==='fast'?'沈遥：“在桩上了。现在能松手了。”':session.arrival.stern.phase==='draw'?'沈遥：“勾住了。等我把它带回来。”':'沈遥：“船尾还在摆。我去够那只绿绳眼。”'):level.quote;
-  overlay.innerHTML='<div class="story"><small>行动简报</small><h3>'+level.name+'</h3><p>'+briefing+'</p><blockquote>'+openingLine+'</blockquote><div id="brief-seats"></div><button class="primary">'+(stage||mark?'从检查点继续':n===0?'登上交通艇':'进入关卡')+'　›</button></div>';
-  seatPanel=TideCrewInput.panel($('brief-seats'),TideArrival.active(session)?(session.arrival.stern?'stern':session.arrival.radio):null);
-  overlay.querySelector('.primary').onclick=()=>startPlaying(true);
-  TideWindows.focus(overlay.querySelector('.primary'));view.draw(session,0,false);
+  if(plotBriefing){
+    overlay.querySelector('.brief-story').textContent=plotBriefing;
+    overlay.querySelector('blockquote').textContent='阿棠：“我从船上往岸上看。你那把尺，往船这边画。”';
+  }
+  view.draw(session,0,false);
+  if(embark)startPlaying(true);
+  return true;
 }
 function startPlaying(announce){
   seatPanel=null;clearInput();
@@ -261,8 +287,8 @@ function showDebrief(g){
   TideWindows.focus(overlay.querySelector('button'));say(levels[index].after);
 }
 let filing=null;
-function openFiling(fromArchive=false){
-  if(fromArchive){openLevel(11);if(mode==='error')return;}
+async function openFiling(fromArchive=false){
+  if(fromArchive&&!(await openLevel(11,0,null,true)))return;
   clearInput();sound.stopScene();window.speechSynthesis?.cancel();
   mode='receipt';$('split').hidden=true;$('film').hidden=true;$('pause').disabled=true;
   overlay.replaceChildren();
@@ -430,7 +456,7 @@ function frame(now){
   if(mode==='regatta'&&race){if(resized)race.redraw();race.frame(now,pads);return;}
   if(mode==='regatta-loading')return;
   if(mode!=='receipt'&&(pads.length||menuPadState.size))padMenus(pads);
-  if(!game.open||!session||!view||mode==='error')return;
+  if(!game.open||!session||!view||mode==='error'||mode==='loading')return;
   const dt=last?Math.min((now-last)/1000,.10):0;last=now;
   if(mode==='receipt'){drawFiling(dt,pads);return;}
   if(mode==='cinema'){drawFilm(dt);return;}
@@ -463,13 +489,13 @@ TideWindows.schedule(frame);
 $('start').onclick=()=>openLevel(progress===12?0:progress,resume?.index===progress?resume.stage:0,resume?.index===progress?storedMark(resume):null);
 $('skip').onclick=()=>{if(mode==='cinema'){view.cinema.skip();showDebrief(session);}};
 $('pause').onclick=pause;$('sound').onclick=$('field-audio').onclick=toggleAudio;
-$('expand').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else if(game.requestFullscreen)await game.requestFullscreen();}catch{showStatus('当前窗口已使用可用的最大画面');}};
+$('expand').onclick=()=>TideWindows.fullscreen(document);
 $('brief').onclick=()=>{showInfo('<h2>北岬灯塔 · 紧急任务</h2><p>海雁号失去动力。机修员林澈和信号员沈遥必须在潮水吞没北礁前恢复电台，找出灯塔旧档案里的误判，重新校准光束。</p><p>十二关贯穿四幕。两人各自操作一名角色，共用同一个三维世界。</p><p><a href="story.html" target="_blank" rel="noopener">阅读原作调研、原创故事与十二关设计（含剧透）</a></p>');addJournal($('info-content'),levels.slice(0,progress).map((l,i)=>'第 '+(i+1)+' 关　'+l.name+'　'+l.after));};
 $('help').onclick=()=>showInfo('<h2>双人操作指南</h2><p>林澈用 WASD 移动、空格跳跃，按住 E 操作。沈遥用方向键移动、斜杠 / 或右 Shift 跳跃，按住 Enter 操作。轻点跳跃可以越过短阶，按住则跳得更高。</p><p>林澈用 Q / R 转镜头，C 回到人物身后。沈遥用逗号 / 句号转镜头，反斜杠回正。两人可以同时转动各自的镜头。</p><p>要给同伴指路，林澈按住 F，沈遥按住分号，手柄按住 LB。用移动键或左摇杆瞄准实物，松开即可。也可以在自己的半屏右击。标记会跟着甲板或船移动。自由行动时站稳，林澈按住 G，沈遥按住单引号键，手柄按住 RB，看向同伴刚指出的实物。看清后对方会收到回应。松开回到原视角。</p><p>跟随各自画面内的设备标记。在光圈里按住操作键，左右键调节仪器，跳跃键确认读数或发送信号。站在移动甲板上会随甲板运动，可从边缘跃向对岸。</p><p>点右上角「双窗口」，可把沈遥的画面拖到另一块显示器。关掉副窗口或点「合回同屏」即可接着玩。在任一窗口按键均可控制两人。拖动自己的画面可转镜头，双击回正。标准手柄使用左摇杆移动、A 跳跃、RT 操作、右摇杆转动视角、按下回到身后。轻推摇杆，行动简报与暂停菜单会亮起对应角色。只有一只手柄时可把它交给任意一边，两只手柄也可互换。方向键选菜单，A 确认，B 返回，Start 或 Esc 暂停，章节与段落检查点保存在此浏览器。</p>');
 const moveCodes=new Set(['BracketLeft','BracketRight','KeyW','KeyA','KeyS','KeyD','KeyE','Space','ArrowUp','ArrowLeft','ArrowDown','ArrowRight','Enter','Slash','ShiftRight','KeyQ','KeyR','KeyC','Comma','Period','Backslash','KeyF','Semicolon','KeyG','Quote']);
 function keyDown(e){
   if(!game.open)return;
-  if(mode==='paused'||mode==='story'||mode==='regatta')TideCrewInput.key(e.code,true);
+  if(mode==='loading'||mode==='paused'||mode==='story'||mode==='regatta')TideCrewInput.key(e.code,true);
   if(race){race.key(e);return;}
   if(mode==='receipt'){
     const action={KeyA:'left',KeyD:'right',KeyE:'clip',Enter:'file',Escape:'close'}[e.code];
@@ -499,7 +525,7 @@ TideWindows.bind({
   hidden(){race?.pause(true);filing?.reply.pause();if(mode==='playing')pause();
     if(mode==='cinema'){sound.tape?.stop();sound.receiver?.stop();}clearInput();}
 });
-game.addEventListener('close',()=>{if(!game.open){TideWindows.close();seatPanel=null;raceEntry++;race?.dispose();race=null;closeFiling();mode='menu';clearInput();sound.stopScene();window.speechSynthesis?.cancel();view?.free();session=null;}});
+game.addEventListener('close',()=>{if(!game.open){TideWindows.close();TideWindows.leaveFullscreen();overlay.classList.remove('entering');seatPanel=null;entrySerial++;race?.dispose();race=null;closeFiling();mode='menu';clearInput();sound.stopScene();window.speechSynthesis?.cancel();view?.free();session=null;}});
 game.addEventListener('cancel',e=>{
   if(race){e.preventDefault();race.pause();return;}
   if(mode==='cinema'){e.preventDefault();$('skip').click();}
@@ -512,3 +538,4 @@ campaign();
 
 $('regatta-open').onclick=()=>enterRegatta(false);
 if(new URLSearchParams(location.search).get('play')==='regatta')enterRegatta(false);
+window.takeMenuIntent?.();

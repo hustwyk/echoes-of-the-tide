@@ -41,11 +41,50 @@ const TideWindows=(()=>{
     const n=document.getElementById('window-note');n.textContent=message;n.hidden=false;
     clearTimeout(noteTimer);noteTimer=setTimeout(()=>{n.hidden=true;},6500);
   }
+  let fieldFullscreen=false,previousBounds=null;
+  async function fullscreen(doc){
+    const w=doc.defaultView;
+    if(doc!==document&&previousBounds&&w===partner){
+      const b=previousBounds;previousBounds=null;
+      w.resizeTo(b.width,b.height);w.moveTo(b.left,b.top);
+      doc.getElementById('expand').setAttribute('aria-label','切换全屏');note('已恢复玩家二的窗口大小。');changed();return;
+    }
+    try{
+      if(doc.fullscreenElement){await doc.exitFullscreen();return;}
+      await doc.documentElement.requestFullscreen();
+      if(doc===document)fieldFullscreen=true;
+    }catch{
+      // Chrome can deny native fullscreen in a script-opened sized popup.
+      // Keep this player on the same monitor and remember their window size.
+      if(doc!==document&&w===partner){
+        const b={width:w.outerWidth,height:w.outerHeight,left:w.screenX,top:w.screenY},screen=w.screen;
+        if(b.width<screen.availWidth-12||b.height<screen.availHeight-12){
+          const cx=b.left+b.width/2,cy=b.top+b.height/2;
+          if(cx>=screen.availLeft&&cx<screen.availLeft+screen.availWidth&&cy>=screen.availTop&&cy<screen.availTop+screen.availHeight)
+            w.moveTo(screen.availLeft,screen.availTop);
+          w.resizeTo(screen.availWidth,screen.availHeight);
+          await new Promise(done=>setTimeout(done,240));
+          if(w!==partner||w.closed)return;
+          if(w.outerWidth>b.width+8||w.outerHeight>b.height+8){
+            previousBounds=b;doc.getElementById('expand').setAttribute('aria-label','恢复窗口大小');
+            note('玩家二窗口已放大。再点一次可恢复原来的大小。');changed();return;
+          }
+          if(w.screenX!==b.left||w.screenY!==b.top)w.moveTo(b.left,b.top);
+        }
+      }
+      note('浏览器未允许此窗口进入全屏。可使用系统的窗口最大化。');
+    }
+  }
+  document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement)fieldFullscreen=false;changed();});
+  function leaveFullscreen(){
+    if(fieldFullscreen&&document.fullscreenElement)document.exitFullscreen().catch(()=>{});
+    fieldFullscreen=false;
+  }
   function changed(){dirty=true;}
   function needsDraw(){const update=dirty;dirty=false;return update;}
   function detachEnded(){
     if(!partner)return;
-    const old=partner;observer?.disconnect();observer=null;
+    const old=partner;previousBounds=null;observer?.disconnect();observer=null;
     clearTimeout(focusTimer);returnUntil=performance.now()+650;
     partnerResize?.disconnect();partnerResize=null;activeWindow=window;
     partner=null;surface=null;context=null;remoteBoard=null;
@@ -121,7 +160,16 @@ const TideWindows=(()=>{
       const doc=w.document;doc.documentElement.lang='zh-CN';doc.title='沈遥 · 玩家二 | 潮汐回声';
       const meta=doc.createElement('meta');meta.name='viewport';meta.content='width=device-width,initial-scale=1';doc.head.append(meta);
       for(const sheet of document.querySelectorAll('link[rel="stylesheet"]')){
-        const link=doc.createElement('link');link.rel='stylesheet';link.href=sheet.href;link.onload=changed;doc.head.append(link);
+        // Use the sheet already displayed in the main window. A fresh request
+        // can leave an unstyled, expanding canvas while the popup is opening.
+        let rules;
+        try{rules=sheet.sheet?.cssRules;}catch{}
+        if(rules){
+          const style=doc.createElement('style');
+          style.textContent=Array.from(rules,rule=>rule.cssText).join('\n');doc.head.append(style);
+        }else{
+          const link=doc.createElement('link');link.rel='stylesheet';link.href=sheet.href;link.onload=changed;doc.head.append(link);
+        }
       }
       document.getElementById('window-note').hidden=true;
       game.dataset.seat='0';toggle.textContent='合回同屏';toggle.setAttribute('aria-expanded','true');
@@ -132,8 +180,7 @@ const TideWindows=(()=>{
       doc.addEventListener('click',e=>{
         const button=e.target.closest('button');if(!button)return;
         if(button.id==='expand'){
-          if(doc.fullscreenElement)doc.exitFullscreen?.().catch(()=>{});
-          else replica.requestFullscreen?.().catch(()=>{});
+          fullscreen(doc);
         }else sources.get(button)?.click();
       });
       doc.addEventListener('keydown',e=>{
@@ -221,5 +268,5 @@ const TideWindows=(()=>{
   toggle.addEventListener('click',open);bindSurface(canvas);
   window.addEventListener('pagehide',detachEnded);window.addEventListener('resize',changed);
   window.addEventListener('blur',blur);document.addEventListener('visibilitychange',visibility);
-  return {layout,present,meter,pads,visible,density,active,focus,dragging,schedule,needsDraw,close:detachEnded,bind:handlers=>{callbacks=handlers;}};
+  return {fullscreen,leaveFullscreen,layout,present,meter,pads,visible,density,active,focus,dragging,schedule,needsDraw,close:detachEnded,bind:handlers=>{callbacks=handlers;}};
 })();
