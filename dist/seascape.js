@@ -538,6 +538,11 @@ window.TideCoast = (() => {
       return new T.Vector3(x,top+1.96,z);
     }
     const lantern=lighthouse();
+    let pilotLamp=null;
+    if(index===11){
+      pilotLamp=new T.SpotLight(0xffdc9b,0,85,.059,.68,2);
+      pilotLamp.position.copy(lantern);group.add(pilotLamp,pilotLamp.target);
+    }
     const beaconMat=mat(new T.MeshBasicMaterial({color:0xffca77,toneMapped:false}));
     const lamp=mesh(shapes.sphere,beaconMat,lantern.x,lantern.y,lantern.z);
     lamp.scale.set(.94,1.2,.94);
@@ -545,8 +550,14 @@ window.TideCoast = (() => {
     const beamGeo=geom(new T.ConeGeometry(4.7,71,40,1,true).translate(0,-35.5,0).rotateX(-Math.PI/2));
     const beamMat=mat(new T.ShaderMaterial({
       uniforms:{uPower:{value:.06}},transparent:true,blending:T.AdditiveBlending,depthWrite:false,side:T.FrontSide,
-      vertexShader:'varying vec2 vUV;void main(){vUV=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
-      fragmentShader:'uniform float uPower; varying vec2 vUV;void main(){float fade=pow(vUV.y,1.7);gl_FragColor=vec4(1.,.72,.36,fade*uPower*.19);}'
+      vertexShader:`varying vec2 vUV; varying vec3 vN; varying vec3 vEye;
+        void main(){vUV=uv;vec4 eye=modelViewMatrix*vec4(position,1.);
+          vEye=-eye.xyz;vN=normalMatrix*normal;gl_Position=projectionMatrix*eye;}`,
+      fragmentShader:`uniform float uPower;varying vec2 vUV;varying vec3 vN;varying vec3 vEye;
+        void main(){float path=abs(dot(normalize(vEye),normalize(vN)));
+          float mist=.90+.10*sin(vUV.y*39.+sin(vUV.y*16.));
+          float fade=pow(vUV.y,1.45)*smoothstep(.0,.95,path)*mist;
+          gl_FragColor=vec4(1.,.76,.44,fade*uPower*.20);}`
     }));
     const beam=mesh(beamGeo,beamMat,lantern.x,lantern.y,lantern.z);
     beam.rotation.y=Math.PI*.86;
@@ -557,13 +568,10 @@ window.TideCoast = (() => {
     const buoySwell=index===8?TideSoundings.swell:TideLookout.swell;
     const seaHeight=(x,z,time)=>water.position.y+buoySwell(x,z,time);
     const marks=TideLookout.marks;
+    let finalPile=null;
     if(index===11){
       const pile=new T.Group();pile.position.set(marks.stump.x,0,marks.stump.z);group.add(pile);
-      const rod=(parent,material,a,b,r,rz=r)=>{
-        const d=b.clone().sub(a),length=d.length(),mid=a.clone().lerp(b,.5).add(parent.position);
-        addInstance('round',material,mid.x,mid.y,mid.z,r*2,length,rz*2,new T.Quaternion().setFromUnitVectors(yAxis,d.normalize()));
-      };
-      TideSurveyPier.buildPile(pile,o=>o.isMaterial?mat(o):geom(o),rod,black,copper,iron);
+      finalPile=TideBrokenPile.create(pile);
     }else if(index!==8){
       const stump=mesh(shapes.round,iron,marks.stump.x,-2.51,marks.stump.z);
       stump.name='断桩';stump.scale.set(.76,3.1,.71);stump.rotation.z=.28;
@@ -771,7 +779,7 @@ window.TideCoast = (() => {
     group.add(new T.Points(glowGeo,glow));
 
     return {
-      marker,water,
+      marker,water,finalPile,
       update(t,cues={},players){
         frameShadow(players);uniforms.uTime.value=t;
         if(cues.vessel){
@@ -800,7 +808,12 @@ window.TideCoast = (() => {
         if(cues.pilot){
           const b=cues.pilot;
           uniforms.uPilot.value.set(b.bearing,1);uniforms.uTurningShip.value.set(b.x,b.z,b.yaw,b.wake);
-          beam.quaternion.setFromUnitVectors(beamAxis,beamDirection.set(Math.sin(b.bearing),-.62,-Math.cos(b.bearing)).normalize());
+          const bow=b.bow||[b.x,water.position.y+1.48,b.z];
+          const range=Math.max(1,Math.hypot(bow[0]-lantern.x,bow[2]-lantern.z));
+          beamDirection.set(Math.sin(b.bearing),(bow[1]-lantern.y)/range,-Math.cos(b.bearing)).normalize();
+          beam.quaternion.setFromUnitVectors(beamAxis,beamDirection);
+          pilotLamp.target.position.copy(lantern).addScaledVector(beamDirection,range);
+          pilotLamp.intensity=4600*strength;
         }
         uniforms.uSignal.value=strength;uniforms.uBearing.value=angle;
         rotors.forEach((obj,i)=>obj.rotation.x=t*(i%2?.27:-.25)*(1+strength*2));
@@ -810,7 +823,7 @@ window.TideCoast = (() => {
       dispose(){
         if(disposed)return;
         disposed=true;
-        buoyFoam.dispose();buoyLantern.dispose();buoyBody.dispose();surf?.dispose();scene.remove(group);
+        finalPile?.dispose();buoyFoam.dispose();buoyLantern.dispose();buoyBody.dispose();surf?.dispose();scene.remove(group);
         if(scene.background===sky || scene.background===fogColor){
           scene.background=previous.background;
           scene.backgroundIntensity=previous.intensity;

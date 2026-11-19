@@ -34,6 +34,7 @@ const TideReceiverAudio=(()=>{
     let haulSource=null,haulSerial=0,haulFoley=null;
     let lipSource=null,lipSerial=0,lipFoley=null;
     let plotSource=null,plotSerial=0,plotFoley=null,bookSource=null,bookSerial=0,bookFoley=null;
+    let deckSource=null,deckSerial=0,deckFoley=null;
     let starter=null;
     const starterHits=new Map();
     let plateSource=null,plateSerial=0,plateFoley=null;
@@ -65,7 +66,7 @@ const TideReceiverAudio=(()=>{
       const source=ctx.createBufferSource(),gain=ctx.createGain(),filter=ctx.createBiquadFilter();
       source.buffer=buffer;source.loop=repeat;
       if(repeat){source.loopStart=key==='horn/diaphone'?.18:.04;source.loopEnd=key==='horn/diaphone'?1.7:2.2;}
-      const pan=key.startsWith('boat/')?TideArrivalSpeech[key.slice(5)]?.pan:key.startsWith('tide/')?TideSoundingsSpeech[key.slice(5)]?.pan:key.startsWith('test/')?TideTransitSpeech[key.slice(5)]?.pan:undefined;
+      const pan=key.startsWith('pass/')?TidePassSpeech[key.slice(5)]?.pan:key.startsWith('boat/')?TideArrivalSpeech[key.slice(5)]?.pan:key.startsWith('tide/')?TideSoundingsSpeech[key.slice(5)]?.pan:key.startsWith('test/')?TideTransitSpeech[key.slice(5)]?.pan:undefined;
       const placement=Number.isFinite(pan)?ctx.createStereoPanner?.():null;
       filter.type='lowpass';filter.frequency.value=placement?8300:6400;gain.gain.value=volume;
       source.connect(filter).connect(gain);
@@ -89,7 +90,7 @@ const TideReceiverAudio=(()=>{
       if(clip){clip.gain.gain.setTargetAtTime(.0001,ctx.currentTime,.012);try{clip.source.stop(ctx.currentTime+.045);}catch{}}
       return null;
     }
-    function stop(){lipFoley=end(lipFoley);bookFoley=end(bookFoley);plotFoley=end(plotFoley);for(const hit of starterHits.values())hit.clip=end(hit.clip);plateFoley=end(plateFoley);haulFoley=end(haulFoley);arrivalFoley=end(arrivalFoley);swingFoley=end(swingFoley);air=end(air);if(echo){for(const node of Object.values(echo))node.disconnect();echo=null;}preview=end(preview);call=end(call);ratchet=end(ratchet);previousStroke=0;story=end(story);storyKey='';relay=end(relay);lastKey=false;}
+    function stop(){deckFoley=end(deckFoley);lipFoley=end(lipFoley);bookFoley=end(bookFoley);plotFoley=end(plotFoley);for(const hit of starterHits.values())hit.clip=end(hit.clip);plateFoley=end(plateFoley);haulFoley=end(haulFoley);arrivalFoley=end(arrivalFoley);swingFoley=end(swingFoley);air=end(air);if(echo){for(const node of Object.values(echo))node.disconnect();echo=null;}preview=end(preview);call=end(call);ratchet=end(ratchet);previousStroke=0;story=end(story);storyKey='';relay=end(relay);lastKey=false;}
     function quay(g){
       const a=g.cable,button=a.down||a.returnDown;
       if(button&&!lastKey){relay=end(relay);relay=play('relay',.72);}
@@ -168,6 +169,15 @@ const TideReceiverAudio=(()=>{
           if(lipSerial!==berth.contactSerial&&buffers[key]){
             lipSerial=berth.contactSerial;lipFoley=end(lipFoley);
             lipFoley=play(key,.81,Math.max(0,g.time-berth.contactAt));
+          }
+        }
+        if(g.lastPass){
+          const watch=g.lastPass.watch;
+          if(deckSource!==watch){deckSource=watch;deckSerial=0;}
+          if(watch.serial!==deckSerial&&buffers['pass/'+watch.cue]){
+            deckSerial=watch.serial;deckFoley=end(deckFoley);
+            const volume=watch.cue==='railTouch'?.84:watch.cue==='deckKey'?.77:.72;
+            deckFoley=play('pass/'+watch.cue,volume,Math.max(0,g.time-watch.at));
           }
         }
         if(g.swing){

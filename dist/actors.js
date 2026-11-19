@@ -1727,8 +1727,9 @@
     for(let k=0;k<4;k++)b.ring('#88765a',[.76,1.56+k*.055,-5.82],[.33,.33,.33],[Math.PI/2,0,0],false,'fabric');
     for(const s of [-1,1]) {
       for(const z of [-6.8,6.94]){
-        b.add(cylinder,'#626960','metal',[s*1.15,1.55,z],[.12,.36,.12]);
-        b.add(cylinder,'#848d7e','metal',[s*1.15,1.76,z],[.17,.07,.17]);
+        const x=s*(z>0?1.89:1.15);
+        b.add(cylinder,'#626960','metal',[x,1.55,z],[.12,.36,.12]);
+        b.add(cylinder,'#848d7e','metal',[x,1.76,z],[.17,.07,.17]);
       }
       b.tube(steel,[s*.25,1.45,6.05],[s*.25,3.1,5.45],.03);
     }

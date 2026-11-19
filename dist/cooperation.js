@@ -109,6 +109,7 @@ const TideCoop = (() => {
       const prevStaff=section.span?.lower?TideDrawbridge.coordinates(section.span,this.players[1-this.spec.driver]):null;
       for(let side=0;side<2;side++){
         const p=this.players[side],oldZ=p.z,oldX=p.x;
+        if(side===1&&this.lastPass&&this.state.mode)continue;
         if(!side&&this.fog?.haul)continue;
         if(transfer&&TideSwing.attached(this,side,inputs[side],dt))continue;
         if(this.relay&&!side&&TideRelay.climb(this,inputs[0],dt))continue;

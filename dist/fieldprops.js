@@ -536,6 +536,13 @@ window.TideFieldProps=(()=>{
       bolted(a,1.65,.53,.16,iron);
       const lights=[-.45,0,.45].map(x=>pilot(offset(a,x,.028,.102),hot,.135));
       const prep=pilot(offset(a,.71,.43,.02),cool,.082);
+      if(g.spec.type==='release'){
+        animation.push(s=>{
+          prep(s.state.mode>0);
+          lights.forEach((lamp,i)=>lamp(s.state.mode>=2||s.engaged[i%2]));
+        });
+        return;
+      }
       const p0=offset(g.section.sites[0],-.77,1.22,-1.30);
       tube(p0,.33,.1,grease,Math.PI/2);rim(offset(p0,0,0,.065),.328,brass);
       for(let i=0;i<20;i++){
@@ -545,14 +552,9 @@ window.TideFieldProps=(()=>{
       const hand=new T.Group();section.add(hand);hand.position.copy(offset(p0,0,0,.087));
       mesh(cube,solid(accentColor(0)),v(0,.14,0),.022,.28,.014,hand);
       animation.push(s=>{
-        if(s.spec.type==='release'){
-          prep(s.state.mode>0);lights.forEach((lamp,i)=>lamp(s.state.mode>=2||s.engaged[i%2]));
-          hand.rotation.z=-s.cues.rescue*TAU;
-        }else{
-          const f=(s.state.age+(s.spec.irregular?.30*Math.sin(s.state.age*.9):0))%s.spec.period/s.spec.period;
-          hand.rotation.z=-TAU*f;
-          prep(s.state.nextShot===1);lights.forEach((lamp,i)=>lamp(i<s.state.received));
-        }
+        const f=(s.state.age+(s.spec.irregular?.30*Math.sin(s.state.age*.9):0))%s.spec.period/s.spec.period;
+        hand.rotation.z=-TAU*f;
+        prep(s.state.nextShot===1);lights.forEach((lamp,i)=>lamp(i<s.state.received));
       });
     }
     function accentColor(side){return side?'#90d4c6':'#e9ab65';}
