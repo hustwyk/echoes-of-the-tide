@@ -340,14 +340,7 @@ const TideFenderYard=(()=>{
     for(const x of [-.147,.147]){block(counter,[x,-.207,0],.042,.593,.246,bronzeDark());disc(counter,[x,-.205,.132],.018,.014,brass,'z',hex);}
     ring(counter,[0,.122,0],.049,.012,brass);rod(counter,[-.086,.068,0],[.086,.068,0],.013,steel);
     function bronzeDark(){return '#73624b';}
-    // The thin rubbing cap occupies the old walking edge. The solid masonry behind it is recessed by the receiving scene.
-    const ledge=w.ledge||{x:-1.72,y:.68,z:10.24,d:3.34};
-    for(let i=0;i<4;i++){
-      const d=ledge.d/4,z=ledge.z-ledge.d*.5+d*(i+.5);
-      block(staticGear,[-1.097,ledge.y-.020,z],.634,.040,d-.006,i%2?green:shell);
-      block(staticGear,[-.798,ledge.y-.051,z],.032,.077,d-.005,bronze);
-      for(const x of [-1.334,-.858])for(const zz of [z-d*.5+.077,z+d*.5-.077])disc(staticGear,[x,ledge.y-.002,zz],.013,.003,steel,'y',hex);
-    }
+    const coping=TideCoping.create(root);
     // Workmen painted the fender's witness against this wall before the chain indicator was installed.
     // The datum at -2.30 and the surviving 0.1 m graduations share the moving shoe's true vertical travel.
     const wallW=2.83,wallH=2.87,wallX=-2.666,wallZ=10.43,wallTop=.645;
@@ -560,7 +553,7 @@ const TideFenderYard=(()=>{
       out[0].copy(reg[1]);out[1].copy(reg[2]);reg[0].localToWorld(out[0]);reg[0].localToWorld(out[1]);return out;
     }
     update();root.updateWorldMatrix(true,true);
-    return {update,hands,dispose(){if(disposed)return;disposed=true;if(root.parent)root.parent.remove(root);for(const m of [rungs,ferrules,antiskid])if(m.dispose)m.dispose();for(const r of resources)r.dispose();resources.clear();root.clear();}};
+    return {update,hands,ready:coping.ready,dispose(){if(disposed)return;disposed=true;coping.dispose();if(root.parent)root.parent.remove(root);for(const m of [rungs,ferrules,antiskid])if(m.dispose)m.dispose();for(const r of resources)r.dispose();resources.clear();root.clear();}};
   }
   return {create};
 })();

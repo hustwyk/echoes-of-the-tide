@@ -1157,6 +1157,7 @@
     const spring=hold?0:easeStep(.028,.160,age),handWeight=hold?1:1-easeStep(.025,.240,age);
     const legsWeight=hold?1:1-easeStep(.09,.36,age);
     const settle=hold?easeStep(0,.145,Math.max(0,w.age||0)):1;
+    const preload=hold&&w.normalX<0?TideFenderCoping.charge(w):0;
     const leftHigh=(wallNormal.x>0)!==!!rig.id;
     if(hold||!state.valid){
       const headroom=active&&Number.isFinite(w.topY)?(w.topY-wallRoot.y)/scale:Infinity;
@@ -1164,7 +1165,7 @@
       const lowering=gaitClamp(1.425-highPalm,0,1.46);
       state.lowEdge=easeStep(.03,.91,lowering);state.crouch=lowering*.67;
       const highFoot=Math.min(.511-state.crouch,headroom-.207);
-      state.shift=gaitClamp(.446-.025*state.lowEdge-dist/scale,-.48,.48);
+      state.shift=gaitClamp(.446-.025*state.lowEdge-.093*preload-dist/scale,-.48,.48);
       wallPoint.copy(wallRoot).addScaledVector(wallNormal,-dist);
       for(let i=0;i<2;i++){
         const sign=i?1:-1,high=(i===0)===leftHigh;
@@ -1180,7 +1181,7 @@
     wallLocalUp.copy(worldUp).applyQuaternion(wallQuat).normalize();
     const yaw=Math.atan2(wallLocalNormal.x,wallLocalNormal.z);
     wallGoal.copy(wallLocalNormal).multiplyScalar(state.shift);
-    wallGoal.addScaledVector(wallLocalUp,.843-.052*settle+.083*spring-state.crouch);
+    wallGoal.addScaledVector(wallLocalUp,.843-.052*settle+.083*spring-state.crouch-.070*preload);
     b.hips.position.lerp(wallGoal,bodyWeight);
     b.hips.quaternion.slerp(wallEase.setFromEuler(wallEuler.set(.043+.060*spring,yaw,leftHigh?.027:-.027)),bodyWeight);
     b.chest.quaternion.slerp(wallEase.setFromEuler(wallEuler.set(-.23-.066*settle+.34*spring-.36*state.lowEdge,leftHigh?.052:-.052,leftHigh?-.034:.034)),bodyWeight);
@@ -1587,6 +1588,7 @@
     }
     if(motion.pointAt||rig.pointing)pointGesture(actor,motion,s);
     if(motion.wall||rig.wallPose)wallPose(actor,motion,s);
+    if(motion.ledge||rig.copingPose)TideMantlePose.apply(actor,motion,s);
     st.x=actor.position.x;st.y=actor.position.y;st.z=actor.position.z;st.yaw=yaw;st.vx=vx;st.vz=vz;st.vy=vy;st.ground=ground;
   }
 
