@@ -3,14 +3,14 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const box=vm.createContext({});
-for(const name of ['missions','traversal','floating','warp-speech','warping','fender-speech','fender-coping','fenders','plate-speech','arrival-speech','stern-line','arrival','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','buoy-motion','light-register','lookout','cistern-speech','cistern','glass-speech','chartroom','paper','lantern','gallery-speech','gallery','shift-speech','starter','transit-speech','transit','signal','tin-lines','tin-memory','archive','relay-speech','relay','soundings-speech','survey-plot','soundings','fog-speech','haul-speech','fog-recovery','fogsignal','pass-speech','stern-watch','lastpass','swing-speech','swing','cooperation']){
+for(const name of ['missions','traversal','floating','warp-speech','warping','fender-speech','fender-coping','fenders','plate-speech','arrival-speech','stern-line','arrival','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','buoy-motion','light-register','lookout','cistern-speech','cistern','glass-speech','chartroom','paper','lantern','gallery-speech','gallery','shift-speech','starter','transit-speech','transit','signal','tin-lines','tin-memory','archive','relay-speech','relay','soundings-speech','survey-plot','soundings','fog-speech','haul-speech','fog-recovery','fogsignal','range-voice','range-watch','pass-speech','stern-watch','lastpass','swing-speech','swing','cooperation']){
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../dist',name+'.js'),'utf8'),box);
 }
 const {Session,near,surface,lookout,ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideSwing,TideCistern,TideGlass,TidePaper}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideSwing,TideCistern,TideGlass,TidePaper})',box);
 const {TideFenders,TideWarping,TideFloating,TideArrival,TideSternLine}=vm.runInContext('({TideFenders,TideWarping,TideFloating,TideArrival,TideSternLine})',box);
 const {TideTransit,TideSurveyPlot,TideLightRegister,TideBuoyMotion}=vm.runInContext('({TideTransit,TideSurveyPlot,TideLightRegister,TideBuoyMotion})',box);
 const {TideTinMemory}=vm.runInContext('({TideTinMemory})',box);
-const {TideGallery}=vm.runInContext('({TideGallery})',box);
+const {TideGallery,TideRangeWatch}=vm.runInContext('({TideGallery,TideRangeWatch})',box);
 const empty=()=>({x:0,z:0,use:false,jump:false});
 function steer(g,i,target,keys){
   const p=g.players[i],dx=target.x-p.x,dz=target.z-p.z,dist=Math.hypot(dx,dz);
@@ -779,6 +779,18 @@ function control(g){
   }
   const trim=(i,value)=>{if(out[i].use)out[i].x=Math.max(-1,Math.min(1,(value-q.dials[i])*24));};
   if(!out.every(k=>k.use))return out;
+  if(g.rangeWatch){
+    const r=g.rangeWatch,axis=v=>Math.max(-1,Math.min(1,v));
+    if(r.phase==='sight'){
+      const id=g.watch.task.targets[r.samples.length],m=TideRangeWatch.measure(g,id);aimScope(g,out,id);
+      out[1].x=axis((m.distance-r.range)*2);out[0].jump=!g.watch.marked&&m.centered&&m.exposed;
+      out[1].jump=!!g.watch.marked&&r.steady>.25;
+    }else if(r.phase==='light'){
+      out[1].x=1;out[0].x=axis((TideRangeWatch.lampBearing(g,r.samples[1])-r.lightAngle)*18);
+      out[1].jump=r.steady>.36;
+    }
+    return out;
+  }
   if(lookout.active(g)){
     aimScope(g,out);
     return out;
@@ -1816,6 +1828,45 @@ if(require.main===module){
   reach(light,()=>light.complete);
   assert.equal(light.optic.stamp,2);assert.equal(light.optic.phase,1);
 
+  // Left camera tracks an actual edge. Two distinct entrance pupils have
+  // zero horizontal parallax at the transfer distance and opposite signs
+  // either side of it. A timer or the other player's confirmation cannot file it.
+  {
+    const g=new Session(11);reach(g,()=>g.engaged.every(Boolean));
+    const r=g.rangeWatch;
+    g.tick(step,[{...empty(),use:true},{...empty(),use:true,jump:true}]);
+    assert.equal(r.samples.length,0);assert.match(r.feedback[1],/报出|报点/);
+    const work=(n,change)=>{for(let j=0;j<n;j++){const k=control(g);change(k);g.tick(step,k);}};
+    for(let j=0;j<600&&!g.watch.marked;j++)work(1,k=>{k[1].x=0;k[1].jump=false;});
+    assert.equal(g.watch.marked,'stump');
+    work(320,k=>{k[1].x=0;k[1].jump=true;});
+    assert.equal(r.samples.length,0);assert.match(r.feedback[1],/接稳|接片/);
+    const m=TideRangeWatch.measure(g,'stump');
+    assert.ok(m.distance>20&&m.distance<36&&Math.abs(m.disparity)>.015);
+    const ep=TideRangeWatch.optics(g),focus=ep.upper.at;
+    assert.ok(Math.abs(Math.hypot(...ep.lower.eye.map((v,i)=>v-ep.upper.eye[i]))-2.4)<1e-9);
+    assert.ok(Math.abs(Math.hypot(...focus.map((v,i)=>v-ep.upper.eye[i]))-r.range)<1e-8);
+    const heightAtAim=TideRangeWatch.position(g,'stump');
+    const leftDelta=focus.map((v,i)=>v-ep.upper.eye[i]),rightDelta=focus.map((v,i)=>v-ep.lower.eye[i]);
+    assert.notEqual(Math.atan2(leftDelta[0],-leftDelta[2]),Math.atan2(rightDelta[0],-rightDelta[2]));
+    assert.ok(heightAtAim[1]<0);
+    for(let j=0;j<800&&!r.samples.length;j++)work(1,k=>{k[1].x=Math.max(-1,Math.min(1,(m.distance+.25-r.range)*2));k[1].jump=r.steady>.4;});
+    assert.ok(Math.abs(r.samples[0].distance-m.distance)<.6);
+    const saved=TideRangeWatch.checkpoint(g),back=new Session(11);
+    TideRangeWatch.restore(back,JSON.parse(JSON.stringify(saved)));
+    assert.deepEqual(JSON.parse(JSON.stringify(back.rangeWatch.samples)),JSON.parse(JSON.stringify(saved.samples)));
+    assert.equal(back.watch.step,1);assert.equal(back.watch.marked,null);
+    reach(back,()=>back.rangeWatch.phase==='light');
+    const rr=back.rangeWatch,copy=TideRangeWatch.checkpoint(back);
+    const ship=rr.samples[1];assert.equal(ship.id,'ship');assert.ok(Number.isFinite(ship.pitch));
+    const file=new Session(11);TideRangeWatch.restore(file,copy);assert.equal(file.rangeWatch.phase,'light');
+    for(let j=0;j<100;j++){
+      const k=control(file);k[1].x=-1;k[1].jump=true;file.tick(step,k);
+    }
+    assert.ok(!file.state.doneAt&&file.stage===0);assert.match(file.rangeWatch.feedback[1],/断桩/);
+    reach(file,()=>file.stage===1);assert.ok(Number.isFinite(file.leadAngle));
+    reach(file,()=>!!file.lastPass);assert.equal(file.lastPass.wheel,file.leadAngle);
+  }
   // From the aft rail the mate can name either observation. Time, a wrong
   // guess or an occluded lower band must never key a clearance automatically.
   {

@@ -3,7 +3,7 @@
 const TideLastPass=(()=>{
   const home=-.96,heading=-2.19,clamp=TideTraversal.clamp;
   function begin(g){
-    g.lastPass=g.index===11&&g.stage===2?{watch:TideSternWatch.create(),drift:0,wheel:home,steer:1,next:'standby',warned:false,cleared:false,turned:false,arrived:false,
+    g.lastPass=g.index===11&&g.stage===2?{watch:TideSternWatch.create(),drift:0,wheel:Number.isFinite(g.leadAngle)?g.leadAngle:home,steer:1,next:'standby',warned:false,cleared:false,turned:false,arrived:false,
       voice:'',subtitle:'',clock:0,line:-1,occupied:false}:null;
     if(g.lastPass)g.cues.water=TideSternWatch.tide(g.time);
   }
@@ -18,9 +18,10 @@ const TideLastPass=(()=>{
     const p=vessel(g,g.time),mark=TideLookout.marks.stump,a=yaw(g);
     return (mark.x-p[0])*Math.sin(a)+(mark.z-p[2])*Math.cos(a);
   }
+  function bowPoint(g){return onDeck(g,0,1.48,-7.85);}
   function bearing(g){
     if(g.lastPass.arrived)return home;
-    const bow=onDeck(g,0,1.48,-7.85);return Math.atan2(bow[0]-14,-91-bow[2]);
+    const bow=bowPoint(g);return Math.atan2(bow[0]-14,-91-bow[2]);
   }
   function onDeck(g,x,y,z){
     const t=g.time,p=vessel(g,t),a=.028*Math.sin(t*.78),b=yaw(g),c=.034*Math.sin(t*.91);
@@ -60,6 +61,10 @@ const TideLastPass=(()=>{
     if(id==='turn'){r.turned=true;r.next='arriving';g.state.mode=2;record(g);}
     if(id==='berth'){r.arrived=true;record(g);}
   }
+  function aimLight(g,bearing,wake){
+    const ship=vessel(g,g.time);
+    g.cues.pilot={bearing,bow:bowPoint(g),x:ship[0],z:ship[2],yaw:yaw(g),wake};
+  }
   function release(g,input,dt){
     const q=g.state,r=g.lastPass;
     if(g.engaged[1]&&!r.occupied&&r.voice){
@@ -68,8 +73,8 @@ const TideLastPass=(()=>{
     }
     r.occupied=g.engaged[1];g.cues.water=TideSternWatch.tide(g.time);g.cues.light=g.engaged[0]?1:.28;
     if(g.engaged[0])r.wheel=clamp(r.wheel+input[0].x*dt*.30,-1.62,-.43);
-    const target=bearing(g),aligned=Math.abs(r.wheel-target)<.061,ship=vessel(g,g.time);
-    g.cues.pilot={bearing:r.wheel,bow:onDeck(g,0,1.48,-7.85),x:ship[0],z:ship[2],yaw:yaw(g),wake:r.turned?.70:.12};
+    const target=bearing(g),aligned=Math.abs(r.wheel-target)<.061;
+    aimLight(g,r.wheel,r.turned?.70:.12);
     const dial={vis:'dial',value:(r.wheel+1.62)/1.19,target:(target+1.62)/1.19,band:.051,
       caption:(r.arrived?'回位刻口':'船首方位')+'　'+Math.round(target*180/Math.PI)+'°　·　灯轴 '+Math.round(r.wheel*180/Math.PI)+'°'};
     if(!q.mode){
@@ -123,5 +128,5 @@ const TideLastPass=(()=>{
     r.next=r.turned?'arriving':'turn';g.state.mode=r.turned?2:1;
     g.field.done=true;g.players=g.section.sites.map(TideTraversal.spawn);g.checkpoints=g.section.sites.slice();
   }
-  return {begin,vessel,yaw,bearing,along,reading:TideSternWatch.reading,onDeck,local,say,shot,release,checkpoint,restore};
+  return {begin,vessel,yaw,bowPoint,bearing,aimLight,along,reading:TideSternWatch.reading,onDeck,local,say,shot,release,checkpoint,restore};
 })();

@@ -67,7 +67,7 @@ const TideHud=(()=>{
       const riding=s.type==='ride' && (s.driver!==i||q.latch);
       v.querySelector('.reticle').hidden=!(TideLookout.active(g)&&g.watch.task.watcher===i&&g.engaged[i]||g.relay?.top&&!i&&g.engaged[i]||g.survey&&i===1&&g.engaged[i]||g.fog?.mode==='spot'&&i===1&&g.engaged[i]);
       const here=TideGallery.active(g)||TideFenders.active(g)||TideSwing.active(g)||!!g.cistern||!!g.glass||!!g.fog||!!g.survey||!!g.relay||!!g.cable||close||g.signal&&g.stage===2&&i===0&&!g.signal.pinned||riding||!!g.section.tram,tag=TideHarbor.targetFor(g,i).name;
-      const task=g.lastPass&&g.field.done&&g.state.mode?(i?(g.lastPass.turned?'船尾回话':'从艉栏报位'):'灯轴手轮'):g.fog?.haul?(i?'离合柄':'轮坑黄环'):TideGallery.active(g)?(g.gallery.phase==='file'?'灯室原数联':'塔外检修台'):TideArrival.active(g)?'交通艇靠泊':TideTinMemory.active(g)?'十秒钟北岬 · 夏日录音':TideTransit.active(g)?'岸灯试光与船上报位':TideFenders.active(g)?'护舷井登岸':TideSwing.active(g)?(g.swing.phase==='report'?'桥头寄件柜':g.swing.phase==='stow'?'把尺交进吊篮':'桥下横移吊环'):g.cable?TideCableQuay.title(g):g.landfall?(g.landfall.pinned?'值班间收听':'防潮门'):g.rig?.belay?'浪沟接应':s.title;
+      const task=g.rangeWatch?(i?'接片测距台':'外礁寻像镜'):g.lastPass&&g.field.done&&g.state.mode?(i?(g.lastPass.turned?'船尾回话':'从艉栏报位'):'灯轴手轮'):g.fog?.haul?(i?'离合柄':'轮坑黄环'):TideGallery.active(g)?(g.gallery.phase==='file'?'灯室原数联':'塔外检修台'):TideArrival.active(g)?'交通艇靠泊':TideTinMemory.active(g)?'十秒钟北岬 · 夏日录音':TideTransit.active(g)?'岸灯试光与船上报位':TideFenders.active(g)?'护舷井登岸':TideSwing.active(g)?(g.swing.phase==='report'?'桥头寄件柜':g.swing.phase==='stow'?'把尺交进吊篮':'桥下横移吊环'):g.cable?TideCableQuay.title(g):g.landfall?(g.landfall.pinned?'值班间收听':'防潮门'):g.rig?.belay?'浪沟接应':s.title;
       const title=g.state.doneAt!==null?'已完成 · '+task:(g.stage+1)+' / '+g.world.sections.length+'　'+task;
       set(v.querySelector('.tool'),title);
       set(v.querySelector('.instruction'),here?r.text||'靠近设备开始操作':g.archive?'前往'+tag:g.signal?'前往'+tag:g.optic?'沿塔顶外环前往'+tag:'前往'+tag+'，沿灯带通过栈桥');
@@ -105,8 +105,14 @@ const TideHud=(()=>{
       const edgeKeys=pads[i]!=null?'左摇杆沿边移动　A 翻上　RT 放手':'方向键沿边移动　/ 翻上　Enter 放手';
       const aftKeys=pads[i]!=null?'左摇杆走动　LT 扶栏　B 贴舷　A 已过　RT 岸台':'方向键走动　] 扶栏　. 贴舷　/ 已过　Enter 岸台';
       const afterdeck=i===1&&g.lastPass&&g.state.mode===1;
-      v.classList.toggle('pilot-station',!!g.lastPass&&g.field.done&&g.state.mode>0);
-      set(v.querySelector('.control-hint'),afterdeck?aftKeys:climbingEdge?edgeKeys:readingBook?numberKeys:plotting?plotKeys:g.signal&&g.stage===0&&close?starterKeys:g.fog?.haul?rescueHint:TideGallery.active(g)?(pads[i]!=null?'左摇杆移动 / 转轮　A 跳　RT 握柄':i?'方向键移动 / 转轮　/ 跳　Enter 握柄':'WASD 移动 / 转轮　空格 跳　E 握柄'):TideArrival.active(g)?arrivalHint:TideTinMemory.active(g)?childhood:TideTransit.active(g)&&i===1?(pads[1]!=null?'左摇杆转镜　A 报位':'方向键转镜　/ 报位'):rack?(i?'向前重听　操作中确认登记':'左右选列，前后选层　操作中确认提起 / 放回'):work?bindings:tips);
+      v.classList.toggle('pilot-station',!!g.rangeWatch||!!g.lastPass&&g.field.done&&g.state.mode>0);
+      let rangeKeys='';
+      if(g.rangeWatch&&g.near[i]){
+        if(i)rangeKeys=pads[i]!=null?'RT 扶台　左右转鼓 / 拨联　A 抄数 / 送出':'Enter 扶台　← → 转鼓 / 拨联　/ 抄数或送出';
+        else if(g.rangeWatch.phase!=='sight')rangeKeys=pads[i]!=null?'RT 守灯　左摇杆转动灯轴':'E 守灯　A / D 转动灯轴';
+        else rangeKeys=pads[i]!=null?'RT 看镜　左摇杆转向　LT 推近　A 报点':'E 看镜　WASD 转向　[ 推近　空格报点';
+      }
+      set(v.querySelector('.control-hint'),rangeKeys|| (afterdeck?aftKeys:climbingEdge?edgeKeys:readingBook?numberKeys:plotting?plotKeys:g.signal&&g.stage===0&&close?starterKeys:g.fog?.haul?rescueHint:TideGallery.active(g)?(pads[i]!=null?'左摇杆移动 / 转轮　A 跳　RT 握柄':i?'方向键移动 / 转轮　/ 跳　Enter 握柄':'WASD 移动 / 转轮　空格 跳　E 握柄'):TideArrival.active(g)?arrivalHint:TideTinMemory.active(g)?childhood:TideTransit.active(g)&&i===1?(pads[1]!=null?'左摇杆转镜　A 报位':'方向键转镜　/ 报位'):rack?(i?'向前重听　操作中确认登记':'左右选列，前后选层　操作中确认提起 / 放回'):work?bindings:tips));
     }
   }
   return {build,update};
