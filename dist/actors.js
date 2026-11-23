@@ -1398,7 +1398,8 @@
 
   function animate(actor,motion,dt,time) {
     const rig=actor.userData.rig,b=rig.bones;
-    TideCrew.express(rig.face,rig.id,time,!!motion.talking);
+    TideCrew.express(rig.face,rig.id,time,motion.talking,motion.rounding,dt);
+    rig.listenYaw=(rig.listenYaw||0)+((motion.listenYaw||0)-(rig.listenYaw||0))*(1-Math.exp(-dt*7));
     const s=gaitClamp(Number.isFinite(dt)?dt:0,0,.12),blend=1-Math.exp(-s*14),slow=1-Math.exp(-s*8.5);
     const ground=motion.grounded!==false,grips=motion.grips,hang=motion.swing;
     const ride=!!(hang&&hang.phase==='ride'&&grips),reaching=!!(hang&&hang.phase==='reach'&&grips);
@@ -1479,7 +1480,7 @@
       -.083*work-.35*squat+air*(-.16*rise+.055*fall),-.094*stride*move*unloaded,
       .023*Math.cos(phase)*move*unloaded+turnLean*.077);
     b.head.rotation.set(.014-.075*work-(motion.incline||0)-b.chest.rotation.x*.24-.067*st.launch+.054*fall*air,
-      Math.sin(time*.55+rig.id)*.05*(1-move)+(motion.gaze||0),-b.chest.rotation.z*.68);
+      Math.sin(time*.55+rig.id)*.05*(1-move)+(motion.gaze||0)+rig.listenYaw,-b.chest.rotation.z*.68);
     if(ride||reaching){
       st.reach=ride?1:Math.min(1,st.reach+s*9.5);
       const weight=st.reach,hangPitch=gaitClamp(angle*.51-angular*.038,-.70,.70);

@@ -458,19 +458,25 @@ window.TideCinema = (() => {
     function deckview(eye,at){return subject(ship,eye,at);}
     // Mark the partners on the shared landing for the short exchange after a task.
     // The active game keeps ownership of both actors and resumes from its checkpoints.
+    function filmMouth(side,bank,clip,table){
+      const pose=clip.voice&&TideDialoguePose.read(bank,clip.voice,table,clip.clock);
+      const speaking=pose&&pose.speaker===side;
+      return {talking:speaking?pose.jaw:0,rounding:speaking?pose.round:0};
+    }
     function performance(side){
       if(!playing)return null;
-      if(idx===3){const p=side?game.world.cistern.haul:game.world.cistern.load;return {...p,yaw:side?1.73:-1.40,talking:TideCistern.film(clock).actor===side,gaze:side?.18:-.18};}
+      if(idx===3){const p=side?game.world.cistern.haul:game.world.cistern.load;return {...p,yaw:side?1.73:-1.40,...filmMouth(side,'cistern',TideCistern.film(clock),TideCisternSpeech),gaze:side?.18:-.18};}
       if(idx===4){
-        const p=game.players[side];return {x:p.x,y:p.y,z:p.z,yaw:p.yaw,talking:!side&&clock<2.8,
+        const p=game.players[side],coda=window.TideArchiveMedia;
+        const face=coda?filmMouth(side,'archive',{voice:'coda',clock},coda):{talking:false,rounding:0};
+        return {x:p.x,y:p.y,z:p.z,yaw:p.yaw,...face,
           gaze:side?-.14:.16,incline:side?.075:.045};
       }
-      if(idx===6){const p=game.world.swing.fileSites[side];return {...p,yaw:p.face,talking:!!side,gaze:side?.17:-.12,incline:.16};}
+      if(idx===6){const p=game.world.swing.fileSites[side];return {...p,yaw:p.face,...filmMouth(side,'swing',TideSwing.film(clock),TideSwingSpeech),gaze:side?.17:-.12,incline:.16};}
       if(idx!==5)return null;
-      const t=clock,hand=side?1:-1,actor=TideGlass.film(t).actor;
-      const speaking=actor===side,listening=actor<0;
+      const t=clock,hand=side?1:-1,clip=TideGlass.film(t),listening=clip.actor<0;
       return {x:TideGlass.origin.x+(side?2.73:1.56),y:hub.mid.y,z:TideGlass.origin.z-4.16,yaw:hand*.48,
-        talking:speaking,gaze:hand*(listening?-.12:.29),incline:listening?.045:.085+.045*Math.sin(t*.92+side)};
+        ...filmMouth(side,'glass',clip,TideGlassSpeech),gaze:hand*(listening?-.12:.29),incline:listening?.045:.085+.045*Math.sin(t*.92+side)};
     }
     function portrait(side,t){
       const a=assets.actors[side],s=side?1:-1;

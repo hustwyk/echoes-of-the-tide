@@ -2,7 +2,16 @@ const TideHud=(()=>{
   const roles=['林澈 · 机修员','沈遥 · 信号员'];
   const pix=['#efad70','#85d6cf'];
   function build(root){
-    root.innerHTML=roles.map((name,i)=>'<div class="viewport role'+i+'"><div class="pname"><b>'+('0'+(i+1))+'</b>'+name+'</div><div class="reticle" hidden aria-hidden="true"><i></i></div><span class="pin" id="pin'+i+'"></span><div class="point-cursor" aria-hidden="true" hidden><i></i><span></span></div><div class="partner-pin from-left" hidden><i></i><span></span></div><div class="partner-pin from-right" hidden><i></i><span></span></div><div class="instrument"><div class="tool"></div><div class="instruction"></div><canvas class="meter" width="600" height="82" hidden></canvas><div class="reading"></div><div class="control-hint"></div></div></div>').join('');
+    root.innerHTML=roles.map((name,i)=>'<div class="viewport role'+i+'"><div class="pname"><b>'+('0'+(i+1))+'</b>'+name+'</div><button type="button" class="crew-beat" aria-live="polite" title="两人确认后一起数三拍"></button><div class="reticle" hidden aria-hidden="true"><i></i></div><span class="pin" id="pin'+i+'"></span><div class="point-cursor" aria-hidden="true" hidden><i></i><span></span></div><div class="partner-pin from-left" hidden><i></i><span></span></div><div class="partner-pin from-right" hidden><i></i><span></span></div><div class="instrument"><div class="tool"></div><div class="instruction"></div><canvas class="meter" width="600" height="82" hidden></canvas><div class="reading"></div><div class="control-hint"></div></div></div>').join('');
+  }
+  function countIn(signal,phase,pads){
+    const beats={three:'三',two:'二',one:'一',go:'动手',set:'两人就绪'};
+    for(const [i,button] of document.querySelectorAll('#split .crew-beat').entries()){
+      const key=pads[i]!=null?'十字键↑':i?'P':'T';
+      const label=phase==='idle'?'约拍　'+key:phase==='ask'?(signal.caller===i?'等同伴　·　取消 '+key:'同伴约拍　·　应答 '+key):beats[phase];
+      set(button,label);
+      if(button.dataset.phase!==phase)button.dataset.phase=phase;
+    }
   }
   function line(ctx,color,x1,y1,x2,y2,width=2){
     ctx.strokeStyle=color;ctx.lineWidth=width;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
@@ -55,6 +64,10 @@ const TideHud=(()=>{
     }
     if(r.target!=null){
       const b=r.band??.05;c.fillStyle='#95d49b50';c.fillRect(w*Math.max(0,r.target-b),0,Math.min(1,2*b)*w,h);
+    }
+    if(Number.isFinite(r.previous)){
+      const x=Math.max(1,Math.min(w-1,r.previous*w));
+      c.save();c.setLineDash([5,4]);line(c,'#ebad82',x,8,x,h-8,3);c.restore();
     }
     if(r.vis!=='chart' && r.vis!=='optic'){line(c,'#f9dfac',clamp(d)*w,2,clamp(d)*w,h-2,4);}
     function clamp(x){return Math.max(.005,Math.min(.995,x));}
@@ -121,5 +134,5 @@ const TideHud=(()=>{
       set(v.querySelector('.control-hint'),(g.fenders?.board.held[i]==='boat'?(pads[i]!=null?'RT 握柄　前后送收　左右摆板':(i?'Enter 握柄　↑ ↓ 送收　← → 摆板':'E 握柄　W S 送收　A D 摆板')):g.fenders?.board.held[i]==='shore'?(pads[i]!=null?'RT 接板　A 落销':(i?'Enter 接板　/ 落销':'E 接板　空格落销')):'')||(trolley?trolleyKeys:'')||rangeKeys|| (enteringBay?bayKeys:afterdeck?aftKeys:climbingEdge?edgeKeys:readingBook?numberKeys:plotting?plotKeys:g.signal&&g.stage===0&&close?starterKeys:g.fog?.haul?rescueHint:TideGallery.active(g)?(pads[i]!=null?'左摇杆移动 / 转轮　A 跳　RT 握柄':i?'方向键移动 / 转轮　/ 跳　Enter 握柄':'WASD 移动 / 转轮　空格 跳　E 握柄'):TideArrival.active(g)?arrivalHint:TideTinMemory.active(g)?childhood:TideTransit.active(g)&&i===1?(pads[1]!=null?'左摇杆转镜　A 报位':'方向键转镜　/ 报位'):rack?(i?'向前重听　操作中确认登记':'左右选列，前后选层　操作中确认提起 / 放回'):work?bindings:tips));
     }
   }
-  return {build,update};
+  return {countIn,build,update};
 })();

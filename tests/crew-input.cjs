@@ -18,3 +18,14 @@ const afterReload=boot();afterReload.assign([a,c]);check(afterReload,2,7);
 afterReload.swap([a,c]);const mixed=boot();mixed.assign([c]);check(mixed,null,7);
 mixed.assign([a,c]);check(mixed,2,7);
 console.log('Keyboard and pad, two pads, a standby pad, disconnect, reconnect and saved seat order passed.');
+
+const count=seats.countIn();
+count.press(0,0);
+assert.equal(count.phase(7.99),'ask');
+assert.equal(count.phase(8),'idle');
+count.press(1,10);count.press(1,10.2);
+assert.equal(count.phase(10.21),'idle');
+count.press(1,12);count.press(0,13);
+assert.deepEqual([13.1,13.3,13.9,14.6,15.1,16].map(time=>count.phase(time)),['set','three','two','one','go','idle']);
+count.press(0,20);count.press(1,20.2);count.clear();
+assert.equal(count.phase(21),'idle');

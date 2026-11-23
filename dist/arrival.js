@@ -16,7 +16,7 @@ const TideArrival=(()=>{
     const h=g.world.fenders.floatPose;
     g.arrival={x:h.anchorX-17.6,z:h.anchorZ+4.65,heading:.19,speed:.63,rudder:0,drive:0,
       plate:{look:0,stroke:.045,coverage:Array(12).fill(0),read:false,reported:false,held:false,direction:0,cue:'',cueAt:0,serial:0},
-      dial:9,channel:9,receive:0,radio:'tune',voice:'',voiceAt:0,caption:'',cue:'',serial:0,
+      dial:9,channel:9,dialDirection:0,nextDetent:0,receive:0,radio:'tune',voice:'',voiceAt:0,caption:'',cue:'',serial:0,
       bow:TideBowCast.create(),attached:false,secured:false,haul:0,
       moored:false,done:false,use:false,warning:'',warnTo:0,misses:0,engineRunning:true};
     advanceHull(g,0,0,0);placeCrew(g,0);display(g);
@@ -162,11 +162,20 @@ const TideArrival=(()=>{
     const s=g.arrival,k=inputs[0],helm=inputs[1];
     const pressed=k.use&&!s.use,released=!k.use&&s.use;
     if(s.radio==='tune'){
-      s.dial=clamp(s.dial+k.x*3.65*dt,6,16);
-      const channel=Math.round(s.dial);
+      const direction=Math.abs(k.x)>.23?Math.sign(k.x):0;
+      let clicks=k.dialClicks||0;
+      if(clicks||direction!==s.dialDirection){
+        if(!clicks)clicks=direction;
+        s.nextDetent=g.time+.39;
+      }else if(direction&&g.time>=s.nextDetent){
+        clicks=direction;s.nextDetent=g.time+.22/Math.max(.33,Math.abs(k.x));
+      }
+      s.dialDirection=direction;
+      const channel=clamp(s.channel+clicks,6,16);
       if(channel!==s.channel){s.channel=channel;tell(g,'dial');}
+      s.dial+=(channel-s.dial)*(1-Math.exp(-dt*27));
     }else if(s.radio==='wait'&&pressed||s.radio==='test'&&released)tell(g,pressed?'pttDown':'pttUp');
-    if(released&&s.radio==='test'&&s.voice==='call'){s.radio='wait';s.voice='';warn(g,'松键太早了。按住到林澈把话说完。');}
+    if(released&&s.radio==='test'&&s.voice==='call'&&s.voiceAt+dt<TideArrivalSpeech.call.cues.at(-1).end){s.radio='wait';s.voice='';warn(g,'松键太早了。按住到林澈把话说完。');}
     inspectPlate(g,helm,dt);voice(g,dt,pressed);
     // Keys spring back to idle. The pilot can back up and try the same shore cleat again.
     const thrust=clamp(-helm.z,-1,1);
@@ -189,6 +198,11 @@ const TideArrival=(()=>{
     let radio,read;
     if(s.radio==='tune'){radio='转动防水电台的旋钮。让掌舵的人告诉你值班频道。';read='频道 '+String(s.channel).padStart(2,'0');}
     else if(s.radio==='wait'){radio=g.time<s.warnTo?s.warning:'按住侧面的发话键，等林澈把话说完。';read='接收灯亮　／　发射灯灭';}
+    else if(s.radio==='test'&&s.voice==='call'){
+      const call=TideArrivalSpeech.call,lastWord=call.cues.at(-1).end,done=s.voiceAt>=lastWord;
+      radio=done?'呼号说完了，可以松开发话键。':'继续按住发话键，说完「听得见吗」。';
+      read=done?'发话结束':'发话中　'+Math.min(2,1+Number(s.voiceAt>=call.cues[1].start))+' / 2 句';
+    }
     else if(s.radio!=='line'){radio='听电台和艇上的回话。';read='北岬工作台　／　CH 12';}
     else if(s.moored){radio='通过艇上的窄走道，准备登岸。';read='首缆已系妥';}
     else if(s.attached){radio=s.secured?'按住操作键收缆，把船带到护舷旁。':'缆眼套住了。等同伴停机，再收紧。';read=s.secured?'船尾空挡　／　可以收缆':'首缆套住';}
@@ -203,7 +217,8 @@ const TideArrival=(()=>{
       radio='找红白牌下的双角桩。左右瞄，前后调仰角。按住操作键后摆，松手抛缆。';
       read='仰角 '+Math.round(bow.loft*180/Math.PI)+'°　／　'+(s.misses?'缆已收回，再抛一把':'白点是这一把的弧线');
     }
-    g.set(0,radio,{caption:read});
+    const transmitting=s.radio==='test'&&s.voice==='call';
+    g.set(0,radio,transmitting?{caption:read,vis:'dial',value:clamp(s.voiceAt/TideArrivalSpeech.call.cues.at(-1).end,0,1)}:{caption:read});
     const plate=s.plate,inspect=s.radio==='tune'&&!plate.reported;
     const pilot=plate.held?(plate.read?'读出值班频道，松开操作键抬头看堤。':'左右移动手套，把两位数字上的盐霜都擦掉。油门仍可进退。'):
       inspect?'舵轮旁有一块值班牌。按住操作键俯身看，报给艇首。':s.moored?'已贴靠。换位，让林澈去堤下的绞盘。':s.attached?(s.secured?'发动机已停。等首缆收紧。':'松开油门，减速后按住操作键停机。'):

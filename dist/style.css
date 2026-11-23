@@ -79,3 +79,11 @@ main>footer a{color:#a9c6c1;text-underline-offset:3px}
 
 .viewport.bay-watch .instrument{bottom:auto;top:50px}
 @media(max-height:520px){.viewport.bay-watch .instrument{top:36px}.viewport.bay-watch .tool{display:none}}
+
+.crew-beat{position:absolute;z-index:3;top:12px;right:12px;pointer-events:auto;font:600 11px/1.4 system-ui,sans-serif;color:#d1dcd7;background:#142223db;border:1px solid #6d807b;border-radius:3px;padding:4px 8px;cursor:pointer}
+.crew-beat:focus-visible{outline:2px solid #ffe9b5;outline-offset:2px}
+.crew-beat[data-phase=ask],.crew-beat[data-phase=set]{background:#233d40;color:#edfffc;border-color:#9ab9b4}
+.crew-beat:is([data-phase=three],[data-phase=two],[data-phase=one],[data-phase=go]){min-width:60px;text-align:center;font-size:17px;letter-spacing:.08em;color:#fff4d5;border-color:#dbbc81}
+.crew-beat[data-phase=go]{background:#234f43;border-color:#aaddbd}
+#game:has(#overlay:not(:empty)) .crew-beat,#game:has(#film:not([hidden])) .crew-beat{visibility:hidden}
+@media(max-width:680px){.crew-beat{top:32px;right:6px;padding:2px 5px;font-size:10px}}

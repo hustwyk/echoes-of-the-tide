@@ -25,7 +25,7 @@ const TideFogSignal=(()=>{
   const notch=[.26,.69];
   function fresh(){
     return {key:'rack',marks:[false,false],travel:.19,clutch:0,spin:.08,speed:nominal,balance:0,
-      mode:'transport',haul:null,haulCue:'',haulCueAt:0,haulSerial:0,service:.07,gaps:[.54,.54],locks:[false,false],stud:0,turn:null,down:false,
+      mode:'transport',lastNotch:null,lastValve:null,haul:null,haulCue:'',haulCueAt:0,haulSerial:0,service:.07,gaps:[.54,.54],locks:[false,false],stud:0,turn:null,down:false,
       valve:0,pressure:1,opened:0,pulseOrigin:0,oldPull:false,trace:trace(),paper:trace(),packets:[],listensAfter:[-8,-8],
       showAft:false,showBridge:false,ready:false,voice:'',clock:0,subtitle:'',line:-1,spoken:false,
       sightYaw:-.12,sightPitch:.065,fix:0,seen:false,storm:0};
@@ -41,7 +41,7 @@ const TideFogSignal=(()=>{
   }
   function begin(g){
     const r=g.fog;if(!r)return;
-    r.haul=null;r.voice='';r.clock=0;r.line=-1;r.subtitle='';r.turn=null;r.down=false;r.oldPull=false;r.valve=0;r.ready=false;
+    r.lastNotch=r.lastValve=null;r.haul=null;r.voice='';r.clock=0;r.line=-1;r.subtitle='';r.turn=null;r.down=false;r.oldPull=false;r.valve=0;r.ready=false;
     r.trace=trace();r.packets=[];r.listensAfter=[-8,-8];r.showAft=r.showBridge=false;
     if(g.stage){
       r.key='seated';r.marks=[true,true];r.spoken=true;r.travel=1;
@@ -201,30 +201,39 @@ const TideFogSignal=(()=>{
     const on=g.engaged[0]&&g.engaged[1];
     if(!r.spoken&&on){r.spoken=true;say(r,'drill');}
     g.set(0,carryingLoad(g)?'左右调飞锤，稳住转速。预灯缺口经过固定指针时按确认。':'握住调速盘，看铜色缺口。缺口经过固定指针时，按确认送出预备灯。',{
-      vis:'dial',value:f,target:.30,band:.055,caption:'凸轮 '+Math.round(f*360)+'°　·　'+(carryingLoad(g)?'转速 '+(r.speed*60).toFixed(1)+' / 8.0 rpm':'遮光段约三秒')});
+      vis:'dial',value:f,target:.30,band:.058,previous:r.lastNotch,caption:'凸轮 '+Math.round(f*360)+'°　·　'+(carryingLoad(g)?'转速 '+(r.speed*60).toFixed(1)+' / 8.0 rpm':'遮光段约三秒')+(r.lastNotch===null?'':'　上次按在 '+Math.round(r.lastNotch*360)+'°，缺口中心 108°')});
     const stamps=slots(r),clock=camTime(r),i=r.trace.source.length,offset=clock-(stamps[i]??9);
+    const last=r.lastValve,review=last&&(last.tooth===i||r.turn===null)?last:null;
     const contact=Math.abs(offset)<(g.stage===0?.10:.15);
     r.ready=r.turn!==null;
     g.set(1,r.mode==='ready'?'握住气阀，听预备灯的回铃。每次触点变亮时往前压杆，短响后松回中位。':
       r.down?'松回中位截断这声雾号。':'等下一个触点靠近中心，往前压杆发一声。',{
         vis:r.ready?'dial':'',value:clamp(.5+offset,0,1),target:r.ready?.5:null,band:g.stage===0?.10:.15,
-        caption:(r.ready?'预备灯亮':'等待预备灯')+'　'+('●'.repeat(i)+'○'.repeat(3-i))+(r.down?'　气阀已开 '+(g.time-r.opened).toFixed(1)+' s':'')});
+        previous:r.ready&&Number.isFinite(review?.offset)?clamp(.5+review.offset,0,1):null,
+        caption:(r.ready?'预备灯亮':'等待预备灯')+'　'+('●'.repeat(i)+'○'.repeat(3-i))+(r.down?'　气阀已开 '+(g.time-r.opened).toFixed(1)+' s':'')+(review?'　'+review.label:'')});
     if(r.mode==='ready'&&g.commit(0,input)){
       if(!on||r.voice){status(g,r.voice?'先听完船长的约定。':'等气阀台有人握住。');return;}
-      if(!steady||Math.abs(f-.30)>.058){status(g,!steady?'飞锤偏出刻线，先把转速压回中线。':'缺口还没过指针。');return;}
+      if(!steady){status(g,'飞锤偏出刻线，先把转速压回中线。');return;}
+      if(Math.abs(f-.30)>.058){r.lastNotch=f;status(g,'预灯未送出。看上次确认的刻线，再等铜缺口。');return;}
+      r.lastNotch=null;
       r.turn=Math.floor(r.spin);r.mode='sending';g.sound(825,.11);
     }
     if(r.mode!=='sending')return;
     if(!g.engaged[0]){fail(g,'调速盘松开，预备灯熄灭。两齿的间隔保留。');return;}
     if(rising&&!r.down){
-      if(!dark(g)||!contact){status(g,'气阀没有对上这个触点。松一次杆再压。');}
+      if(!dark(g)||!contact){
+        const label='第'+(i+1)+'响'+(offset<0?'早':'晚')+Math.abs(offset).toFixed(2)+' 秒';
+        r.lastValve={tooth:i,offset,label};
+        status(g,label+'。松一次杆再压。');
+      }
       else{r.down=true;r.opened=g.time;r.pulseOrigin=clock;r.pressure=clamp(r.pressure-.09,0,1);}
     }
     if(r.down){
       const width=g.time-r.opened;
-      if(width>.46||!dark(g)){fail(g,'这声拖进下一段了。短按气阀，松开时听雾号收尾。');return;}
+      if(width>.46||!dark(g)){r.lastValve={tooth:i,label:'第'+(i+1)+'响压了 '+width.toFixed(2)+' 秒，下一次早点收阀'};fail(g,'这声拖进下一段了。短按气阀，松开时听雾号收尾。');return;}
       if(!pull){
-        if(width<.135){fail(g,'气膜还没起振。稍多压一会儿再放。');return;}
+        if(width<.135){r.lastValve={tooth:i,label:'第'+(i+1)+'响只压了 '+width.toFixed(2)+' 秒，下一次晚点收阀'};fail(g,'气膜还没起振。稍多压一会儿再放。');return;}
+        if(r.lastValve?.tooth===i)r.lastValve=null;
         signalPacket(g,width);r.down=false;
         if(r.trace.source.length===3){r.mode='drain';r.ready=false;}
       }

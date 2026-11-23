@@ -21,10 +21,67 @@ const TidePocketSet=(()=>{
     },true,true);
     const steel=finish(0xffffff,.47,.56,{roughnessMap:grain}),enamel=finish(0xffffff,.58,.32,{map:stipple,roughnessMap:grain,bumpMap:grain,bumpScale:.000065}),
       rubber=finish(0xffffff,.77,.045,{roughnessMap:grain}),bright=finish(0xffffff,.34,.72,{roughnessMap:grain});
+    // Unwrap the die-cast body around its rounded rim. The rubbed band on the
+    // lid follows the fold-down handle; chips expose pale alloy at raised edges.
+    const skinW=512,skinH=256,wrapH=118,backW=303;
+    function hullFinish(){
+      const colorCanvas=document.createElement('canvas'),mixCanvas=document.createElement('canvas');
+      for(const c of [colorCanvas,mixCanvas]){c.width=skinW;c.height=skinH;}
+      const col=colorCanvas.getContext('2d'),mix=mixCanvas.getContext('2d');
+      const cc=col.createImageData(skinW,skinH),mm=mix.createImageData(skinW,skinH);
+      const line=outline(.303,.200,.019),sums=[0];
+      for(let i=1;i<=line.length;i++)sums.push(sums[i-1]+Math.hypot(line[i%line.length][0]-line[i-1][0],line[i%line.length][1]-line[i-1][1]));
+      const hash=(x,y)=>{let a=Math.imul(x+97,374761393)^Math.imul(y+269,668265263);a=Math.imul(a^(a>>>13),1274126177);return (a>>>0)/4294967295;};
+      function noise(x,y){
+        const i=Math.floor(x),j=Math.floor(y);let u=x-i,v=y-j;u=u*u*(3-2*u);v=v*v*(3-2*v);
+        const a=hash(i,j),b=hash(i+1,j),c=hash(i,j+1),d=hash(i+1,j+1);
+        return (a+(b-a)*u)*(1-v)+(c+(d-c)*u)*v;
+      }
+      const smooth=(a,b,t)=>{const f=clamp((t-a)/(b-a));return f*f*(3-2*f);};
+      let seg=0;
+      for(let i=0;i<skinW;i++){
+        const walk=i/(skinW-1)*sums.at(-1);while(seg<line.length-1&&walk>sums[seg+1])seg++;
+        const lo=line[seg],hi=line[(seg+1)%line.length],k=(walk-sums[seg])/(sums[seg+1]-sums[seg]);
+        const sx=lo[0]+k*(hi[0]-lo[0]),sy=lo[1]+k*(hi[1]-lo[1]);
+        for(let j=0;j<skinH;j++){
+          const side=j<wrapH+3,x=side?sx:(i/backW-.5)*-.296,y=side?sy:(.5-(j-wrapH-7)/122)*.198,z=side?-.004-clamp((j-1)/(wrapH-2))*.133:-.137;
+          const u=i*.036,v=j*.060,f=noise(u,v),fine=noise(i*.39,j*.39),r=hash(i+5,j-1),
+            edge=side?Math.min(Math.abs(z+.009),Math.abs(z+.127),Math.abs(z+.113)*1.65):Math.min(.148-Math.abs(x),.098-Math.abs(y)),
+            top=smooth(.078,.096,y),corner=smooth(.102,.148,Math.abs(x)),front=smooth(-.055,-.007,z);
+          const hinge=Math.max(Math.exp(-((x+.077)**2/.00021+(z+.058)**2/.00016)),Math.exp(-((x-.069)**2/.00021+(z+.058)**2/.00016)))*top,
+            folded=top*Math.exp(-(((z+.081)/.012)**2))*Math.exp(-((x/.071)**6)),
+            hand=smooth(.065,.14,Math.abs(x))*front*.35+folded*.60+hinge*.31;
+          const edgeWear=Math.exp(-Math.max(0,edge)/(.0009+.0019*corner))*(.46+.28*corner+.18*top),
+            islands=f*.34+fine*.41+r*.25,chip=smooth(.865,.94,islands+edgeWear*.34+hinge*.065),
+            primer=smooth(.78,.94,islands+edgeWear*.29+hinge*.07)*(.24+edgeWear*.69),
+            salt=top*Math.max(0,1-Math.abs(Math.hypot((x+.076)/.018,(z+.06)/.022)-1)*3.1)*(.09+.47*fine)
+              +top*Math.max(0,1-Math.abs(Math.hypot((x-.07)/.015,(z+.06)/.018)-1)*3.6)*(.09+.42*fine),
+            blot=(f-.48)*15+(fine-.5)*10+(r-.5)*9;
+          const rr=80+blot-hand*13+salt*31,gg=103+blot-hand*11+salt*31,bb=90+blot-hand*10+salt*27;
+          const p=primer*(1-chip),al=chip*(.82+.14*r),off=(j*skinW+i)*4;
+          cc.data[off]=(rr*(1-p)+(138+14*f)*p)*(1-al)+(162+29*f)*al;
+          cc.data[off+1]=(gg*(1-p)+(132+14*f)*p)*(1-al)+(166+20*f)*al;
+          cc.data[off+2]=(bb*(1-p)+(101+12*f)*p)*(1-al)+(158+18*f)*al;cc.data[off+3]=255;
+          mm.data[off]=132+(fine-.5)*21+(r-.5)*12-p*12-chip*25+salt*10;
+          mm.data[off+1]=160+18*f-hand*58-p*4-chip*39+salt*29;
+          mm.data[off+2]=32+4*r+p*3+chip*137;mm.data[off+3]=255;
+        }
+      }
+      col.putImageData(cc,0,0);mix.putImageData(mm,0,0);
+      for(let j=0;j<460;j++){
+        const x=random()*skinW,y=random()*wrapH,edge=Math.min(y,wrapH-y),s=.7+random()**2*(edge<9?8:3);
+        col.strokeStyle=edge<10?'rgba(180,182,155,.46)':'rgba(136,150,135,.28)';col.lineWidth=.4+random()*.7;
+        col.beginPath();col.moveTo(x,y);col.lineTo(x+s,y+(random()-.48)*s*.44);col.stroke();
+      }
+      const make=(canvas,srgb)=>{const t=own(new T.CanvasTexture(canvas));if(srgb)t.colorSpace=T.SRGBColorSpace;t.anisotropy=6;return t;};
+      const a=make(colorCanvas,true),b=make(mixCanvas,false);
+      return finish(0xffffff,1,1,{map:a,roughnessMap:b,metalnessMap:b,bumpMap:b,bumpScale:.00015});
+    }
+    const housing=hullFinish();
     const atlasCanvas=document.createElement('canvas');atlasCanvas.width=2048;atlasCanvas.height=1024;
     const atlasCtx=atlasCanvas.getContext('2d'),atlas=own(new T.CanvasTexture(atlasCanvas));
     atlas.colorSpace=T.SRGBColorSpace;atlas.anisotropy=6;
-    const artwork=finish(0xffffff,.61,.13,{map:atlas}),cells=[[4,4],[1212,4],[1212,289],[1212,485],[1212,760],[4,802]];let cell=0;
+    const artwork=finish(0xffffff,.61,.13,{map:atlas}),cells=[[4,4],[1212,4],[4,802],[1212,485],[1212,760],[1212,289]];let cell=0;
     function art(w,h,draw){
       const tex=document.createElement('canvas');tex.width=w;tex.height=h;draw(tex.getContext('2d'),w,h);
       const [x,y]=cells[cell++];atlasCtx.drawImage(tex,x,y);
@@ -43,18 +100,47 @@ const TidePocketSet=(()=>{
         c.beginPath();c.moveTo(x,y);c.lineTo(x+1+random()*18,y+random()*4);c.stroke();}
       c.strokeStyle='#859589';c.lineWidth=2;xyPath(c,15,15,w-30,h-30,40);c.stroke();c.strokeStyle='#35463d';xyPath(c,23,23,w-46,h-46,36);c.stroke();
       letter(c,'北岬  船用收发机',74,94,48,'sans-serif','#e2dcc1','left');letter(c,'V H F   ·   0 4 7',75,146,26,'monospace','#c3cbb1','left');
-      letter(c,'信道',823,268,28);
-      letter(c,'接收',610,682,27);letter(c,'发话',743,682,27);letter(c,'调谐',965,699,30);
-      c.lineWidth=4;c.strokeStyle='#bcbca0';for(let i=0;i<7;i++){const x=825+i*40;c.beginPath();c.moveTo(x,332+i%2*6);c.lineTo(x+7,324+i%2*6);c.stroke();}
+      // Glove contacts form crescent-shaped polish around the selector and
+      // waxy thumb key. Screw recesses drain narrow salt tracks downhill.
+      const ox=963,oy=511,arc=(r,a)=>[ox+r*Math.sin(a),oy-r*Math.cos(a)];
+      for(let i=0;i<310;i++){
+        const a=(random()-.50)*5.0,rad=151+random()**1.7*36,len=.008+random()**2*.095;
+        c.strokeStyle=i%4?'rgba(142,145,119,.18)':'rgba(25,43,39,.23)';c.lineWidth=.7+random()*1.7;
+        const A=arc(rad,a),B=arc(rad,a+len);c.beginPath();c.moveTo(...A);c.lineTo(...B);c.stroke();
+      }
+      for(const [x,y] of [[37,49],[1162,49],[37,745],[1162,745]]){
+        for(let i=0;i<21;i++){const xx=x+(random()-.5)*33,yy=y+random()*9,span=4+random()**2*37;
+          const wash=c.createLinearGradient(0,yy,0,yy+span);wash.addColorStop(0,'rgba(172,170,131,.26)');wash.addColorStop(1,'rgba(165,161,127,0)');c.fillStyle=wash;c.fillRect(xx,yy,.8+random()*2,span);}
+      }
+      letter(c,'信 道',847,272,31,'sans-serif','#d0d3b5');
+      letter(c,'接收',610,688,33,'sans-serif','#dbd9b9');letter(c,'发话',754,688,33,'sans-serif','#dbd9b9');letter(c,'调谐',960,729,32);
+      for(let j=0;j<=10;j++){
+        const a=(-118+j*23.6)*Math.PI/180,outer=j%5===0?184:178;
+        const A=arc(168,a),B=arc(outer,a);c.strokeStyle=j%5===0?'#c8c6a6':'#aeb69d';c.lineWidth=j%5===0?4:3;
+        c.beginPath();c.moveTo(...A);c.lineTo(...B);c.stroke();
+      }
       c.lineWidth=2;c.strokeStyle='#748379';c.beginPath();c.moveTo(464,625);c.lineTo(770,625);c.stroke();
     });
     const speaker=art(420,280,(c,w,h)=>{c.fillStyle='#4d5350';c.fillRect(0,0,w,h);
       for(let row=-1;row<h/12;row++)for(let col=-1;col<w/13;col++){const x=col*13+(row%2)*6.5,y=row*12;c.fillStyle='#798078';c.beginPath();c.arc(x,y+1.2,3.8,0,TAU);c.fill();c.fillStyle='#191f1e';c.beginPath();c.arc(x,y,3.65,0,TAU);c.fill();}
       const v=c.createLinearGradient(0,0,w*.18,h);v.addColorStop(0,'rgba(65,67,59,.45)');v.addColorStop(.48,'rgba(29,39,34,.04)');v.addColorStop(1,'rgba(14,18,18,.45)');c.fillStyle=v;c.fillRect(0,0,w,h);
     });
-    const bands=art(768,192,(c,w,h)=>{const grad=c.createLinearGradient(0,0,0,h);grad.addColorStop(0,'#4a554c');grad.addColorStop(.4,'#7e8a70');grad.addColorStop(.75,'#aeb394');grad.addColorStop(1,'#67765f');c.fillStyle=grad;c.fillRect(0,0,w,h);
-      for(let i=0;i<=50;i++){const x=67+i*(w-134)/50;c.fillStyle='#26382d';const tall=i%5?17:34;c.fillRect(x,154-tall,i%5?2:4,tall)}
-      for(let i=0;i<11;i++)letter(c,String(6+i).padStart(2,'0'),67+i*(w-134)/10,76,39,'monospace','#23382e');
+    const bands=art(1200,200,(c,w,h)=>{
+      const grad=c.createLinearGradient(0,0,0,h);
+      for(const [offset,col] of [[0,'#777c67'],[.11,'#b9bda2'],[.35,'#d6d5b5'],[.72,'#ced0b1'],[.90,'#b9bea2'],[1,'#838b75']])grad.addColorStop(offset,col);
+      c.fillStyle=grad;c.fillRect(0,0,w,h);
+      for(let j=0;j<2300;j++){const x=random()*w,y=random()*h;c.fillStyle=j%4?'rgba(118,105,75,.085)':'rgba(245,235,196,.20)';c.fillRect(x,y,.8+random()*2,.6+random()*1.1);}
+      const pitch=w/15;
+      for(let channel=6;channel<=16;channel++){
+        const x=(2.5+channel-6)*pitch;
+        c.fillStyle='#213a34';c.textAlign='center';c.textBaseline='middle';c.font='bold 106px "Arial Narrow","Helvetica Neue",sans-serif';
+        c.fillText(String(channel).padStart(2,'0'),x,88,68);
+        for(let tick=0;tick<5;tick++){
+          if(channel===16&&tick>0)continue;
+          c.fillStyle='#435348';c.fillRect(x+tick*pitch/5-1,tick?164:148,tick?1.6:3.2,tick?10:23);
+        }
+      }
+      for(const x of [pitch*1.87,pitch*13.13]){c.fillStyle='#7a805f';c.fillRect(x,34,2,138);}
     });
     const vu=art(640,270,(c,w,h)=>{const grad=c.createLinearGradient(0,0,0,h);grad.addColorStop(0,'#afa38a');grad.addColorStop(.24,'#e9dbb2');grad.addColorStop(.72,'#ddd3ac');grad.addColorStop(1,'#ac9d80');c.fillStyle=grad;c.fillRect(0,0,w,h);
       for(let i=0;i<1500;i++){c.fillStyle=i%5?'#b2a5844a':'#78674549';c.fillRect(random()*w,random()*h,1+random()*2,random()*2)}
@@ -69,7 +155,8 @@ const TidePocketSet=(()=>{
     function add(par,g,mat,col,x=0,y=0,z=0,sx=1,sy=1,sz=1,rot=null){
       const owner=par.userData.bakeInto||par;if(!batches.has(owner))batches.set(owner,new Map());const map=batches.get(owner);if(!map.has(mat))map.set(mat,{p:[],n:[],uv:[],c:[],i:[]});const b=map.get(mat);
       transform.position.set(x,y,z);transform.scale.set(sx,sy,sz);if(rot?.isQuaternion)transform.quaternion.copy(rot);else transform.rotation.set(...(rot||[0,0,0]));transform.updateMatrix();if(owner!==par){par.updateMatrix();transform.matrix.premultiply(par.matrix);}nmat.getNormalMatrix(transform.matrix);tint.set(col);
-      const a=g.attributes,base=b.p.length/3;for(let j=0;j<a.position.count;j++){p.fromBufferAttribute(a.position,j).applyMatrix4(transform.matrix);n.fromBufferAttribute(a.normal,j).applyNormalMatrix(nmat);b.p.push(p.x,p.y,p.z);b.n.push(n.x,n.y,n.z);b.uv.push(a.uv?.getX(j)||0,a.uv?.getY(j)||0);b.c.push(tint.r,tint.g,tint.b)}
+      const a=g.attributes,base=b.p.length/3;for(let j=0;j<a.position.count;j++){p.fromBufferAttribute(a.position,j).applyMatrix4(transform.matrix);n.fromBufferAttribute(a.normal,j).applyNormalMatrix(nmat);b.p.push(p.x,p.y,p.z);b.n.push(n.x,n.y,n.z);b.uv.push(a.uv?.getX(j)||0,a.uv?.getY(j)||0);if(a.color)b.c.push(tint.r*a.color.getX(j),tint.g*a.color.getY(j),tint.b*a.color.getZ(j));
+        else b.c.push(tint.r,tint.g,tint.b);}
       const ix=g.index;for(let i=0,len=ix?.count||a.position.count;i<len;i++)b.i.push(base+(ix?ix.getX(i):i));}
     function box(par,x,y,z,w,h,d,colour,mat=steel,r=null){add(par,cube,mat,colour,x,y,z,w,h,d,r);}
     function tube(par,a,b,r,colour,mat=steel,sides=14){const A=V(...a),B=V(...b);dir.subVectors(B,A);const length=dir.length();tmpQ.setFromUnitVectors(up,dir.multiplyScalar(1/length));A.lerp(B,.5);add(par,pipe(sides),mat,colour,A.x,A.y,A.z,r,length,r,tmpQ)}
@@ -85,14 +172,14 @@ const TidePocketSet=(()=>{
     function outline(w,h,r){const pts=[];for(const [cx,cy,a] of [[w/2-r,h/2-r,0],[-w/2+r,h/2-r,.5],[-w/2+r,-h/2+r,1],[w/2-r,-h/2+r,1.5]]){
       for(let j=0;j<=7;j++){const u=(a+j/14)*Math.PI;pts.push([cx+r*Math.cos(u),cy+r*Math.sin(u)])}}return pts}
     function shell(par,x,y,profiles,colour,mat){const rows=profiles.map(([w,h,r,z])=>[outline(w,h,r),z]),P=[],U=[],I=[],N=rows[0][0].length;
-      for(const [pts,z] of rows){let walk=0;for(let j=0;j<=N;j++){const v=pts[j%N],previous=pts[(j-1+N)%N];if(j)walk+=Math.hypot(v[0]-previous[0],v[1]-previous[1]);P.push(v[0],v[1],z);U.push(walk*8,z*8);}}
+      for(const [pts,z] of rows){let walk=0;const length=pts.reduce((l,xy,i)=>{const next=pts[(i+1)%N];return l+Math.hypot(next[0]-xy[0],next[1]-xy[1]);},0);for(let j=0;j<=N;j++){const v=pts[j%N],previous=pts[(j-1+N)%N];if(j)walk+=Math.hypot(v[0]-previous[0],v[1]-previous[1]);P.push(v[0],v[1],z);if(mat===housing)U.push((.5+walk/length*(skinW-1))/skinW,1-(1+clamp((-.004-z)/.133)*(wrapH-2))/skinH);else U.push(walk*8,z*8);}}
       for(let i=1;i<rows.length;i++)for(let j=0;j<N;j++){const l=(i-1)*(N+1)+j,k=l+1;I.push(l,k,k+N+1,l,k+N+1,l+N+1)}
-      function cap(k,reverse){const [row,z]=rows[k],start=P.length/3;for(const [x,y] of row){P.push(x,y,z);U.push(x*8+.5,y*8+.5);}
+      function cap(k,reverse){const [row,z]=rows[k],start=P.length/3;for(const [x,y] of row){P.push(x,y,z);if(mat===housing)U.push(clamp((.5-x/.296)*backW/skinW),1-(wrapH+7+(.5-y/.198)*122)/skinH);else U.push(x*8+.5,y*8+.5);}
         for(let j=1;j<N-1;j++)I.push(start,reverse?start+j+1:start+j,reverse?start+j:start+j+1)}
       cap(0,true);cap(rows.length-1,false);
       const g=form(new T.BufferGeometry());g.setAttribute('position',new T.Float32BufferAttribute(P,3));g.setAttribute('uv',new T.Float32BufferAttribute(U,2));g.setIndex(I);g.computeVertexNormals();add(par,g,mat,colour,x,y,0);}
     const olive='#45625a',olive2='#597168',iron='#414d48',alu='#a4aaa0',brass='#ae9364',dark='#292f2d',seal='#363b35',black='#242927',bone='#e0d7b8';
-    shell(face,0,0,[[.268,.166,.02,-.137],[.293,.192,.021,-.125],[.303,.20,.019,-.111],[.303,.20,.019,-.010],[.302,.20,.019,-.004]],olive,enamel);
+    shell(face,0,0,[[.268,.166,.02,-.137],[.293,.192,.021,-.125],[.303,.20,.019,-.111],[.303,.20,.019,-.010],[.302,.20,.019,-.004]],0xffffff,housing);
     shell(face,0,0,[[.306,.204,.022,-.009],[.311,.209,.023,-.005],[.311,.209,.023,.002],[.304,.201,.020,.006]],seal,rubber);
     shell(face,0,0,[[.302,.20,.019,.001],[.304,.201,.020,.005],[.297,.194,.018,.011],[.293,.190,.017,.0125]],olive2,enamel);
     graphic(face,0,0,.0127,.281,.179,plate);
@@ -108,8 +195,31 @@ const TidePocketSet=(()=>{
     const bx=.057,by=.056;
     shell(face,bx,by,[[.137,.042,.005,.013],[.140,.044,.006,.016],[.137,.042,.005,.0193]],'#4a554f',steel);
     shell(face,bx,by,[[.132,.036,.003,.019],[.132,.036,.003,.0205]],'#26362f',rubber);
-    graphic(face,bx,by,.0208,.124,.030,bands);
-    const hair=group(face,bx,by,.022);box(hair,0,0,0,.00095,.028,.00055,'#9d4026',bright);box(hair,0,.0148,0,.003,.0017,.0011,brass,bright);
+    // A geared scale drum advances behind a fixed glass reticle. The cut
+    // window shows three neighbouring channels without a privileged station.
+    const drumGeo=own(new T.BufferGeometry()),drumX=[],drumP=[],drumU=[],drumI=[];
+    const drumN=12,tape=bands.region,visibleCells=3.42;
+    for(let j=0;j<=drumN;j++){
+      const u=j/drumN,xx=(u-.5)*.124,zz=.0214-.0020*(2*u-1)**2;
+      for(let k=0;k<2;k++){
+        drumP.push(bx+xx,by+(k-.5)*.0304,zz);drumX.push((u-.5)*visibleCells);
+        drumU.push(0,1-(tape[1]+(k?1:tape[3]-1))/atlasCanvas.height);
+      }
+      if(j<drumN){const i=j*2;drumI.push(i,i+2,i+1,i+2,i+3,i+1);}
+    }
+    drumGeo.setAttribute('position',new T.Float32BufferAttribute(drumP,3));drumGeo.setAttribute('uv',new T.Float32BufferAttribute(drumU,2));drumGeo.setIndex(drumI);drumGeo.computeVertexNormals();
+    const drumColor=new Float32Array(drumX.length*3).fill(1);drumGeo.setAttribute('color',new T.BufferAttribute(drumColor,3));
+    const drumUV=drumGeo.attributes.uv;drumUV.setUsage(T.DynamicDrawUsage);const drum=new T.Mesh(drumGeo,artwork);drum.receiveShadow=true;face.add(drum);
+    let drumRead=-100,drumFrame=-100;
+    function moveScale(step,dt,init){
+      if(init||dt===0)drumRead=step;else drumRead+=(step-drumRead)*(1-Math.exp(-dt*39));
+      if(Math.abs(drumRead-step)<.01)drumRead=step;if(Math.abs(drumFrame-drumRead)<.0005)return;
+      for(let i=0;i<drumX.length;i++)drumUV.setX(i,(tape[0]+(2.5+drumRead+drumX[i])*tape[2]/15)/atlasCanvas.width);
+      drumUV.needsUpdate=true;drumFrame=drumRead;
+    }
+    box(face,bx,by-.0118,.0230,.0013,.0062,.0006,'#9d573a',bright);
+    box(face,bx,by+.0131,.0231,.0014,.0037,.0006,'#9d573a',bright);
+    box(face,bx,by-.0157,.0231,.0062,.0017,.00075,'#b4a582',bright);
     const meterX=-.071,meterY=-.053;
     shell(face,meterX,meterY,[[.100,.041,.006,.0129],[.104,.044,.006,.017],[.101,.042,.004,.020]],'#605b48',bright);
     shell(face,meterX,meterY,[[.095,.036,.004,.019],[.096,.037,.004,.021]],'#353b35',rubber);
@@ -120,13 +230,37 @@ const TidePocketSet=(()=>{
       graphic(face,x,y,z,w,h,glass);
       box(face,x,y+h*.47,z+.0002,w*.93,.00038,.00035,'#a6afa6',bright);
     }
+    // Moulded finger scallops fade into the convex face. Thumb-polished
+    // shoulders and little patches of graphite in the valleys rotate as one.
     const dx=.085,dy=-.026;
-    disc(face,dx,dy,.017,.035,.006,iron,steel,64);tor(face,dx,dy,.021,.0324,.0020,brass,bright);disc(face,dx,dy,.022,.027,.008,'#343d38',rubber);
+    disc(face,dx,dy,.0168,.0373,.0052,iron,steel,64);
+    tor(face,dx,dy,.0198,.0350,.0017,'#9e8962',bright);
+    disc(face,dx,dy,.0216,.0308,.0068,'#393f36',rubber);
     const dial=group(face,dx,dy,.024);
-    disc(dial,0,0,.006,.0278,.015,'#303733',rubber,64);disc(dial,0,0,.0144,.0253,.0030,'#3f4740',rubber,64);
-    for(let i=0;i<34;i++){const a=TAU*i/34;box(dial,Math.sin(a)*.0269,Math.cos(a)*.0269,.0079,.0026,.0022,.0122,'#515951',rubber,[0,0,-a]);}
-    tor(dial,0,0,.0154,.0233,.0010,'#74786c',steel);tor(dial,0,0,.0160,.0163,.0005,'#555d54',rubber);
-    box(dial,0,.017,.0164,.0020,.0135,.0010,bone,enamel);disc(dial,0,0,.0159,.0072,.0024,'#62695e',steel,32);
+    const rimRows=[
+      [.0015,.0265,.12],[.0025,.0296,.55],[.0040,.0328,.91],
+      [.0064,.0340,1],[.0116,.0336,1],[.0140,.0314,.78],
+      [.0150,.0287,.29],[.0157,.0266,.02],[.0165,.0195,0],[.0169,.0103,0],[.0168,0,0]
+    ];
+    const knobPos=[],K=[],UV=[],F=[],steps=144,bakelite=new T.Color();
+    for(let j=0;j<rimRows.length;j++){
+      const [z,rad,fluting]=rimRows[j];for(let i=0;i<=steps;i++){
+        const a=TAU*i/steps,ridge=(1+Math.cos(a*18))*.5,valley=1-ridge,r=rad-.0036*fluting*valley**.76;
+        const x=r*Math.sin(a),y=r*Math.cos(a);knobPos.push(x,y,z);
+        const polish=ridge*fluting,grain=.5+.5*Math.cos(a*5.0+.4);
+        bakelite.setRGB(.064+.035*polish+.008*grain,.074+.031*polish+.006*grain,.065+.027*polish+.006*grain);
+        K.push(bakelite.r,bakelite.g,bakelite.b);UV.push(i/steps*2.0,j*.12);
+        if(j<rimRows.length-1&&i<steps){const k=j*(steps+1)+i;F.push(k,k+steps+1,k+1,k+1,k+steps+1,k+steps+2);}
+      }
+    }
+    const dialBody=form(new T.BufferGeometry());dialBody.setAttribute('position',new T.Float32BufferAttribute(knobPos,3));dialBody.setAttribute('uv',new T.Float32BufferAttribute(UV,2));dialBody.setAttribute('color',new T.Float32BufferAttribute(K,3));dialBody.setIndex(F);dialBody.computeVertexNormals();add(dial,dialBody,rubber,0xffffff);
+    tor(dial,0,0,.01645,.0191,.00057,'#676c5d',steel);tor(dial,0,0,.01635,.0242,.00041,'#535748',rubber);
+    // Inlaid bone index reaches over the shoulder. The satin collar and the
+    // small darker slot remain visible on the upper half above a gloved hand.
+    box(dial,0,.0220,.0164,.0028,.0141,.00066,bone,steel);
+    box(dial,0,.0292,.0151,.0027,.0028,.00075,'#c9bc9c',steel,[.31,0,0]);
+    disc(dial,0,0,.01675,.00625,.0018,'#95968a',steel,32);
+    box(dial,0,0,.01780,.0066,.00087,.00027,'#464b43',rubber,[0,0,-.48]);
     for(const x of [-.117,.117])for(const [z,h] of [[-.024,.013],[.064,.028]]){box(root,x,h/2,z,.025,h,.028,dark,rubber);box(root,x,.0024,z,.029,.0048,.031,seal,rubber);}
     // Neoprene thumb key travels into a gasket. A knuckle guard protects both ends against the companionway wall.
     const key=group(face,-.152,-.003,-.007);
@@ -202,7 +336,7 @@ const TidePocketSet=(()=>{
       const tuning=clamp(Number.isFinite(s.tune)?s.tune:.5),down=clamp(Number(s.ptt)||0),powered=s.power!==false,signal=powered?clamp(Number(s.level)||0):0;
       const step=Math.round(tuning*10);if(!init&&lastStep!==-1&&step!==lastStep&&!s.silent)click(s,step);lastStep=step;
       // End-stops are ±118 degrees about the panel normal. The glass hairline reads the same channel as the notch.
-      dial.rotation.z=(.5-tuning)*236*Math.PI/180;hair.position.x=bx+(tuning-.5)*.10237;
+      dial.rotation.z=(.5-tuning)*236*Math.PI/180;moveScale(step,dt,init);
       if(init){press=down;velocity=0;level=signal}else if(dt){const k=39,e=Math.exp(-k*dt),d=press-down;press=down+(d+(velocity+k*d)*dt)*e;velocity=(velocity-k*(velocity+k*d)*dt)*e;
         level+=(signal-level)*(1-Math.exp(-dt*(signal>level?20:7)))}
       key.position.x=-.152+press*.0051;key.rotation.z=-.033*press;

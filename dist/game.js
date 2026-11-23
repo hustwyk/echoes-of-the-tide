@@ -11,7 +11,7 @@ try {
 const sound=new HarborSound();
 let wantsAudio=true;try{wantsAudio=localStorage.getItem('tide-audio')!=='off';}catch{}
 const keys=new Set(),jumps=[false,false],toolTaps=[false,false],gamepadDown=[false,false];
-let waitTap=false,waitPad=false;
+let waitTap=false,waitPad=false,dialClicks=0;
 let tideTicket=null;
 try{tideTicket=TideGallery.validTicket(JSON.parse(localStorage.getItem('tide-survey-ticket')));}catch{}
 let session=null,view=null,index=0,mode='menu',last=0,remainder=0,redraw=0,voice=false;
@@ -21,7 +21,24 @@ let menuPadState=new Set();
 function gamepads(){
   return TideWindows.pads().filter(p=>p.connected);
 }
+const crewBeat=TideCrewInput.countIn(),beatPad=[false,false];
+let beatPhase='',beatCaller=-1,beatPads=-1;
 TideHud.build($('split'));
+function requestBeat(i){if(mode==='playing')crewBeat.press(i,session.time);}
+for(const [i,b] of document.querySelectorAll('#split .crew-beat').entries())b.onclick=()=>requestBeat(i);
+function updateBeat(){
+  const phase=crewBeat.phase(session.time);
+  const devices=Number(padSlots[0]!==null)+2*Number(padSlots[1]!==null);
+  if(phase===beatPhase&&beatCaller===crewBeat.caller&&devices===beatPads)return;
+  if(phase!==beatPhase){
+    if(phase==='go')sound.tone(690,.12,'sine',.105);
+    else if(['three','two','one'].includes(phase))sound.tone(375,.055,'sine',.105);
+  }
+  TideHud.countIn(crewBeat,phase,padSlots);
+  beatPhase=phase;beatCaller=crewBeat.caller;beatPads=devices;
+}
+function clearBeat(){crewBeat.clear();beatPhase='';TideHud.countIn(crewBeat,'idle',padSlots);}
+
 function showInfo(html) {
   $('info-content').innerHTML = html;
   if (!info.open) info.showModal();
@@ -71,9 +88,9 @@ function savePoint(g){
   try{localStorage.setItem('tide-3d-checkpoint',JSON.stringify(resume));}catch{}
 }
 function clearInput(){
-  TideCrewInput.clear();
+  TideCrewInput.clear();clearBeat();beatPad.fill(true);
   if(view)view.lastTick=null;
-  view?.pointing?.cancel();pointTaps.fill(false);waitTap=false;waitPad=false;keys.clear();jumps.fill(false);toolTaps.fill(false);gamepadDown.fill(false);cameraButtons.fill(false);last=0;remainder=0;
+  view?.pointing?.cancel();pointTaps.fill(false);waitTap=false;waitPad=false;dialClicks=0;keys.clear();jumps.fill(false);toolTaps.fill(false);gamepadDown.fill(false);cameraButtons.fill(false);last=0;remainder=0;
 }
 function note(line){
   if(line && journal.at(-1)!==line)journal.push(line);
@@ -101,6 +118,7 @@ function radio(line,duration=5){
   session.notice=line;session.noticeUntil=session.time+duration;say(line);
 }
 function onStage(g){
+  clearBeat();
   view?.pointing?.clear();savePoint(g);const line=TideFenders.active(g)?TideFenders.briefing:g.spec.radio;note(line);g.notice=line;g.noticeUntil=g.time+6;
   if(mode==='playing'&&!TideFenders.active(g)&&!g.swing?.voice&&!g.cistern?.voice)say(line);
 }
@@ -403,6 +421,9 @@ function pollInputs(now,connected){
     const dead=v=>Math.abs(v||0)>.17?v:0;
     const down=!!pad?.buttons[0]?.pressed;
     const jump=jumps[i]||down&&!gamepadDown[i];gamepadDown[i]=down;
+    const padBeat=!!pad?.buttons[12]?.pressed;
+    if(padBeat&&!beatPad[i])requestBeat(i);
+    beatPad[i]=padBeat;
     const aft=i===1&&TideSternWatch.station(session);
     const waitButton=aft&&!!pad?.buttons[1]?.pressed;
     const waitReport=aft&&(waitTap||waitButton&&!waitPad);
@@ -418,7 +439,7 @@ function pollInputs(now,connected){
     const use=toolTaps[i]||keys.has(i?'Enter':'KeyE')||!!pad?.buttons[7]?.pressed;
     const cameraInput=orbit||center||keys.has(i?'Backslash':'KeyC')||dead(pad?.axes[2])||dead(pad?.axes[3])||TideWindows.dragging(i);
     view.pointing.request(i,keys.has(i?'Quote':'KeyG')||!!pad?.buttons[5]?.pressed,Boolean(pointing||x||z||use||jump||cameraInput),!!pad);
-    return {x:pointing?0:x,z:pointing?0:z,use,waitReport,magnify:(i?keys.has('BracketRight'):session.rangeWatch&&keys.has('BracketLeft'))?1:(pad?.buttons[6]?.value||Number(!!pad?.buttons[6]?.pressed)),jumpHeld:(i?keys.has('Slash')||keys.has('ShiftRight'):keys.has('Space'))||down,jump};
+    return {x:pointing?0:x,z:pointing?0:z,dialClicks:i||pointing?0:dialClicks,use,waitReport,magnify:(i?keys.has('BracketRight'):session.rangeWatch&&keys.has('BracketLeft'))?1:(pad?.buttons[6]?.value||Number(!!pad?.buttons[6]?.pressed)),jumpHeld:(i?keys.has('Slash')||keys.has('ShiftRight'):keys.has('Space'))||down,jump};
   });
 }
 function padMenus(pads){
@@ -466,15 +487,16 @@ function frame(now){
   }
   remainder+=dt;
   if(remainder>=1/60){
-    const inputs=pollInputs(Math.floor(remainder*60)/60,pads);jumps.fill(false);toolTaps.fill(false);
+    const inputs=pollInputs(Math.floor(remainder*60)/60,pads);jumps.fill(false);toolTaps.fill(false);dialClicks=0;
     while(remainder>=1/60 && mode==='playing'){
       view.rememberPose(session);
       session.tick(1/60,inputs,TideGallery.active(session)?view.yaws.map((yaw,i)=>TideGallery.movementYaw(session,i,yaw)):view.yaws);remainder-=1/60;
-      for(const input of inputs){input.jump=false;input.waitReport=false;}
+      for(const input of inputs){input.jump=false;input.waitReport=false;input.dialClicks=0;}
     }
   }
   if(mode!=='playing')return;
   if(session.archive?.memory?.poolRequested){session.archive.memory.poolRequested=false;enterRegatta(true);return;}
+  updateBeat();
   view.draw(session,dt,true,remainder*60);
   if(sound.enabled){sound.scene?.update(session,dt);sound.tape?.update(session);sound.receiver?.update(session);}
   if(!redraw||now-redraw>55){
@@ -491,8 +513,8 @@ $('skip').onclick=()=>{if(mode==='cinema'){view.cinema.skip();showDebrief(sessio
 $('pause').onclick=pause;$('sound').onclick=$('field-audio').onclick=toggleAudio;
 $('expand').onclick=()=>TideWindows.fullscreen(document);
 $('brief').onclick=()=>{showInfo('<h2>北岬灯塔 · 紧急任务</h2><p>海雁号失去动力。机修员林澈和信号员沈遥必须在潮水吞没北礁前恢复电台，找出灯塔旧档案里的误判，重新校准光束。</p><p>十二关贯穿四幕。两人各自操作一名角色，共用同一个三维世界。</p><p><a href="story.html" target="_blank" rel="noopener">阅读原作调研、原创故事与十二关设计（含剧透）</a></p>');addJournal($('info-content'),levels.slice(0,progress).map((l,i)=>'第 '+(i+1)+' 关　'+l.name+'　'+l.after));};
-$('help').onclick=()=>showInfo('<h2>双人操作指南</h2><p>林澈用 WASD 移动、空格跳跃，按住 E 操作。沈遥用方向键移动、斜杠 / 或右 Shift 跳跃，按住 Enter 操作。轻点跳跃可以越过短阶，按住则跳得更高。</p><p>林澈用 Q / R 转镜头，C 回到人物身后。沈遥用逗号 / 句号转镜头，反斜杠回正。两人可以同时转动各自的镜头。</p><p>要给同伴指路，林澈按住 F，沈遥按住分号，手柄按住 LB。用移动键或左摇杆瞄准实物，松开即可。也可以在自己的半屏右击。标记会跟着甲板或船移动。自由行动时站稳，林澈按住 G，沈遥按住单引号键，手柄按住 RB，看向同伴刚指出的实物。看清后对方会收到回应。松开回到原视角。</p><p>跟随各自画面内的设备标记。在光圈里按住操作键，左右键调节仪器，跳跃键确认读数或发送信号。站在移动甲板上会随甲板运动，可从边缘跃向对岸。</p><p>点右上角「双窗口」，可把沈遥的画面拖到另一块显示器。关掉副窗口或点「合回同屏」即可接着玩。在任一窗口按键均可控制两人。拖动自己的画面可转镜头，双击回正。标准手柄使用左摇杆移动、A 跳跃、RT 操作、右摇杆转动视角、按下回到身后。轻推摇杆，行动简报与暂停菜单会亮起对应角色。只有一只手柄时可把它交给任意一边，两只手柄也可互换。方向键选菜单，A 确认，B 返回，Start 或 Esc 暂停，章节与段落检查点保存在此浏览器。</p>');
-const moveCodes=new Set(['BracketLeft','BracketRight','KeyW','KeyA','KeyS','KeyD','KeyE','Space','ArrowUp','ArrowLeft','ArrowDown','ArrowRight','Enter','Slash','ShiftRight','KeyQ','KeyR','KeyC','Comma','Period','Backslash','KeyF','Semicolon','KeyG','Quote']);
+$('help').onclick=()=>showInfo('<h2>双人操作指南</h2><p>林澈用 WASD 移动、空格跳跃，按住 E 操作。沈遥用方向键移动、斜杠 / 或右 Shift 跳跃，按住 Enter 操作。轻点跳跃可以越过短阶，按住则跳得更高。</p><p>林澈用 Q / R 转镜头，C 回到人物身后。沈遥用逗号 / 句号转镜头，反斜杠回正。两人可以同时转动各自的镜头。</p><p>想一起出手时，林澈按 T，沈遥按 P，手柄按十字键上。一个人先约拍，另一人准备好后应答。两边听到三拍，看到「动手」时各自操作。</p><p>要给同伴指路，林澈按住 F，沈遥按住分号，手柄按住 LB。用移动键或左摇杆瞄准实物，松开即可。也可以在自己的半屏右击。标记会跟着甲板或船移动。自由行动时站稳，林澈按住 G，沈遥按住单引号键，手柄按住 RB，看向同伴刚指出的实物。看清后对方会收到回应。松开回到原视角。</p><p>跟随各自画面内的设备标记。在光圈里按住操作键，左右键调节仪器，跳跃键确认读数或发送信号。站在移动甲板上会随甲板运动，可从边缘跃向对岸。</p><p>点右上角「双窗口」，可把沈遥的画面拖到另一块显示器。关掉副窗口或点「合回同屏」即可接着玩。在任一窗口按键均可控制两人。拖动自己的画面可转镜头，双击回正。标准手柄使用左摇杆移动、A 跳跃、RT 操作、右摇杆转动视角、按下回到身后。轻推摇杆，行动简报与暂停菜单会亮起对应角色。只有一只手柄时可把它交给任意一边，两只手柄也可互换。方向键选菜单，A 确认，B 返回，Start 或 Esc 暂停，章节与段落检查点保存在此浏览器。</p>');
+const moveCodes=new Set(['BracketLeft','BracketRight','KeyW','KeyA','KeyS','KeyD','KeyE','Space','ArrowUp','ArrowLeft','ArrowDown','ArrowRight','Enter','Slash','ShiftRight','KeyQ','KeyR','KeyC','Comma','Period','Backslash','KeyF','Semicolon','KeyG','Quote','KeyT','KeyP']);
 function keyDown(e){
   if(!game.open)return;
   if(mode==='loading'||mode==='paused'||mode==='story'||mode==='regatta')TideCrewInput.key(e.code,true);
@@ -505,6 +527,8 @@ function keyDown(e){
   if(e.code==='Escape'&&(mode==='playing'||mode==='paused')){e.preventDefault();if(!e.repeat)pause();return;}
   if(mode!=='playing'||!moveCodes.has(e.code))return;
   e.preventDefault();keys.add(e.code);
+  if(!e.repeat&&(e.code==='KeyT'||e.code==='KeyP'))requestBeat(e.code==='KeyT'?0:1);
+  if(!e.repeat&&session.arrival?.radio==='tune'&&(e.code==='KeyA'||e.code==='KeyD'))dialClicks+=e.code==='KeyD'?1:-1;
   if(!e.repeat&&e.code==='Period'&&TideSternWatch.station(session))waitTap=true;
   if(!e.repeat&&(e.code==='KeyF'||e.code==='Semicolon'))pointTaps[e.code==='KeyF'?0:1]=true;
   if(!e.repeat&&(e.code==='KeyC'||e.code==='Backslash'))recenter(e.code==='KeyC'?0:1);

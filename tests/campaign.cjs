@@ -1228,10 +1228,13 @@ if(require.main===module){
     reach(g,()=>r.mode==='sending'&&r.down);
     g.tick(step,[{...empty(),use:true},{...empty(),use:true}]);
     assert.equal(r.mode,'ready');assert.equal(r.trace.source.length,0);
+    assert.match(r.lastValve.label,/第1响只压了/);
     reach(g,()=>r.mode==='sending'&&r.down);
     for(let j=0;j<32;j++)g.tick(step,[{...empty(),use:true},{...empty(),use:true,z:-1}]);
     assert.equal(r.mode,'ready');
+    assert.match(r.lastValve.label,/早点收阀/);
     reach(g,()=>r.mode==='drain');
+    assert.equal(r.lastValve,null);
     for(let j=0;j<150;j++)g.tick(step,[{...empty(),use:true},{...empty(),use:true}]);
     assert.equal(r.mode,'drain');assert.equal(r.showAft,false);assert.equal(r.showBridge,false);
     assert.deepEqual(Array.from(r.trace.aft),Array.from(r.trace.source));

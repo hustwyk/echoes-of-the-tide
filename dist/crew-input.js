@@ -50,5 +50,29 @@ const TideCrewInput=(()=>{
     button.onclick=()=>{const pads=gamepads();swap(pads);update(pads);};
     update(gamepads());return {box,update};
   }
-  return {assign,swap,slots,panel,key,clear:()=>previewKeys.clear()};
+  // Both seats share the simulation clock. An unanswered invitation never starts a count.
+  function countIn(){
+    let caller=-1,asked=0,start=null;
+    function clear(){caller=-1;start=null;}
+    function phase(now){
+      if(caller<0)return 'idle';
+      if(start===null){
+        if(now-asked<8)return 'ask';
+      }else{
+        const elapsed=now-start;
+        if(elapsed<0)return 'set';
+        if(elapsed<1.8)return ['three','two','one'][Math.min(2,Math.floor(elapsed/.6))];
+        if(elapsed<2.55)return 'go';
+      }
+      clear();return 'idle';
+    }
+    function press(side,time){
+      const before=phase(time);
+      if(before==='idle'){caller=side;asked=time;start=null;}
+      else if(before==='ask'&&side!==caller)start=time+.24;
+      else if(before==='ask'&&time-asked>.15)clear();
+    }
+    return {press,phase,clear,get caller(){return caller;}};
+  }
+  return {assign,swap,slots,countIn,panel,key,clear:()=>previewKeys.clear()};
 })();
