@@ -167,7 +167,7 @@ const TideArrivalRig=(()=>{
       return hands;
     }
     function shot(i,yaw,pitch,ready,aspect){
-      const s=g.arrival;if(!TideArrival.active(g)||s.moored&&s.walking>=.93)return null;
+      const s=g.arrival;if(!TideArrival.active(g))return null;
       const look=clampPan(yaw),rise=Math.max(-.4,Math.min(.6,pitch));
       let eye,at,fov;
       if(i){
@@ -216,12 +216,12 @@ const TideArrivalRig=(()=>{
         fov+=(closeup.fov-fov)*blend;
       }
       const close=!i&&s.atBow<.65&&entry>.91;
-      const away=Math.min(1,s.walking/.93),blend=1-away*away*(3-2*away);
-      return {eye:eye.toArray(),at:at.toArray(),fov,blend,handsOnly:close||glance>.82,focus:close&&s.atBow<.05?eye.distanceTo(at):0};
+
+      return {eye:eye.toArray(),at:at.toArray(),fov,handsOnly:close||glance>.82,focus:close&&s.atBow<.05?eye.distanceTo(at):0};
     }
     function seat(){
-      const s=g.arrival;if(!TideArrival.active(g)||s.walking>.17||s.stern?.travel>=.24)return null;
-      return {weight:Math.max(0,1-s.walking/.15-(s.stern?.travel||0)/.24),hip:world(-5.907,-2.0456,16.65),
+      const s=g.arrival;if(!TideArrival.active(g)||s.stern?.travel>=.24)return null;
+      return {weight:Math.max(0,1-(s.stern?.travel||0)/.24),hip:world(-5.907,-2.0456,16.65),
         feet:[world(-5.556,-2.486,16.45),world(-5.514,-2.486,16.85)]};
     }
     function clampPan(v){return Math.max(-1,Math.min(1,Math.sin(v)));}

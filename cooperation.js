@@ -84,7 +84,8 @@ const TideCoop = (() => {
       this.time+=dt;TideFerryTrail.update(this);
       if(TideGallery.active(this)){TideGallery.step(this,inputs,yaws,dt);return;}
       if(TideArrival.active(this)){TideArrival.step(this,inputs,dt);return;}
-      if(this.world.fenders)TideFloating.step(this.world.fenders.floatPose,this.players,this.cues.water,this.time,dt);TideFenders.narrate(this,dt);if(this.swing)TideSwing.narrate(this,dt);if(this.cistern)TideCistern.narrate(this,dt);if(this.glass)TideGlass.narrate(this,dt);
+      if(this.world.fenders)TideFloating.step(this.world.fenders.floatPose,this.players,this.cues.water,this.time,dt);if(this.fenders?.moored&&!TideFenders.active(this))TideBerthBoard.footing(this);
+      if(this.arrival?.done&&this.arrival.voice)TideArrival.voice(this,dt,false);else TideFenders.narrate(this,dt);if(this.swing)TideSwing.narrate(this,dt);if(this.cistern)TideCistern.narrate(this,dt);if(this.glass)TideGlass.narrate(this,dt);
       const q=this.state, section=this.section;
       q.age+=dt;TidePassage.update(this);TideRigging.updateLadders(section,dt);
       if(q.doneAt!==null && this.time-q.doneAt>1.15){

@@ -17,7 +17,7 @@ const TideArrival=(()=>{
     g.arrival={x:h.anchorX-17.6,z:h.anchorZ+4.65,heading:.19,speed:.63,rudder:0,drive:0,
       plate:{look:0,stroke:.045,coverage:Array(12).fill(0),read:false,reported:false,held:false,direction:0,cue:'',cueAt:0,serial:0},
       dial:9,channel:9,receive:0,radio:'tune',voice:'',voiceAt:0,caption:'',cue:'',serial:0,
-      bow:TideBowCast.create(),attached:false,secured:false,haul:0,walking:0,
+      bow:TideBowCast.create(),attached:false,secured:false,haul:0,
       moored:false,done:false,use:false,warning:'',warnTo:0,misses:0,engineRunning:true};
     advanceHull(g,0,0,0);placeCrew(g,0);display(g);
   }
@@ -150,25 +150,12 @@ const TideArrival=(()=>{
       }
       by=-(1-f)*Math.PI*.5+s.stern.turn*f;
     }
-    if(s.moored){
-      s.walking=Math.min(1,s.walking+dt*.285);
-      const pathA=[[1.65,15.69],[.25,15.84],[-1.05,16.60],[-2.40,16.56],[-3.08,17.25]];
-      const pathB=[[TideSternLine.rail.x,TideSternLine.rail.z],[-4.83,16.68],[-4.48,17.90],[-2.60,17.52],[-1.10,17.20],[.18,17.48],[1.15,17.25]];
-      function cross(path,t,startY,endY,initial){
-        const step=clamp(t,0,1)*(path.length-1),n=Math.min(path.length-2,Math.floor(step)),f=step-n;
-        const [x,z]=path[n],dx=path[n+1][0]-x,dz=path[n+1][1]-z;
-        return {x:x+dx*f,y:startY+(endY-startY)*t,z:z+dz*f,yaw:t>0?Math.atan2(-dx,-dz):initial};
-      }
-      a=cross(pathA,s.walking,castSite.y,-2.72,0);
-      b=cross(pathB,clamp((s.walking-.15)/.85,0,1),TideSternLine.rail.y,-2.62,s.stern.turn);
-      ay=a.yaw;by=b.yaw;
-    }
     if(t>0&&t<1&&!s.moored)ay=Math.atan2(radioSite.x-castSite.x,radioSite.z-castSite.z);
     if(t===1&&!s.moored&&!s.attached)ay=-s.bow.aim;
     moveTo(g,0,a,ay);moveTo(g,1,b,by);
     if(s.stern&&s.stern.travel<1)g.players[1].speed=1.17;
     if(t>0&&t<1&&!s.moored)g.players[0].speed=Math.hypot(castSite.x-radioSite.x,castSite.z-radioSite.z)*1.2;
-    if(s.moored&&s.walking>0&&s.walking<1){g.players[0].speed=1.65;g.players[1].speed=s.walking>.15?2.35:0;}
+
   }
   function warn(g,msg){g.arrival.warning=msg;g.arrival.warnTo=g.time+2.5;}
   function step(g,inputs,dt){
@@ -189,10 +176,9 @@ const TideArrival=(()=>{
     TideBowCast.step(g,k,dt,pressed,released);
     if(s.stern&&!s.moored)TideSternLine.step(g,helm,dt);
     placeCrew(g,dt);s.use=k.use;
-    if(s.moored&&s.walking>=1&&!s.voice){
+    if(s.moored){
       s.done=true;g.engaged.fill(false);g.near.fill(false);g.fenders.moored=true;
-      for(let i=0;i<2;i++){const p=g.players[i],f=g.world.fenders.boats[i];p.ground=f;p.y=TideTraversal.surfaceHeight(f,p.x,p.z);p.yaw=0;p.grace=.1;}
-      g.events.checkpoint?.(g);g.alert(TideFenders.briefing,3);return;
+      TideBerthBoard.start(g);g.events.checkpoint?.(g);g.alert(TideFenders.briefing,3);return;
     }
     display(g);
   }
@@ -224,5 +210,5 @@ const TideArrival=(()=>{
       '看岸边红白「首缆」牌，向前进车，带船首靠过去。临近收油，过头可倒车。';
     g.set(1,pilot,{caption:(s.secured?'空挡':'航速 '+Math.abs(s.speed).toFixed(1)+' m/s')+(s.radio==='tune'?(plate.read?'　／　外港值班 12':'　／　舵座铜牌'):'')});
   }
-  return {begin,step,active,speech,cleat,deck,tell,helmSite,castSite,radioSite};
+  return {begin,step,active,voice,speech,cleat,deck,tell,helmSite,castSite,radioSite};
 })();
