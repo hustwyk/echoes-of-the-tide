@@ -7,7 +7,7 @@ const TideScenes=(()=>{
     'glass-speech cistern-speech cistern chartroom paper gallery-speech shift-speech starter transit-speech transit signal',
     'tin-lines archive relay-speech relay soundings-speech survey-plot soundings',
     'fog-speech range-voice range-watch pass-speech stern-watch bay-passage lastpass ferry-trail haul-speech fog-recovery fogsignal swing-speech swing cooperation',
-    'assets/crew-faces assets/cloth-maps crew mantle-pose actors ferry-hull pierdeck equipment',
+    'assets/crew-faces assets/cloth-maps assets/speech-shapes dialogue-pose crew mantle-pose actors ferry-hull pierdeck equipment',
     'surf buoy-body buoy-lantern buoy-foam ocean-grid wind-sea ferry-wash seascape fieldprops receipt cinematics dockside lens',
     'assets/bridge-steel steel pocket-bench bridgework',
     'bearings pointing sightlines contactsurf harborreflection footlight static-piers harbor',
@@ -26,7 +26,7 @@ const TideScenes=(()=>{
     'foghouseenv foghousegear fog-haul haul-pose foghouse',
     'broken-pile entrance-marks bridge-windows reef-finder range-images range-console pilot-stand afterdeck watch-hands',
   ].map(s=>s.split(' '));
-  const pool='vendor/three.min assets/slab-maps assets/crew-faces assets/cloth-maps crew child-duo bearings harborreflection harbor regatta regatta-speech regatta-boats regatta-view regatta-audio regatta-ui regatta-pool'.split(' ');
+  const pool='vendor/three.min assets/slab-maps assets/crew-faces assets/cloth-maps assets/speech-shapes dialogue-pose crew child-duo bearings harborreflection harbor regatta regatta-speech regatta-boats regatta-view regatta-audio regatta-ui regatta-pool'.split(' ');
   const finished=new Set(),pending=new Map(),preloads=new Map();
   function preload(name){
     if(finished.has(name)||preloads.has(name))return;

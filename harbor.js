@@ -316,6 +316,7 @@ const TideHarbor = (() => {
         mesh.visible=sec===g.section;
         mesh.material.opacity=phase>.78?.87:phase>.55?.3+.4*Math.abs(Math.sin(t*10)):.20;
       }
+      const dialogue=TideDialoguePose.current(g);
       for(let i=0;i<2;i++){
         const p=g.players[i],obj=this.actors[i],acting=this.cinema.performance(i);
         const pose=acting||this.presented(g,i,alpha);
@@ -338,16 +339,14 @@ const TideHarbor = (() => {
         const relayHands=transfer&&!acting?this.swingYard.hands(g,i):g.cistern?(acting?this.cisternRoom.filmHands(g,i,this.cinema.time):this.cisternRoom.hands(g,i)):g.glass&&!acting?this.glassRoom.hands(g,i):g.fog&&!acting?this.fogHouse.hands(g,i):g.survey&&!acting?this.tideStation.hands(g,i):g.relay&&!acting?this.relayStation.hands(g,i):null;
         const berth=TideFenders.active(g)&&!acting;
         const grips=!acting&&g.rangeWatch?(i?this.rangeConsole.grips(g):this.reefFinder.grips(g)):!i&&g.lastPass&&g.field.done&&!acting?this.pilotStand.hands(g):TideGallery.active(g)?(g.gallery.phase==='file'?this.gallerySlip.grips(g,i):this.galleryGear.grips(g,i)):TideArrival.active(g)?this.arrivalRig.grips(i):berth?(g.fenders.board.held[i]?this.boardRig.hands(g.fenders.board.held[i]):g.fenders.grip[i]?this.fenderYard.hands(g.fenders.grip[i],p):null):g.glass&&!acting?(relayHands||(using&&g.glass.phase==='desk'?this.paperGrips(g,i):null)):transfer||g.cistern||g.fog||g.survey||g.relay?relayHands:(carryingTester?this.cableYard.testerHands(g):carryingLead?this.cableYard.leadHands(g):using&&g.cable?this.cableYard.hands(g,i):hanging?this.belayGrips(p,g.rig.belay.anchor):carry?this.archiveStudio.carryGrips(g,i):!using?null:g.landfall?this.floodRoom.hands(TideLandfall.targets(g)[i].kind):g.archive?(g.archive.location[i]==='desks'?this.archiveStudio.desks[i].hands():this.archiveStudio.shelfGrips(g,i)):g.signal?(this.transitRig.hands(g,i)||this.signalhouse.hands(g,i)):g.optic?this.lanternroom.hands(g,i):movingGrip?this.bridgework.hands(g.section,i):paper?this.paperGrips(g,i):this.equipment.grips(device));
-        const fenderLine=berth&&TideFenderSpeech[g.fenders.voice];
-        const starterLine=g.signal&&(g.stage===0?TideShiftSpeech[g.signal.voice]:TideTransitSpeech[g.signal.voice]?.mouth&&TideTransitSpeech[g.signal.voice]);
-        const haulLine=g.fog&&TideHaulSpeech[g.fog.voice];
         const workSpeed=g.optic?.mount&&!g.optic.mount.done&&using?g.optic.mount.speed||0:p.speed;
         TideActors.animate(obj, {speed:acting?0:workSpeed,vx:p.vx,vz:p.vz,vy:p.vy,yaw:pose.yaw,launch:p.launch,landing:p.landing,
           groundFloor:ready&&!acting?p.ground:null,groundWorld:g.world,
           slopeX:p.ground?.axes?.nx||0,slopeZ:p.ground?.axes?.nz||0,
           swing:transfer&&g.swing.occupied&&i===g.swing.rider?{angle:g.swing.angle,omega:g.swing.omega,phase:'ride',effort:g.swing.effort}:null,
-          ledge:berth&&i?g.fenders.ledge:null,wall:berth&&i?g.fenders.wall:null,pointAt:!acting&&ready?this.pointing.pointAt(i,g.time):null,grounded:p.grounded,climbing:!!g.gallery?.arrests[i]||(berth&&!i&&g.fenders.onLadder)||(!i&&!!g.relay?.climb)||!!g.swing?.climb[i],operating:TideArrival.active(g)?!!grips:!!relayHands||using||carryingTester||carryingLead||carry||hanging,grips,helmSeat:i&&TideArrival.active(g)?this.arrivalRig.seat():null,talking:fenderLine?.mouth?fenderLine.speaker===(i?'沈遥':'林澈')&&(fenderLine.mouth.levels[Math.floor(g.fenders.clock*fenderLine.mouth.hz)]||0)>10:starterLine?starterLine.speaker===(i?'沈遥':'林澈')&&(starterLine.mouth.levels[Math.floor(g.signal.clock*starterLine.mouth.hz)]||0)>10:haulLine?haulLine.speaker===(i?'沈遥':'林澈')&&(haulLine.mouth?.levels[Math.floor(g.fog.clock*20)]||0)>10:TideGallery.active(g)?!!(g.gallery.voice&&TideGallerySpeech[g.gallery.voice].speaker===(i?'沈遥':'林澈')&&(TideGallerySpeech[g.gallery.voice].mouth?.levels[Math.floor(g.gallery.clock*20)]||0)>10):g.arrival?.voice&&(TideArrival.speech(g.arrival.voice).speaker===(i?'沈遥':'林澈'))&&
-            (TideArrival.speech(g.arrival.voice).mouth?.levels[Math.floor(g.arrival.voiceAt*20)]||0)>12,...acting},dt,t);
+          ledge:berth&&i?g.fenders.ledge:null,wall:berth&&i?g.fenders.wall:null,pointAt:!acting&&ready?this.pointing.pointAt(i,g.time):null,grounded:p.grounded,climbing:!!g.gallery?.arrests[i]||(berth&&!i&&g.fenders.onLadder)||(!i&&!!g.relay?.climb)||!!g.swing?.climb[i],operating:TideArrival.active(g)?!!grips:!!relayHands||using||carryingTester||carryingLead||carry||hanging,grips,helmSeat:i&&TideArrival.active(g)?this.arrivalRig.seat():null,talking:dialogue?.speaker===i?dialogue.jaw:0,
+          rounding:dialogue?.speaker===i?dialogue.round:0,
+          listenYaw:!acting&&!grips?TideDialoguePose.listenerYaw(p,g.players[1-i],dialogue,i):0,...acting},dt,t);
         if(g.stage===0&&g.signal&&!acting)TideStarterPose.apply(obj,g,i,dt,t,grips);
         if(i&&g.arrival&&!acting&&this.arrivalRig){
           TidePlatePose.apply(obj,g,dt,t,this.arrivalRig.plate);

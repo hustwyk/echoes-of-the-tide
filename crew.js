@@ -18,15 +18,22 @@ const TideCrew=(()=>{
   skin.side=T.DoubleSide;
   skin.onBeforeCompile=shader=>{
     shader.uniforms.profileAtlas={value:profile};
-    shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nattribute vec3 profileUV; varying vec3 sideSample;')
-      .replace('#include <uv_vertex>','#include <uv_vertex>\nsideSample=profileUV;');
-    shader.fragmentShader=shader.fragmentShader.replace('#include <common>','#include <common>\nuniform sampler2D profileAtlas;varying vec3 sideSample;')
+    shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nattribute vec3 profileUV; attribute float skinFinish; varying float vSkinFinish; varying vec3 sideSample;')
+      .replace('#include <uv_vertex>','#include <uv_vertex>\nsideSample=profileUV;vSkinFinish=skinFinish;');
+    shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\nroughnessFactor=clamp(roughnessFactor+vSkinFinish,0.33,0.87);').replace('#include <common>','#include <common>\nuniform sampler2D profileAtlas;varying vec3 sideSample;varying float vSkinFinish;')
       .replace('#include <map_fragment>','diffuseColor.rgb*=mix(texture2D(map,vMapUv).rgb,texture2D(profileAtlas,sideSample.xy).rgb,sideSample.z);');
   };
   function projectProfile(g,side,part){
-    const a=g.attributes.position,coords=[];
+    const a=g.attributes.position,coords=[],finish=[];
+    const face=TideCrewSkin.people[side].position;
+    const region=(x,y,landmark,w,h)=>Math.exp(-((x-face[landmark*3])**2/w**2+(y-face[landmark*3+1])**2/h**2));
     for(let i=0;i<a.count;i++){
       const x=Math.abs(a.getX(i)),y=a.getY(i),z=a.getZ(i);
+      const sx=a.getX(i);
+      const gloss=part==='face'
+        ? .055-.24*region(sx,y,1,.025,.029)-.29*region(sx,y,13,.029,.010)-.13*region(sx,y,10,.048,.044)
+        : .075;
+      finish.push(gloss);
       const px=(side?551:152)-(z-.012)*(side?1710:1810);
       const py=(side?239:240)-(y-(side?.117:.120))*(side?1640:1540);
       const back=(side?418:24)+(side?75:54)*T.MathUtils.smoothstep(py,162,340);
@@ -34,6 +41,7 @@ const TideCrew=(()=>{
         T.MathUtils.smoothstep(z,-.056,-.015)*T.MathUtils.smoothstep(x,.026,.056);
       coords.push(Math.max(back,px)/768,1-py/512,part==='scalp'?Math.max(weight,T.MathUtils.smoothstep(z,-.010,.015)):weight);
     }
+    g.setAttribute('skinFinish',new T.Float32BufferAttribute(finish,1));
     g.setAttribute('profileUV',new T.Float32BufferAttribute(coords,3));return g;
   }
   function geometry(pos,uv,index){
@@ -109,7 +117,7 @@ const TideCrew=(()=>{
       const hole=edges.findIndex(edge=>tri.every(i=>edge.has(i)));
       (hole===2?mouth:hole>=0?eyes:skinIndices).push(...tri);
     }
-    const g=geometry(source,data.uv,skinIndices),close=new Float32Array(source.length),say=new Float32Array(source.length);
+    const g=geometry(source,data.uv,skinIndices),close=new Float32Array(source.length),say=new Float32Array(source.length),round=new Float32Array(source.length);
     for(const [upper,lower] of lids)for(let k=1;k<upper.length-1;k++){
       const a=3*upper[k],b=3*lower[k];
       for(let axis=0;axis<3;axis++){
@@ -123,9 +131,12 @@ const TideCrew=(()=>{
       const weight=(1-T.MathUtils.smoothstep(y,lipY-.001,lipY+.004))*(1-T.MathUtils.smoothstep(Math.abs(x),.025,.063));
       say[3*i+1]=-weight*(.003+.003*T.MathUtils.smoothstep(y,endY,lipY));
       say[3*i+2]=weight*.002;
+      const lipX=x-source[3*13],mask=Math.exp(-(lipX*lipX/.00080+(y-lipY)**2/.00013));
+      round[3*i]=-lipX*.19*mask;
+      round[3*i+2]=-.0038*mask;
     }
     for(const i of lips[0]){say[3*i+1]=.0005;say[3*i+2]=0;}
-    g.morphTargetsRelative=true;g.morphAttributes.position=[close,say].map(a=>new T.BufferAttribute(a,3));
+    g.morphTargetsRelative=true;g.morphAttributes.position=[close,say,round].map(a=>new T.BufferAttribute(a,3));
     add(group,projectProfile(g,side,'face'),skin,'face');
     const inner=source.slice();
     for(const i of new Set(eyes))inner[3*i+2]+=.0004;
@@ -145,12 +156,15 @@ const TideCrew=(()=>{
       const m=new T.MeshStandardMaterial({map:profile,roughness:.71});add(group,g,m,'盘发');
     }
   }
-  function express(mesh,id,time,talking){
+  function express(mesh,id,time,talking,rounded=0,dt=1/60){
     const period=id?4.73:5.21;
     const t=(time+(id?2.03:1.23))%period;
     const blink=T.MathUtils.smoothstep(t,.04,.126)*(1-T.MathUtils.smoothstep(t,.14,.263));
     mesh.morphTargetInfluences[0]=blink;
-    mesh.morphTargetInfluences[1]=talking?Math.max(0,.44+.31*Math.sin(time*21+id)+.23*Math.sin(time*31.2)):0;
+    const jaw=typeof talking==='number'?talking:talking ? .44+.31*Math.sin(time*21+id)+.23*Math.sin(time*31.2):0;
+    const weights=mesh.morphTargetInfluences;
+    weights[1]+=(Math.max(0,jaw)-weights[1])*(1-Math.exp(-dt*(jaw>weights[1]?42:26)));
+    weights[2]+=(rounded-weights[2])*(1-Math.exp(-dt*25));
   }
   return {face,express};
 })();
