@@ -3,11 +3,11 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const box=vm.createContext({});
-for(const name of ['missions','traversal','floating','warp-speech','warping','fender-speech','fender-coping','fenders','plate-speech','arrival-speech','stern-line','bow-cast','arrival','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','buoy-motion','light-register','lookout','cistern-speech','cistern','glass-speech','chartroom','paper','lantern','gallery-speech','gallery','shift-speech','starter','transit-speech','transit','signal','tin-lines','tin-memory','archive','relay-speech','relay-trolley','relay','soundings-speech','survey-plot','soundings','fog-speech','haul-speech','fog-recovery','fogsignal','range-voice','range-watch','pass-speech','stern-watch','bay-passage','lastpass','ferry-trail','swing-speech','swing','cooperation']){
+for(const name of ['missions','traversal','floating','warp-speech','warping','fender-speech','fender-coping','berth-board','fenders','plate-speech','arrival-speech','stern-line','bow-cast','arrival','passage','landfall-message','landfall','quay-speech','cablequay','rigging','drawbridge','fieldwork','buoy-motion','light-register','lookout','cistern-speech','cistern','glass-speech','chartroom','paper','lantern','gallery-speech','gallery','shift-speech','starter','transit-speech','transit','signal','tin-lines','tin-memory','archive','relay-speech','relay-trolley','relay','soundings-speech','survey-plot','soundings','fog-speech','haul-speech','fog-recovery','fogsignal','range-voice','range-watch','pass-speech','stern-watch','bay-passage','lastpass','ferry-trail','swing-speech','swing','cooperation']){
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../dist',name+'.js'),'utf8'),box);
 }
 const {Session,near,surface,lookout,ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideSwing,TideCistern,TideGlass,TidePaper}=vm.runInContext('({Session:TideCoop.Session,near:TideCoop.near,surface:TideTraversal.surface,lookout:TideLookout,ridePressure:TideCoop.ridePressure,TideLantern,TideSignal,TideArchive,TideLandfall,TideCableQuay,TideRelay,TideSoundings,TideFogSignal,TideLastPass,TideSwing,TideCistern,TideGlass,TidePaper})',box);
-const {TideFenders,TideWarping,TideFloating,TideArrival,TideSternLine,TideBowCast}=vm.runInContext('({TideFenders,TideWarping,TideFloating,TideArrival,TideSternLine,TideBowCast})',box);
+const {TideFenders,TideWarping,TideFloating,TideArrival,TideSternLine,TideBowCast,TideBerthBoard}=vm.runInContext('({TideFenders,TideWarping,TideFloating,TideArrival,TideSternLine,TideBowCast,TideBerthBoard})',box);
 const {TideTransit,TideSurveyPlot,TideLightRegister,TideBuoyMotion}=vm.runInContext('({TideTransit,TideSurveyPlot,TideLightRegister,TideBuoyMotion})',box);
 const {TideTinMemory}=vm.runInContext('({TideTinMemory})',box);
 const {TideGallery,TideRangeWatch,TideBayPassage}=vm.runInContext('({TideGallery,TideRangeWatch,TideBayPassage})',box);
@@ -1037,6 +1037,76 @@ if(require.main===module){
     assert.ok(g.players.every(p=>p.grounded));
     const restored=new Session(0);TideFenders.restore(restored,TideFenders.checkpoint(g));
     assert.ok(restored.fenders.moored&&!TideArrival.active(restored));
+  }
+  {
+    const g=new Session(0);
+    TideArrival.begin(g);
+    reach(g,()=>g.arrival.moored);
+    const board=g.fenders.board,world=g.world.fenders;
+    const initial=TideFenders.checkpoint(g);
+    assert.equal(g.players[0].ground,world.boats[1]);
+    assert.equal(g.players[1].ground,world.boats[0]);
+    const drifter=new Session(0);
+    TideFenders.restore(drifter,initial);
+    const localFeet=()=>drifter.players.map(p=>TideFloating.local(drifter.world.fenders.floatPose,p.x,p.y,p.z));
+    const feet=localFeet();
+    for(let i=0;i<240;i++)drifter.tick(step,[empty(),empty()]);
+    localFeet().forEach((p,i)=>assert.ok(Math.hypot(p.x-feet[i].x,p.z-feet[i].z)<.04,'A moored player keeps their place on the deck'));
+
+    // Only inputs from the two operators move the actors and the board.
+    const paths=[[[.08,15.72],[-.52,16.16],[-2.68,16.30],[-3.08,16.13]],[[-4,15.72],[-2.55,16]]];
+    const positions=[0,0],axis=n=>Math.max(-1,Math.min(1,n));
+    function walk(input,actor,target,speed=.80){
+      const dx=target.x-actor.x,dz=target.z-actor.z;
+      input.x=axis(dx*2)*speed;
+      input.z=axis(dz*2)*speed;
+      return Math.hypot(dx,dz)<.19;
+    }
+    let leg=0,attempted=false,rejected=false,onBoard=false,onNose=false;
+    for(let frame=0;frame<2400&&!board.locked;frame++){
+      const keys=[empty(),empty()],shape=TideBerthBoard.pose(g);
+      for(let i=0;i<2;i++){
+        const k=keys[i],p=g.players[i],next=paths[i][positions[i]];
+        if(next){
+          if(walk(k,p,TideArrival.deck(g,next[0],-2.72,next[1])))positions[i]++;
+        }else if(i===1){
+          k.use=true;
+          if(attempted){
+            const tip=TideBerthBoard.pose(g,true).b;
+            k.x=axis((shape.seat.x-tip.x)*5);
+            k.z=axis((shape.seat.z-tip.z)*5);
+          }else if(board.extension<.84)k.z=-1;
+        }else if(leg<4){
+          const targets=[shape.a,shape.knuckle,{x:shape.b.x,z:shape.b.z-.39},TideBerthBoard.shore];
+          if(board.extension>.80&&walk(k,p,targets[leg],[.60,.60,.55,.80][leg])&&(leg!==3||TideBerthBoard.near(g,0,'shore')))leg++;
+        }else{
+          k.use=true;
+          k.jump=!attempted||board.fit>.94&&!board.lastJump[0];
+          attempted=true;
+        }
+      }
+      g.tick(step,keys);
+      onBoard||=g.players[0].ground===board.floor;
+      onNose||=g.players[0].ground===board.nose;
+      rejected||=board.cue==='board-knock'&&!board.locked&&board.feedback.includes('偏东');
+    }
+    assert.ok(onBoard&&onNose&&rejected&&board.locked);
+    assert.equal(g.setbacks,0);
+    const saved=JSON.parse(JSON.stringify(TideFenders.checkpoint(g)));
+    assert.deepEqual(saved.board.bank,['lower',null]);
+    const resumed=new Session(0);
+    TideFenders.restore(resumed,saved);
+    assert.equal(resumed.players[0].ground,resumed.world.fenders.lower);
+    assert.equal(resumed.players[1].ground,resumed.world.fenders.boats[0]);
+    const heel=TideBerthBoard.pose(resumed).a;
+    for(let i=0;i<60;i++)resumed.tick(step,[empty(),empty()]);
+    const after=TideBerthBoard.pose(resumed);
+    assert.ok(resumed.fenders.board.locked&&Math.abs(heel.y-after.a.y)>.001);
+    assert.deepEqual(after.b,after.seat);
+    const legacy=new Session(0);
+    TideFenders.restore(legacy,{berth:'moored'});
+    assert.ok(legacy.players.every(p=>p.grounded));
+    assert.equal(legacy.fenders.board.locked,false);
   }
   {
     const g=new Session(0),s=g.fenders;

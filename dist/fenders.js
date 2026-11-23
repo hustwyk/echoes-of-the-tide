@@ -27,7 +27,7 @@ const TideFenders = (() => {
     if(!g.world.fenders)return null;
     g.checkpoints=g.world.fenders.boats.slice();g.players=g.checkpoints.map(spawn);
     TideFloating.step(g.world.fenders.floatPose,g.players,g.cues.water,0,0);
-    return {phase:'approach',setting:0,fenderX:2.67,fenderTop:-2.30,wheelSpin:0,ladder:0,pawl:false,onLadder:false,
+    return {board:TideBerthBoard.create(g.world),phase:'approach',setting:0,fenderX:2.67,fenderTop:-2.30,wheelSpin:0,ladder:0,pawl:false,onLadder:false,
       ledge:null,ledgeExit:null,askedAtEdge:false,contactSerial:0,contactSound:'',contactAt:-10,wall:null,lastFace:0,kicks:0,wallBuffer:0,previousJump:false,seen:[false,false],grip:[null,null],top:[false,false],voice:'shore',clock:0,line:-1,queue:[],subtitle:'',warned:false,heardPawl:false};
   }
   function active(g){return g.index===0&&g.stage===0&&!!g.fenders&&g.fenders.phase!=='done';}
@@ -115,7 +115,9 @@ const TideFenders = (() => {
   function step(g,inputs,yaws,dt){
     const s=g.fenders,w=g.world.fenders,[a,b]=g.players,[ka,kb]=inputs;
     s.grip.fill(null);g.near.fill(false);g.engaged.fill(false);
-    const winding=!s.top[0]&&close(a,wheel)&&ka.use&&!s.onLadder;
+    TideBerthBoard.step(g,inputs,dt);
+    const boarding=s.board.held;
+    const winding=!boarding[0]&&!s.top[0]&&close(a,wheel)&&ka.use&&!s.onLadder;
     s.pawl=s.top[1]&&close(b,pawl)&&kb.use&&s.ladder<1;
     const old=s.setting;
     s.setting=clamp(s.setting+(winding?clamp(-ka.z,-1,1)*.66:s.top[1]?0:-.24)*dt,0,1);
@@ -136,11 +138,13 @@ const TideFenders = (() => {
       a.y=clamp(a.y+climbing*1.85*dt,ladder.y,top);a.speed=Math.abs(climbing)*1.85;
       if(a.y>=top){Object.assign(a,spawn(w.sill),{z:9.15});s.onLadder=false;s.top[0]=true;g.checkpoints[0]=w.sill;}
       if(a.y<=ladder.y&&!ka.use){Object.assign(a,spawn(w.lower),{x:ladder.x,z:ladder.z});s.onLadder=false;}
-    }else move(a,ka,dt,g.world,yaws[0],winding);
-    if(!s.top[1])climber(g,kb,yaws[1],dt);
+    }else move(a,ka,dt,g.world,yaws[0],winding||!!boarding[0]);
+    if(boarding[1])move(b,kb,dt,g.world,yaws[1],true);
+    else if(!s.top[1])climber(g,kb,yaws[1],dt);
     else{
       const oldX=b.x,oldZ=b.z;move(b,kb,dt,g.world,yaws[1],s.pawl);TideFenderCoping.guard(b,oldX,oldZ);
     }
+    if(s.board.crossing){TideBerthBoard.guard(g,0);TideBerthBoard.guard(g,1);}
     if(a.ground===w.lower&&!s.seen[0]){s.seen[0]=true;g.checkpoints[0]=w.lower;}
     if(b.ground===w.well&&!s.seen[1]){s.seen[1]=true;g.checkpoints[1]=w.well;s.phase='climb';}
     if(!s.top[1]&&b.ground===w.ledge){
@@ -154,10 +158,12 @@ const TideFenders = (() => {
       if(wet||s.top[i]&&p.y<top-1.46)swimmer(g,i,wet);
       g.near[i]=!!s.grip[i]||close(g.players[i],target(g,i).p);g.engaged[i]=!!s.grip[i];
     }
+    for(let i=0;i<2;i++)if(boarding[i]){s.grip[i]=boarding[i];g.near[i]=g.engaged[i]=true;}
+    TideBerthBoard.recordBank(g);
     const leftText=s.top[0]?'从石阶下到吊篮码头':s.onLadder?'握紧梯档，向前爬；松手可停':s.ladder>=1?'到绞轮后面的卷梯，按住操作并向前爬':s.top[1]?'靠近回程梯，等沈遥放到底':s.ledge?'她挂住了。守在绞轮边，等她绕过堤沿的铁盖。':s.seen[0]?'按住操作并向前收绳，等沈遥蹬上堤沿':'跑向手绞轮，在艇边起跳，长按跳得更高';
     const rightText=s.ladder>=1?'回身下石阶，在吊篮码头等林澈':s.top[1]?'站到棘轮前，按住操作并向后放梯':s.ledge?(s.ledge.phase==='up'?'压稳双掌，把膝盖送上堤。':s.ledge.z>TideFenderCoping.flatEnd?'抓紧石边，沿边往岸里挪，找铁盖尽头的平石。':'双手上方已经平了，再按跳翻上堤。'):s.wall?.phase==='hold'?(s.wall.normalX>0?'脚掌贴住了，松开再按跳蹬向对面':(TideFenderCoping.charge(s.wall)>.90?'脚掌踩稳了。按跳高蹬，往堤上平石落。':'短蹬可抓沿。脚掌压稳胶面后，再蹬能跳高。')):s.lastFace===1?'接住升起的右护舷，再按跳蹬回左堤沿':s.seen[1]?'向左边黑护舷起跳，贴住后再按一次跳':'越过艇边水沟，沿窄踏板跑到两块护舷之间';
-    g.set(0,leftText,s.grip[0]==='wheel'?{vis:'dial',value:s.setting,caption:'护舷升程 '+Math.round(100*s.setting)+'%'}:{});
-    g.set(1,rightText,s.grip[1]==='pawl'?{vis:'dial',value:s.ladder,caption:'放梯 '+Math.round(100*s.ladder)+'%'}:{});
+    g.set(0,TideBerthBoard.hint(g,0)||leftText,s.grip[0]==='wheel'?{vis:'dial',value:s.setting,caption:'护舷升程 '+Math.round(100*s.setting)+'%'}:{});
+    g.set(1,TideBerthBoard.hint(g,1)||rightText,s.grip[1]==='pawl'?{vis:'dial',value:s.ladder,caption:'放梯 '+Math.round(100*s.ladder)+'%'}:{});
     if(s.top.every(Boolean)&&g.players.every(p=>p.grounded&&p.z<5.79)){
       s.phase='done';s.queue.push('return');g.checkpoints=g.section.starts.slice();g.engaged.fill(false);g.near.fill(false);
       g.events.checkpoint?.(g);speak(g,g.spec.radio);
@@ -165,15 +171,17 @@ const TideFenders = (() => {
   }
   function checkpoint(g){
     if(!g.fenders||g.stage!==0)return null;
-    if(!['done','exit','upper'].includes(g.fenders.phase))return g.fenders.moored?{berth:'moored'}:TideSternLine.checkpoint(g);
-    return {berth:g.fenders.phase};
+    if(!['done','exit','upper'].includes(g.fenders.phase))return g.fenders.moored?{berth:'moored',board:TideBerthBoard.save(g)}:TideSternLine.checkpoint(g);
+    return {berth:g.fenders.phase,board:g.fenders.board.locked?TideBerthBoard.save(g):null};
   }
   function restore(g,mark){
     if(!g.fenders||g.stage!==0)return;
     if(mark?.berth==='stern'){TideSternLine.restore(g,mark);return;}
-    if(mark?.berth==='moored'){g.fenders.moored=true;return;}
+    if(mark?.berth==='moored'){g.fenders.moored=true;TideBerthBoard.restore(g,mark.board);return;}
     if(!['done','exit','upper'].includes(mark?.berth))return;
-    const s=g.fenders,w=g.world.fenders;s.phase=mark.berth;s.top[1]=true;s.seen.fill(true);s.setting=1;s.voice='';s.heardPawl=mark.berth!=='upper';s.clock=0;s.line=-1;s.queue=[];s.subtitle='';s.warned=true;geometry(s);
+    const s=g.fenders,w=g.world.fenders;s.moored=true;
+    if(mark.board?.locked)TideBerthBoard.restore(g,{...mark.board,crossing:false,bank:[]});
+    s.phase=mark.berth;s.top[1]=true;s.seen.fill(true);s.setting=1;s.voice='';s.heardPawl=mark.berth!=='upper';s.clock=0;s.line=-1;s.queue=[];s.subtitle='';s.warned=true;geometry(s);
     s.ladder=s.phase==='upper'?0:1;s.top[0]=s.phase==='done';
     g.checkpoints=s.phase==='done'?g.section.starts.slice():[w.lower,w.ledge];g.players=g.checkpoints.map(spawn);
     if(!s.top[0])g.players[1].z=9.98;
@@ -181,6 +189,7 @@ const TideFenders = (() => {
   }
   function shot(g,i,yaw,pitch){
     const s=g.fenders,p=g.players[i];
+    const board=TideBerthBoard.shot(g,i);if(board)return board;
     const edge=TideFenderCoping.shot(g,i);if(edge)return edge;
     if(Math.abs(yaw)>.85||(!s.grip[i]&&(i===0||!s.seen[1]||s.top[1])))return null;
     const x=i?(s.top[1]?-2.12:.10):p.x;

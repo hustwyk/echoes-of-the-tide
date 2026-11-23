@@ -3,7 +3,7 @@
 const TideScenes=(()=>{
   const common=[
     'vendor/three.min assets/deck-textures assets/slab-maps concrete',
-    'floating warp-speech warping passage assets/breakwater-audio landfall-message quay-speech cablequay fender-speech fender-coping fenders plate-speech arrival-speech stern-line bow-cast arrival landfall rigging drawbridge fieldwork buoy-motion light-register lookout',
+    'floating warp-speech warping passage assets/breakwater-audio landfall-message quay-speech cablequay fender-speech fender-coping berth-board fenders plate-speech arrival-speech stern-line bow-cast arrival landfall rigging drawbridge fieldwork buoy-motion light-register lookout',
     'glass-speech cistern-speech cistern chartroom paper gallery-speech shift-speech starter transit-speech transit signal',
     'tin-lines archive relay-speech relay soundings-speech survey-plot soundings',
     'fog-speech range-voice range-watch pass-speech stern-watch bay-passage lastpass ferry-trail haul-speech fog-recovery fogsignal swing-speech swing cooperation',
@@ -13,7 +13,7 @@ const TideScenes=(()=>{
     'bearings pointing sightlines contactsurf harborreflection footlight static-piers harbor',
   ].flatMap(row=>row.split(' '));
   const chapters=[
-    'pilotboat pocket-radio helm-plate plate-pose stern-pose stern-water stern-gear bow-eye bow-wash arrival-rig shore-scans coping fenderyard floodgear floodquay floodroom',
+    'pilotboat pocket-radio helm-plate plate-pose stern-pose stern-water stern-gear bow-eye bow-wash arrival-rig shore-scans coping landing-board fenderyard floodgear floodquay floodroom',
     'cableenv warpfloat cablegear cableyard',
     'transit-rig transit-glass transit-optics starter-pose starter-bench clutch-bench rain-apron register-desk signalhouse',
     'cisternenv cisterngear cisternroom',
